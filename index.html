@@ -1051,10 +1051,11 @@ footer {
       <input class="auth-input" type="text" id="account-email" readonly>
 
       <label class="auth-label">Password</label>
-      <div style="display:flex; gap:8px; margin-top:0;">
-        <input class="auth-input" type="password" id="account-password" readonly style="margin-top:0;">
-        <button type="button" class="trade-add-btn" style="flex-shrink:0;" onclick="toggleAccountPasswordVisibility()" id="account-password-toggle">Show</button>
+      <div style="display:flex; gap:8px; margin-top:0; align-items:center;">
+        <input class="auth-input" type="text" value="••••••••" readonly style="margin-top:0;">
+        <button type="button" class="trade-add-btn" style="flex-shrink:0;" onclick="sendAccountPasswordReset()" id="account-password-reset-btn">Reset Password</button>
       </div>
+      <div id="account-password-reset-note" style="display:none; font-family:'Lato',sans-serif; font-size:13px; color:#3DB87A; margin-top:6px;"></div>
 
       <label class="auth-label">Subscription</label>
       <div id="account-subscription-status" style="font-family:'Lato',sans-serif; font-size:16px; font-weight:900; color:#111; margin-bottom:6px;"></div>
@@ -1619,12 +1620,10 @@ const supabaseClient = (typeof window !== 'undefined' && window.supabase)
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
   : null;
 
-// --- DEMO-ONLY in-memory auth store ---------------------------------------
-// This runs entirely in the browser tab and resets on refresh. It exists so
-// you can see and click through the real signup/signin/projections flow.
-// A live site would replace this block with calls to a real backend
-// (e.g. Supabase auth) so accounts persist across visits and devices.
-const users = {};   // email -> { password }
+// --- AUTH ------------------------------------------------------------------
+// Real accounts via Supabase Auth (see below) — replaces the earlier
+// demo-only in-memory store. currentUser.isAdmin gates Admin access;
+// currentUser.isPro gates Pro content.
 let currentUser = null;
 
 function showPage(evt, pageName) {
@@ -1672,9 +1671,7 @@ function renderAccountPage() {
   document.getElementById('account-name').value = fullName;
   document.getElementById('account-username').value = username;
   document.getElementById('account-email').value = currentUser.email;
-  document.getElementById('account-password').value = currentUser.password || '';
-  document.getElementById('account-password').type = 'password';
-  document.getElementById('account-password-toggle').textContent = 'Show';
+  document.getElementById('account-password-reset-note').style.display = 'none';
 
   const statusEl = document.getElementById('account-subscription-status');
   const noteEl = document.getElementById('account-subscription-note');
@@ -1695,17 +1692,23 @@ function renderAccountPage() {
   }
 }
 
-function toggleAccountPasswordVisibility() {
-  const input = document.getElementById('account-password');
-  const btn = document.getElementById('account-password-toggle');
-  const showing = input.type === 'text';
-  input.type = showing ? 'password' : 'text';
-  btn.textContent = showing ? 'Show' : 'Hide';
+// Real auth never exposes a plaintext password to the client — this sends
+// a real reset-password email via Supabase Auth instead of "showing" one.
+async function sendAccountPasswordReset() {
+  if (!currentUser || !supabaseClient) return;
+  const btn = document.getElementById('account-password-reset-btn');
+  const note = document.getElementById('account-password-reset-note');
+  btn.disabled = true;
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(currentUser.email);
+  btn.disabled = false;
+  note.style.color = error ? '#c0392b' : '#3DB87A';
+  note.textContent = error ? error.message : 'Password reset email sent to ' + currentUser.email + '.';
+  note.style.display = 'block';
 }
 
 let cancelSubscriptionArmed = false;
 
-function cancelSubscription() {
+async function cancelSubscription() {
   if (!currentUser || !currentUser.isPro) return;
   const btn = document.getElementById('account-cancel-btn');
 
@@ -1718,7 +1721,9 @@ function cancelSubscription() {
 
   cancelSubscriptionArmed = false;
   currentUser.isPro = false;
-  if (users[currentUser.email]) users[currentUser.email].isPro = false;
+  if (supabaseClient) {
+    await supabaseClient.from('profiles').update({ is_pro: false }).eq('id', currentUser.id);
+  }
   renderAccountPage();
 }
 
@@ -1947,7 +1952,7 @@ function renderProjectionsPage() {
   }
 }
 
-function handleSignup() {
+async function handleSignup() {
   const firstName = document.getElementById('signup-firstname').value.trim();
   const lastName = document.getElementById('signup-lastname').value.trim();
   const email = document.getElementById('signup-email').value.trim().toLowerCase();
@@ -1964,17 +1969,38 @@ function handleSignup() {
     errorEl.style.display = 'block';
     return;
   }
-  if (users[email]) {
-    errorEl.textContent = 'An account with that email already exists.';
+  if (!supabaseClient) {
+    errorEl.textContent = 'Sign-up is unavailable right now — the database connection is not set up.';
     errorEl.style.display = 'block';
     return;
   }
-  users[email] = { firstName, lastName, password, isPro: false };
-  logIn(email);
-  showPage(null, 'home');
+
+  const { data, error } = await supabaseClient.auth.signUp({
+    email, password,
+    options: { data: { first_name: firstName, last_name: lastName } }
+  });
+  if (error) {
+    errorEl.textContent = error.message;
+    errorEl.style.display = 'block';
+    return;
+  }
+  errorEl.style.display = 'none';
+
+  // The database trigger (see 01_schema.sql) creates the profiles row
+  // automatically from the signup metadata above.
+  if (data.session) {
+    await logIn(data.user);
+    showPage(null, 'home');
+  } else {
+    // Email confirmation is turned on for this project — there's no active
+    // session yet until the user clicks the link in their inbox.
+    errorEl.style.color = '#3DB87A';
+    errorEl.textContent = 'Check your email to confirm your account, then sign in.';
+    errorEl.style.display = 'block';
+  }
 }
 
-function handleSignin() {
+async function handleSignin() {
   const email = document.getElementById('signin-email').value.trim().toLowerCase();
   const password = document.getElementById('signin-password').value;
   const errorEl = document.getElementById('signin-error');
@@ -1984,19 +2010,45 @@ function handleSignin() {
     errorEl.style.display = 'block';
     return;
   }
-  const record = users[email];
-  if (!record || record.password !== password) {
-    errorEl.textContent = 'No account matches that email and password.';
+  if (!supabaseClient) {
+    errorEl.textContent = 'Sign-in is unavailable right now — the database connection is not set up.';
     errorEl.style.display = 'block';
     return;
   }
-  logIn(email);
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    // Show the real reason — a generic "no account matches" message here
+    // would hide genuinely different problems (e.g. an unconfirmed email)
+    // behind the wrong explanation.
+    errorEl.textContent = /email not confirmed/i.test(error.message)
+      ? 'Check your inbox — you need to confirm your email before signing in.'
+      : error.message;
+    errorEl.style.display = 'block';
+    return;
+  }
+  errorEl.style.display = 'none';
+  await logIn(data.user);
   showPage(null, 'home');
 }
 
-function logIn(email) {
-  const record = users[email] || { firstName: '', lastName: '', password: '', isPro: false };
-  currentUser = { email, firstName: record.firstName || '', lastName: record.lastName || '', password: record.password, isPro: !!record.isPro };
+// Loads the profiles row for a Supabase Auth user and sets currentUser +
+// the logged-in nav state. Called after signup/signin, and once on page
+// load if a session already exists (Supabase persists sessions itself).
+async function logIn(authUser) {
+  let profile = { first_name: '', last_name: '', is_pro: false, is_admin: false };
+  if (supabaseClient) {
+    const { data } = await supabaseClient.from('profiles').select('*').eq('id', authUser.id).single();
+    if (data) profile = data;
+  }
+  currentUser = {
+    id: authUser.id,
+    email: authUser.email,
+    firstName: profile.first_name || '',
+    lastName: profile.last_name || '',
+    isPro: !!profile.is_pro,
+    isAdmin: !!profile.is_admin,
+  };
   document.getElementById('nav-actions-loggedout').style.display = 'none';
   document.getElementById('nav-actions-loggedin').style.display = 'flex';
   document.getElementById('signup-error').style.display = 'none';
@@ -2008,8 +2060,9 @@ function logIn(email) {
   document.getElementById('mobile-nav-logout').style.display = 'block';
 }
 
-function logOut(evt) {
+async function logOut(evt) {
   evt.preventDefault();
+  if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
   document.getElementById('nav-actions-loggedout').style.display = 'flex';
   document.getElementById('nav-actions-loggedin').style.display = 'none';
@@ -2682,7 +2735,7 @@ let adminRowCount = 0;
 function refreshAdminGate() {
   const locked = document.getElementById('admin-locked');
   const builder = document.getElementById('admin-builder');
-  if (currentUser) {
+  if (currentUser && currentUser.isAdmin) {
     locked.style.display = 'none';
     builder.style.display = 'block';
     populateAdminPlayerDatalist();
@@ -2692,6 +2745,18 @@ function refreshAdminGate() {
   } else {
     locked.style.display = 'block';
     builder.style.display = 'none';
+    const titleEl = locked.querySelector('.trade-locked-title');
+    const subEl = locked.querySelector('.trade-locked-sub');
+    const linkEl = locked.querySelector('a');
+    if (currentUser && !currentUser.isAdmin) {
+      titleEl.textContent = '🔒 This account doesn\'t have Admin access';
+      subEl.textContent = 'Ask the site owner to grant Admin access to your account.';
+      if (linkEl) linkEl.style.display = 'none';
+    } else {
+      titleEl.textContent = '🔒 Sign in to access Admin';
+      subEl.textContent = 'Create a free account to publish weekly rankings.';
+      if (linkEl) linkEl.style.display = '';
+    }
   }
 }
 
@@ -4849,6 +4914,16 @@ async function loadAppState() {
   await loadAppState();
   renderHomepageArticles();
   renderTicker();
+
+  // Supabase Auth persists sessions on its own (separate from the app data
+  // cache above) — if the visitor already has a valid session, log them
+  // back in automatically instead of showing them signed out.
+  if (supabaseClient) {
+    const { data } = await supabaseClient.auth.getSession();
+    if (data && data.session) {
+      await logIn(data.session.user);
+    }
+  }
 })();
 </script>
 
