@@ -715,7 +715,7 @@ footer {
     <a class="nav-link" href="#">Draft Guide</a>
     <a class="nav-link" href="#" onclick="goToArticlesPage(event)">Articles</a>
     <a class="nav-link" href="#" onclick="goToTrade(event)">Trade Analyzer</a>
-    <a class="nav-link" href="#" onclick="goToAdmin(event)">Admin</a>
+    <a class="nav-link" href="#" onclick="goToAdmin(event)" id="nav-link-admin" style="display:none;">Admin</a>
   </div>
   <div class="nav-actions" id="nav-actions-loggedout">
     <a class="nav-sign-in" href="#" onclick="showPage(event,'signin')">Sign in</a>
@@ -740,7 +740,7 @@ footer {
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(null, event)">Draft Guide</a>
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToArticlesPage, event)">Articles</a>
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToTrade, event)">Trade Analyzer</a>
-  <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToAdmin, event)">Admin</a>
+  <a class="mobile-nav-link" href="#" id="mobile-nav-admin" style="display:none;" onclick="closeMobileNavThen(goToAdmin, event)">Admin</a>
   <div class="mobile-nav-divider"></div>
   <a class="mobile-nav-link" href="#" id="mobile-nav-signin" onclick="closeMobileNavThen(function(e){showPage(e,'signin')}, event)">Sign in</a>
   <a class="mobile-nav-link" href="#" id="mobile-nav-signup" onclick="closeMobileNavThen(function(e){showPage(e,'signup')}, event)">Sign Up</a>
@@ -2136,6 +2136,11 @@ async function logIn(authUser) {
   document.getElementById('mobile-nav-signin').style.display = 'none';
   document.getElementById('mobile-nav-signup').style.display = 'none';
   document.getElementById('mobile-nav-logout').style.display = 'block';
+
+  // Only your own account (the one with is_admin=true in the database)
+  // sees the Admin link at all — everyone else doesn't even see it exists.
+  document.getElementById('nav-link-admin').style.display = currentUser.isAdmin ? '' : 'none';
+  document.getElementById('mobile-nav-admin').style.display = currentUser.isAdmin ? 'block' : 'none';
 }
 
 async function logOut(evt) {
@@ -2147,6 +2152,8 @@ async function logOut(evt) {
   document.getElementById('mobile-nav-signin').style.display = 'block';
   document.getElementById('mobile-nav-signup').style.display = 'block';
   document.getElementById('mobile-nav-logout').style.display = 'none';
+  document.getElementById('nav-link-admin').style.display = 'none';
+  document.getElementById('mobile-nav-admin').style.display = 'none';
   const banner = document.getElementById('home-pro-banner');
   if (banner) banner.style.display = 'flex';
   showPage(null, 'home');
