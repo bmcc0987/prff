@@ -1069,6 +1069,13 @@ footer {
       <div id="account-subscription-status" style="font-family:'Lato',sans-serif; font-size:16px; font-weight:900; color:#111; margin-bottom:6px;"></div>
       <div id="account-subscription-note" style="font-family:'Lato',sans-serif; font-size:13px; color:#888; margin-bottom:16px;"></div>
 
+      <div id="account-subscribe-tiers" style="display:none;">
+        <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('season')">Season Pass — $40 (through Jan 11)</button>
+        <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;background:#555;" onclick="startCheckout('monthly')">Monthly — $15/mo (starts Sept 9, ends Jan 11)</button>
+        <button type="button" class="trade-analyze-btn" style="width:100%;background:#555;" onclick="startCheckout('weekly')">Weekly — $4/wk (ends Jan 11)</button>
+        <div id="account-checkout-error" style="display:none; font-family:'Lato',sans-serif; font-size:13px; color:#c0392b; margin-top:8px;"></div>
+      </div>
+
       <button type="button" class="trade-analyze-btn" style="width:100%;" id="account-cancel-btn" onclick="cancelSubscription()">Cancel Subscription</button>
 
       <a href="#" class="article-back-link" style="display:block; text-align:center; margin-top:20px;" onclick="goToHome(event)">← Back to home</a>
@@ -1690,6 +1697,8 @@ function renderAccountPage() {
   const statusEl = document.getElementById('account-subscription-status');
   const noteEl = document.getElementById('account-subscription-note');
   const cancelBtn = document.getElementById('account-cancel-btn');
+  const tiersEl = document.getElementById('account-subscribe-tiers');
+  document.getElementById('account-checkout-error').style.display = 'none';
   cancelSubscriptionArmed = false;
   cancelBtn.style.background = '';
   if (currentUser.isPro) {
@@ -1698,11 +1707,13 @@ function renderAccountPage() {
     noteEl.textContent = 'You have full access to season long and weekly projections, the trade analyzer, and all articles.';
     cancelBtn.style.display = 'block';
     cancelBtn.textContent = 'Cancel Subscription';
+    tiersEl.style.display = 'none';
   } else {
     statusEl.textContent = 'Free';
     statusEl.style.color = '#111';
     noteEl.textContent = 'You don\'t have an active Pro subscription.';
     cancelBtn.style.display = 'none';
+    tiersEl.style.display = 'block';
   }
 }
 
@@ -1763,6 +1774,33 @@ async function sendAccountPasswordReset() {
 }
 
 let cancelSubscriptionArmed = false;
+
+// Calls the create-checkout-session Edge Function for the chosen tier and
+// redirects to Stripe's own hosted checkout page. All the actual payment
+// handling happens on Stripe's page — this site never touches card data.
+async function startCheckout(tier) {
+  if (!currentUser || !supabaseClient) return;
+  const errorEl = document.getElementById('account-checkout-error');
+  errorEl.style.display = 'none';
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData.session.access_token;
+    const res = await fetch(SUPABASE_URL + '/functions/v1/create-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken,
+      },
+      body: JSON.stringify({ tier }),
+    });
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+    window.location.href = result.url;
+  } catch (e) {
+    errorEl.textContent = 'Could not start checkout: ' + e.message;
+    errorEl.style.display = 'block';
+  }
+}
 
 async function cancelSubscription() {
   if (!currentUser || !currentUser.isPro) return;
@@ -2114,17 +2152,18 @@ async function handleForgotPassword(evt) {
 // the logged-in nav state. Called after signup/signin, and once on page
 // load if a session already exists (Supabase persists sessions itself).
 async function logIn(authUser) {
-  let profile = { first_name: '', last_name: '', is_pro: false, is_admin: false };
+  let profile = { first_name: '', last_name: '', is_pro: false, is_admin: false, pro_expires_at: null };
   if (supabaseClient) {
     const { data } = await supabaseClient.from('profiles').select('*').eq('id', authUser.id).single();
     if (data) profile = data;
   }
+  const notExpired = !profile.pro_expires_at || new Date(profile.pro_expires_at) > new Date();
   currentUser = {
     id: authUser.id,
     email: authUser.email,
     firstName: profile.first_name || '',
     lastName: profile.last_name || '',
-    isPro: !!profile.is_pro,
+    isPro: !!profile.is_pro && notExpired,
     isAdmin: !!profile.is_admin,
   };
   document.getElementById('nav-actions-loggedout').style.display = 'none';
