@@ -769,7 +769,7 @@ footer {
   </div>
 </div>
 
-<div style="background:#0d0d0d; padding:7px 20px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.04);">
+<div id="ticker-login-nudge" style="background:#0d0d0d; padding:7px 20px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.04);">
   <a href="#" style="font-family:'Lato',sans-serif; font-size:12px; font-weight:700; color:#3DB87A; text-decoration:none; letter-spacing:0.03em;">Log in to see full projections →</a>
 </div>
 
@@ -784,11 +784,13 @@ footer {
       <span class="hero-results">Results</span>
     </div>
     <p>Our unique process uses implied totals to project players using probabilities. Learn more about our Superforecasting method below.</p>
-    <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
-      <a class="btn-subscribe" href="#articles">Subscribe</a>
-      <a class="btn-go-pro" href="#" onclick="goToAccount(event)">Go Pro</a>
+    <div id="hero-subscribe-cta">
+      <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
+        <a class="btn-subscribe" href="#articles">Subscribe</a>
+        <a class="btn-go-pro" href="#" onclick="goToAccount(event)">Go Pro</a>
+      </div>
+      <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free until September 9, 2026 (day 1 of the NFL season). Go Pro to access all functions of the site all season long!</p>
     </div>
-    <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free until September 9, 2026 (day 1 of the NFL season). Go Pro to access all functions of the site all season long!</p>
 
   </div>
   <a class="scroll-arrow" href="#articles">
@@ -1833,6 +1835,7 @@ async function cancelSubscription() {
   if (supabaseClient) {
     await supabaseClient.from('profiles').update({ is_pro: false }).eq('id', currentUser.id);
   }
+  updateHomepageProState();
   renderAccountPage();
 }
 
@@ -2195,6 +2198,19 @@ async function logIn(authUser) {
   // sees the Admin link at all — everyone else doesn't even see it exists.
   document.getElementById('nav-link-admin').style.display = currentUser.isAdmin ? '' : 'none';
   document.getElementById('mobile-nav-admin').style.display = currentUser.isAdmin ? 'block' : 'none';
+
+  updateHomepageProState();
+}
+
+// Hides the "Subscribe / Go Pro" pitch on the homepage hero and the
+// "Log in to see full projections" ticker nudge once someone is an active
+// Pro subscriber — neither one applies to them anymore.
+function updateHomepageProState() {
+  const isPro = !!(currentUser && currentUser.isPro);
+  const cta = document.getElementById('hero-subscribe-cta');
+  const nudge = document.getElementById('ticker-login-nudge');
+  if (cta) cta.style.display = isPro ? 'none' : 'block';
+  if (nudge) nudge.style.display = isPro ? 'none' : 'block';
 }
 
 async function logOut(evt) {
@@ -2210,6 +2226,7 @@ async function logOut(evt) {
   document.getElementById('mobile-nav-admin').style.display = 'none';
   const banner = document.getElementById('home-pro-banner');
   if (banner) banner.style.display = 'flex';
+  updateHomepageProState();
   showPage(null, 'home');
 }
 
