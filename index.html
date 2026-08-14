@@ -1029,6 +1029,33 @@ footer {
 </div>
 
 
+<!-- CONTACT PAGE -->
+<div id="page-contact" style="display:none;">
+  <div class="auth-page">
+    <div class="auth-card" style="max-width:460px;">
+      <h1 class="auth-title">Contact Us</h1>
+      <p class="auth-sub">Have a question, feedback, or a fantasy football problem you want a second opinion on? Send us a message.</p>
+
+      <div id="contact-error" style="display:none; background:#fdecea; border:1px solid #f5c6c0; color:#c0392b; font-family:'Lato',sans-serif; font-size:14px; padding:12px 16px; border-radius:8px; margin-bottom:16px;"></div>
+      <div id="contact-success" style="display:none; background:#eafaf1; border:1px solid #b7ebc9; color:#1e7e42; font-family:'Lato',sans-serif; font-size:14px; padding:12px 16px; border-radius:8px; margin-bottom:16px;">Thanks — your message has been sent. We'll get back to you soon.</div>
+
+      <div id="contact-form-wrap">
+        <label class="auth-label">Name</label>
+        <input class="auth-input" type="text" id="contact-name" placeholder="Your name">
+
+        <label class="auth-label">Email <span class="trade-optional-tag">so we can reply</span></label>
+        <input class="auth-input" type="email" id="contact-email" placeholder="you@example.com">
+
+        <label class="auth-label">Message</label>
+        <textarea class="auth-input" id="contact-message" rows="6" placeholder="What's on your mind?" style="resize:vertical;"></textarea>
+
+        <button type="button" class="auth-btn" id="contact-submit-btn" onclick="submitContactForm()">Send Message</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- ACCOUNT PAGE -->
 <div id="page-account" style="display:none;">
   <div class="auth-page">
@@ -1623,7 +1650,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
   <div class="footer-links">
     <a class="footer-link" href="#" onclick="goToPrivacy(event)">Privacy</a>
     <a class="footer-link" href="#" onclick="goToTerms(event)">Terms</a>
-    <a class="footer-link" href="#">Support</a>
+    <a class="footer-link" href="#" onclick="goToContact(event)">Contact</a>
     <a class="footer-link" href="#">© 2026 Process/Results</a>
   </div>
 </footer>
@@ -1650,7 +1677,7 @@ let currentUser = null;
 
 function showPage(evt, pageName) {
   if (evt) evt.preventDefault();
-  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account')
+  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact')
     .forEach(el => el.style.display = 'none');
   document.getElementById('page-' + pageName).style.display = 'block';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1673,6 +1700,14 @@ function goToTerms(evt) {
 function goToPrivacy(evt) {
   if (evt) evt.preventDefault();
   showPage(null, 'privacy');
+}
+
+function goToContact(evt) {
+  if (evt) evt.preventDefault();
+  document.getElementById('contact-error').style.display = 'none';
+  document.getElementById('contact-success').style.display = 'none';
+  document.getElementById('contact-form-wrap').style.display = 'block';
+  showPage(null, 'contact');
 }
 
 function goToAccount(evt) {
@@ -1768,6 +1803,51 @@ async function updateAccountPassword() {
 
 // Real auth never exposes a plaintext password to the client — this sends
 // a real reset-password email via Supabase Auth instead of "showing" one.
+// Sends a contact form message via the send-contact-email Edge Function
+// (which uses Resend's API directly server-side — the Resend API key never
+// touches this browser code). Works whether or not the visitor is signed
+// in, since anyone should be able to reach out.
+async function submitContactForm() {
+  const name = document.getElementById('contact-name').value.trim();
+  const email = document.getElementById('contact-email').value.trim();
+  const message = document.getElementById('contact-message').value.trim();
+  const errorEl = document.getElementById('contact-error');
+  const successEl = document.getElementById('contact-success');
+  errorEl.style.display = 'none';
+
+  if (!name || !message) {
+    errorEl.textContent = 'Please fill in your name and a message.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!supabaseClient) {
+    errorEl.textContent = 'Contact form is unavailable right now — the database connection is not set up.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('contact-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    const res = await fetch(SUPABASE_URL + '/functions/v1/send-contact-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ name, email, message }),
+    });
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+    document.getElementById('contact-form-wrap').style.display = 'none';
+    successEl.style.display = 'block';
+  } catch (e) {
+    errorEl.textContent = 'Could not send your message: ' + e.message;
+    errorEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Message';
+  }
+}
+
 async function sendAccountPasswordReset() {
   if (!currentUser || !supabaseClient) return;
   const note = document.getElementById('account-password-reset-note');
