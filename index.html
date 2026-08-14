@@ -4335,12 +4335,34 @@ function renderTableBlock(lines) {
     return allNumeric ? 'right' : 'left';
   });
 
+  // Rows whose first cell is exactly one of these labels (bold markers and
+  // surrounding whitespace ignored) automatically get the same dark
+  // summary-row treatment used throughout the site's other tables — black
+  // background, white text, except the "%" row which renders in the site's
+  // green accent instead of white.
+  const SUMMARY_LABELS = ['total', 'mean', 'min', 'max', '%'];
+  function summaryKind(row) {
+    const label = (row[0] || '').trim().replace(/^\*\*|\*\*$/g, '').toLowerCase();
+    return SUMMARY_LABELS.includes(label) ? label : null;
+  }
+
   let html = '<div class="article-table-wrap"><table class="article-table"><thead><tr>';
   headerCells.forEach((h, i) => {
     html += '<th style="text-align:' + (aligns[i] || 'left') + ';">' + formatInline(h) + '</th>';
   });
   html += '</tr></thead><tbody>';
   dataRows.forEach((row, ri) => {
+    const kind = summaryKind(row);
+    if (kind) {
+      const rowColor = kind === '%' ? '#3DB87A' : '#fff';
+      html += '<tr style="background:#111;">';
+      headerCells.forEach((_, i) => {
+        const raw = row[i] || '';
+        html += '<td style="text-align:' + (aligns[i] || 'left') + ';color:' + rowColor + ';font-weight:700;">' + formatInline(raw) + '</td>';
+      });
+      html += '</tr>';
+      return;
+    }
     html += '<tr' + (ri % 2 === 1 ? ' class="article-table-alt"' : '') + '>';
     headerCells.forEach((_, i) => {
       const raw = row[i] || '';
