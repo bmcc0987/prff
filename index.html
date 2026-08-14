@@ -1097,6 +1097,15 @@ footer {
         <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('monthly')">Monthly — $15/mo (starts Sept 9, ends Jan 11)</button>
         <button type="button" class="trade-analyze-btn" style="width:100%;" onclick="startCheckout('weekly')">Weekly — $4/wk (ends Jan 11)</button>
         <div id="account-checkout-error" style="display:none; font-family:'Lato',sans-serif; font-size:13px; color:#c0392b; margin-top:8px;"></div>
+
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid #eee;">
+          <label class="auth-label">Have a promo code?</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input class="auth-input" type="text" id="promo-code-input" placeholder="Enter code" style="margin-top:0; flex:1 1 auto; min-width:0; text-transform:uppercase;">
+            <button type="button" class="trade-add-btn" style="flex-shrink:0; width:auto; white-space:nowrap;" onclick="redeemPromoCode()" id="promo-code-btn">Apply</button>
+          </div>
+          <div id="promo-code-message" style="display:none; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
+        </div>
       </div>
 
       <button type="button" class="trade-analyze-btn" style="width:100%;" id="account-cancel-btn" onclick="cancelSubscription()">Cancel Subscription</button>
@@ -1886,6 +1895,52 @@ async function startCheckout(tier) {
   }
 }
 
+// Redeems a promo code via the redeem-promo-code Edge Function, which does
+// all the real validation (exists, active, not expired, not over its
+// redemption limit, not already used by this person) server-side using the
+// service role key — the browser never gets to flip is_pro itself.
+async function redeemPromoCode() {
+  if (!currentUser || !supabaseClient) return;
+  const input = document.getElementById('promo-code-input');
+  const msg = document.getElementById('promo-code-message');
+  const btn = document.getElementById('promo-code-btn');
+  const code = input.value.trim();
+  if (!code) {
+    msg.style.color = '#c0392b';
+    msg.textContent = 'Enter a code first.';
+    msg.style.display = 'block';
+    return;
+  }
+  btn.disabled = true;
+  msg.style.display = 'none';
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData.session.access_token;
+    const res = await fetch(SUPABASE_URL + '/functions/v1/redeem-promo-code', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken,
+      },
+      body: JSON.stringify({ code }),
+    });
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+    currentUser.isPro = true;
+    updateHomepageProState();
+    msg.style.color = '#3DB87A';
+    msg.textContent = 'Code applied — you now have Pro access through the end of the season!';
+    msg.style.display = 'block';
+    setTimeout(renderAccountPage, 2000); // give the success message a moment to be seen before the layout switches to the Pro view
+  } catch (e) {
+    msg.style.color = '#c0392b';
+    msg.textContent = e.message;
+    msg.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function cancelSubscription() {
   if (!currentUser || !currentUser.isPro) return;
   const btn = document.getElementById('account-cancel-btn');
@@ -2045,7 +2100,7 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = buildPublishedTableHTML(activeWeeklyPosition, 'Season Long', data.topN, data.rows, 'exportSeasonLongPositionCSV');
+    section.innerHTML = buildPublishedTableHTML(activeWeeklyPosition, 'Season Long', data.topN, data.rows, 'exportSeasonLongPositionCSV', true);
     container.appendChild(section);
     return;
   }
@@ -3080,23 +3135,49 @@ function probToColor(prob) {
   return 'rgb(' + rgb.join(',') + ')';
 }
 
-function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName) {
+function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, highlightTeamTier) {
   const uid = 'pubtbl-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  // Maps each team to whether it's a Top 12 or Bottom 12 (rank 21-32)
+  // season-long implied-total team, so the Team column can be colored to
+  // match. Built once per render from the live season-long totals — if
+  // nothing's published yet, this just comes back empty and nothing gets
+  // colored (no crash either way).
+  let teamTierColor = {};
+  if (highlightTeamTier && publishedSeasonLongTotals && publishedSeasonLongTotals.rows) {
+    const sorted = publishedSeasonLongTotals.rows
+      .filter(r => typeof r.value === 'number')
+      .slice()
+      .sort((a, b) => b.value - a.value);
+    sorted.forEach((r, i) => {
+      const rank = i + 1;
+      const abbr = NFL_TEAM_ABBR[r.team] || r.team; // totals store full names; player rows store abbreviations
+      if (rank <= 12) teamTierColor[abbr] = '#3DB87A';
+      else if (rank >= 21) teamTierColor[abbr] = '#c0392b';
+    });
+  }
 
   let html = '<div class="pub-table-wrap">';
   if (exportFnName) {
     html += '<button type="button" class="export-csv-btn" onclick="' + exportFnName + '()">Export as CSV</button>';
   }
   html += '<div class="pub-title">' + position + ' Probabilities to Finish in the Top ' + topN + ' – ' + weekLabel + '</div>';
+  if (highlightTeamTier) {
+    html += '<div style="font-family:\'Lato\',sans-serif;font-size:12px;color:#666;padding:0 16px 10px;">' +
+      '<span style="color:#3DB87A;font-weight:700;">■</span> Top 12 season-long implied-total team &nbsp;&nbsp;' +
+      '<span style="color:#c0392b;font-weight:700;">■</span> Bottom 12 (21-32) season-long implied-total team</div>';
+  }
   html += '<div class="pub-table-flex">';
 
   html += '<div class="pub-table-scroll"><table class="pub-table" id="' + uid + '"><thead><tr><th>Rank</th><th>Player</th><th>Team</th><th>Prob</th></tr></thead><tbody>';
   rows.forEach((r, i) => {
     if (!r.player) return;
+    const tierColor = teamTierColor[r.team];
+    const teamStyle = tierColor ? ' style="color:' + tierColor + ';font-weight:700;"' : '';
     html += '<tr>' +
       '<td>' + (i + 1) + '</td>' +
       '<td>' + r.player + '</td>' +
-      '<td>' + (r.team || '') + '</td>' +
+      '<td' + teamStyle + '>' + (r.team || '') + '</td>' +
       '<td class="pub-prob-cell pub-prob-selectable" data-name="' + r.player + '" data-prob="' + r.prob + '" ' +
       'style="background:' + probToColor(r.prob) + ';" ' +
       'onmousedown="pubProbDragStart(event,\'' + uid + '\')" onmouseenter="pubProbDragOver(event,\'' + uid + '\')">' + r.prob + '%</td>' +
