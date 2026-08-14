@@ -1569,8 +1569,15 @@ footer {
       </div>
 
       <div class="admin-field" style="margin-bottom:16px;">
-        <label class="auth-label">Featured image URL <span class="trade-optional-tag">optional</span></label>
-        <input class="auth-input" type="text" id="article-image" placeholder="https://example.com/photo.jpg">
+        <label class="auth-label">Featured image <span class="trade-optional-tag">optional</span></label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input class="auth-input" type="text" id="article-image" placeholder="https://example.com/photo.jpg" style="flex:1 1 auto; min-width:0;">
+          <button type="button" class="trade-add-btn" style="flex-shrink:0; width:auto; white-space:nowrap;" onclick="document.getElementById('article-featured-image-file').click()">Upload</button>
+          <input type="file" id="article-featured-image-file" accept="image/*" style="display:none;" onchange="handleFeaturedImageFileSelect(event)">
+        </div>
+        <div id="article-featured-image-preview-wrap" style="display:none; margin-top:10px;">
+          <img id="article-featured-image-preview" style="max-width:100%; max-height:160px; border-radius:8px; display:block;">
+        </div>
       </div>
 
       <div class="admin-field" style="margin-bottom:16px;">
@@ -4340,7 +4347,7 @@ function renderTableBlock(lines) {
   // summary-row treatment used throughout the site's other tables — black
   // background, white text, except the "%" row which renders in the site's
   // green accent instead of white.
-  const SUMMARY_LABELS = ['total', 'mean', 'min', 'max', '%'];
+  const SUMMARY_LABELS = ['total', 'mean', 'average', 'min', 'max', '%'];
   function summaryKind(row) {
     const label = (row[0] || '').trim().replace(/^\*\*|\*\*$/g, '').toLowerCase();
     return SUMMARY_LABELS.includes(label) ? label : null;
@@ -4550,6 +4557,34 @@ function insertPhotoBlock(altText, url) {
 // Reads a photo picked from the user's own computer and embeds it directly
 // as a data URL — no upload/hosting step needed, the image data lives right
 // in the published article.
+// Same approach as body photos (handlePhotoFileSelect below): reads the
+// file straight into a data URL, no upload/hosting step needed. Unlike a
+// body photo, this one just fills the URL field (and shows a small
+// preview) rather than inserting a block into the article text.
+function handleFeaturedImageFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    const errorEl = document.getElementById('article-editor-error');
+    if (errorEl) {
+      errorEl.textContent = 'Please choose an image file.';
+      errorEl.style.display = 'block';
+    }
+    event.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    document.getElementById('article-image').value = e.target.result;
+    const previewWrap = document.getElementById('article-featured-image-preview-wrap');
+    const preview = document.getElementById('article-featured-image-preview');
+    preview.src = e.target.result;
+    previewWrap.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
 function handlePhotoFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -4849,6 +4884,7 @@ function loadArticleIntoEditor() {
     document.getElementById('article-editing-id').value = '';
     document.getElementById('article-editing-type').value = '';
     document.getElementById('article-preview-wrap').style.display = 'none';
+    document.getElementById('article-featured-image-preview-wrap').style.display = 'none';
     return;
   }
   const isDraft = raw.startsWith('draft:');
@@ -4862,8 +4898,16 @@ function loadArticleIntoEditor() {
   document.getElementById('article-body').value = a.body;
   document.getElementById('article-editing-id').value = a.id;
   document.getElementById('article-editing-type').value = isDraft ? 'draft' : 'published';
-  const preview = document.getElementById('article-preview');
-  preview.innerHTML = buildArticleReaderHTML(a);
+  const previewWrap = document.getElementById('article-featured-image-preview-wrap');
+  const preview = document.getElementById('article-featured-image-preview');
+  if (a.image) {
+    preview.src = a.image;
+    previewWrap.style.display = 'block';
+  } else {
+    previewWrap.style.display = 'none';
+  }
+  const articlePreview = document.getElementById('article-preview');
+  articlePreview.innerHTML = buildArticleReaderHTML(a);
   document.getElementById('article-preview-wrap').style.display = 'block';
 }
 
