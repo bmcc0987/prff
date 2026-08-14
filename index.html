@@ -4721,12 +4721,14 @@ function estimateReadMinutes(body) {
 }
 
 function buildArticleReaderHTML(article) {
-  const imageHtml = article.image ? '<img class="article-reader-image" src="' + article.image + '" alt="">' : '';
+  // The featured image is used for the article's thumbnail on listing
+  // cards (see renderHomepageArticles) — it intentionally does NOT also
+  // render again at the top of the article body when someone opens it.
   return '<a href="#" class="article-back-link" onclick="goToArticlesPage(event)">← Back to articles</a>' +
     '<div class="article-reader-tag">' + article.tag + ' · ' + article.access + '</div>' +
     '<h1 class="article-reader-title">' + article.title + '</h1>' +
     '<div class="article-reader-meta">By ' + article.author + ' · ' + article.dateLabel + ' · ' + estimateReadMinutes(article.body) + ' min read</div>' +
-    imageHtml + parseArticleBody(article.body);
+    parseArticleBody(article.body);
 }
 
 async function publishArticle() {
