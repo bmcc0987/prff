@@ -806,13 +806,13 @@ footer {
     </div>
     <a class="see-all" href="#" onclick="goToArticlesPage(event)">View all articles →</a>
   </div>
-  <div class="featured-article">
-    <div class="featured-img-wrap"><img src="hero-photo.png" alt="Football player" /></div>
+  <div class="featured-article" id="featured-article-block" style="display:none;">
+    <div class="featured-img-wrap"><img id="featured-article-img" src="hero-photo.png" alt="Football player" /></div>
     <div class="featured-body">
-      <div class="article-tag">Draft strategy · Free</div>
-      <div class="featured-headline">Who stuck to their plan? Grading all 32 teams from the 2026 NFL Draft</div>
-      <div class="featured-excerpt">We graded every team against their own stated pre-draft priorities — capital spent, positions addressed, and volume of investment. The results might surprise you.</div>
-      <a class="read-btn" href="#">Read article →</a>
+      <div class="article-tag" id="featured-article-tag">Draft strategy · Free</div>
+      <div class="featured-headline" id="featured-article-headline">Who stuck to their plan? Grading all 32 teams from the 2026 NFL Draft</div>
+      <div class="featured-excerpt" id="featured-article-excerpt"></div>
+      <a class="read-btn" href="#" id="featured-article-link">Read article →</a>
     </div>
   </div>
   <div class="articles-grid articles-grid-dynamic">
@@ -4915,8 +4915,29 @@ function loadArticleIntoEditor() {
 // Articles page's) from published articles, newest first. If nothing's
 // published yet, the static placeholder cards already in the HTML stay put.
 function renderHomepageArticles() {
-  const grids = document.querySelectorAll('.articles-grid-dynamic');
   const ids = Object.keys(publishedArticles);
+
+  // The large "Featured analysis" hero card at the top of the section —
+  // previously static placeholder HTML that never got wired to real data.
+  // Now shows the most recently published article, and hides itself
+  // entirely if nothing's been published yet.
+  const featuredBlock = document.getElementById('featured-article-block');
+  if (featuredBlock) {
+    if (ids.length === 0) {
+      featuredBlock.style.display = 'none';
+    } else {
+      const latest = publishedArticles[ids[ids.length - 1]];
+      document.getElementById('featured-article-img').src = latest.image || 'hero-photo.png';
+      document.getElementById('featured-article-tag').textContent = latest.tag + ' · ' + latest.access;
+      document.getElementById('featured-article-headline').textContent = latest.title;
+      document.getElementById('featured-article-excerpt').textContent = plainTextExcerpt(latest.body, 180);
+      const link = document.getElementById('featured-article-link');
+      link.onclick = function (e) { e.preventDefault(); goToArticle(ids[ids.length - 1]); };
+      featuredBlock.style.display = '';
+    }
+  }
+
+  const grids = document.querySelectorAll('.articles-grid-dynamic');
   if (ids.length === 0 || grids.length === 0) return;
 
   grids.forEach(grid => {
@@ -4937,6 +4958,24 @@ function renderHomepageArticles() {
       grid.appendChild(card);
     });
   });
+}
+
+// Strips the article-syntax markup (headers, bullets, table rows, links,
+// bold/italic markers) down to plain readable text for the featured card's
+// short excerpt, since articles don't have a separate excerpt field.
+function plainTextExcerpt(body, maxLen) {
+  const plain = body
+    .split('\n')
+    .filter(line => !line.trim().startsWith('|') && !line.trim().startsWith('%%'))
+    .join(' ')
+    .replace(/#+\s*/g, '')
+    .replace(/[•\t]/g, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain.length > maxLen ? plain.slice(0, maxLen).trim() + '…' : plain;
 }
 
 function goToArticle(id) {
