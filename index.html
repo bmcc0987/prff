@@ -172,6 +172,14 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
   cursor: pointer; transition: background 0.15s, transform 0.1s; text-decoration: none;
 }
 .btn-subscribe:hover { background: #2ea065; transform: translateY(-1px); }
+.btn-go-pro {
+  display: inline-block; background: transparent; color: white; border: 2px solid white;
+  border-radius: 8px; padding: 14px 50px;
+  font-family: 'Lato', sans-serif; font-size: 16px; font-weight: 900;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer; transition: background 0.15s, transform 0.1s; text-decoration: none;
+}
+.btn-go-pro:hover { background: rgba(255,255,255,0.15); transform: translateY(-1px); }
 
 .scroll-arrow {
   position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
@@ -715,7 +723,7 @@ footer {
     </div>
     <a class="nav-link" href="#">Draft Guide</a>
     <a class="nav-link" href="#" onclick="goToArticlesPage(event)">Articles</a>
-    <a class="nav-link" href="#" onclick="goToTrade(event)">Trade Analyzer</a>
+    <a class="nav-link" href="#" onclick="goToTrade(event)">Trade/Team Analyzer</a>
     <a class="nav-link" href="#" onclick="goToAdmin(event)" id="nav-link-admin" style="display:none;">Admin</a>
   </div>
   <div class="nav-actions" id="nav-actions-loggedout">
@@ -740,7 +748,7 @@ footer {
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToProjections, event)">Projections</a>
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(null, event)">Draft Guide</a>
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToArticlesPage, event)">Articles</a>
-  <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToTrade, event)">Trade Analyzer</a>
+  <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToTrade, event)">Trade/Team Analyzer</a>
   <a class="mobile-nav-link" href="#" id="mobile-nav-admin" style="display:none;" onclick="closeMobileNavThen(goToAdmin, event)">Admin</a>
   <div class="mobile-nav-divider"></div>
   <a class="mobile-nav-link" href="#" id="mobile-nav-signin" onclick="closeMobileNavThen(function(e){showPage(e,'signin')}, event)">Sign in</a>
@@ -776,8 +784,11 @@ footer {
       <span class="hero-results">Results</span>
     </div>
     <p>Our unique process uses implied totals to project players using probabilities. Learn more about our Superforecasting method below.</p>
-    <a class="btn-subscribe" href="#articles">Subscribe</a>
-    <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free until September 9, 2026 (day 1 of the NFL season). Subscribe to access all functions of the site all season long!</p>
+    <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
+      <a class="btn-subscribe" href="#articles">Subscribe</a>
+      <a class="btn-go-pro" href="#" onclick="goToAccount(event)">Go Pro</a>
+    </div>
+    <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free until September 9, 2026 (day 1 of the NFL season). Go Pro to access all functions of the site all season long!</p>
 
   </div>
   <a class="scroll-arrow" href="#articles">
@@ -823,7 +834,7 @@ footer {
   <div class="pro-features">
     <div class="pro-feat">Superforecasted full season projections</div>
     <div class="pro-feat">Weekly projections</div>
-    <div class="pro-feat">Trade analyzer</div>
+    <div class="pro-feat">Trade/Team analyzer</div>
     <div class="pro-feat">Team Implied Totals</div>
     <div class="pro-feat">Analysis</div>
   </div>
@@ -893,7 +904,7 @@ footer {
     <p class="article-body-p">We may add, modify, suspend, or discontinue any part of the Services at any time, with or without notice.</p>
 
     <h2 class="article-subheading">3. Accounts</h2>
-    <p class="article-body-p">To access certain features — including saved rosters, the Trade Analyzer, and subscriber-only content — you may need to create an account. You agree to provide accurate information when creating an account and to keep your login credentials confidential. You are responsible for all activity that occurs under your account.</p>
+    <p class="article-body-p">To access certain features — including saved rosters, the Trade/Team Analyzer, and subscriber-only content — you may need to create an account. You agree to provide accurate information when creating an account and to keep your login credentials confidential. You are responsible for all activity that occurs under your account.</p>
 
     <h2 class="article-subheading">4. Subscriptions and Billing</h2>
     <h3 class="article-subheading-small">4.1 Automatic renewal.</h3>
@@ -982,14 +993,14 @@ footer {
     <p class="article-body-p">If you purchase a subscription, payment is processed by our third-party payment processor (Stripe). We do not directly collect or store your full credit card number — Stripe handles that in accordance with its own security standards (PCI-DSS compliance). We do receive limited billing information from Stripe, such as your subscription status and payment history, to manage your account.</p>
 
     <h3 class="article-subheading-small">1.3 Usage information.</h3>
-    <p class="article-body-p">We may automatically collect information about how you use the Site, such as pages visited, features used (including Trade Analyzer inputs and saved roster data), and general device/browser information, to help us understand usage and improve the Site.</p>
+    <p class="article-body-p">We may automatically collect information about how you use the Site, such as pages visited, features used (including Trade/Team Analyzer inputs and saved roster data), and general device/browser information, to help us understand usage and improve the Site.</p>
 
     <h3 class="article-subheading-small">1.4 Content you provide.</h3>
-    <p class="article-body-p">If you use tools like the Trade Analyzer or save roster information, we store the player names and team data you enter so you can return to it later.</p>
+    <p class="article-body-p">If you use tools like the Trade/Team Analyzer or save roster information, we store the player names and team data you enter so you can return to it later.</p>
 
     <h2 class="article-subheading">2. How We Use Your Information</h2>
     <p class="article-body-p">We use the information we collect to:</p>
-    <p class="article-body-p">• Create and maintain your account<br>• Process subscription payments and manage billing<br>• Provide access to subscriber-only content and tools<br>• Save your Trade Analyzer inputs and roster data between visits<br>• Communicate with you about your account, including renewal reminders and important updates<br>• Improve the Site and understand how it's used<br>• Detect and prevent fraud or misuse</p>
+    <p class="article-body-p">• Create and maintain your account<br>• Process subscription payments and manage billing<br>• Provide access to subscriber-only content and tools<br>• Save your Trade/Team Analyzer inputs and roster data between visits<br>• Communicate with you about your account, including renewal reminders and important updates<br>• Improve the Site and understand how it's used<br>• Detect and prevent fraud or misuse</p>
     <p class="article-body-p">We do not sell your personal information to third parties.</p>
 
     <h2 class="article-subheading">3. How We Share Information</h2>
@@ -1072,7 +1083,7 @@ footer {
       <div id="account-subscription-note" style="font-family:'Lato',sans-serif; font-size:13px; color:#888; margin-bottom:16px;"></div>
 
       <div id="account-subscribe-tiers" style="display:none;">
-        <p style="font-family:'Lato',sans-serif; font-size:13px; line-height:1.6; color:#555; margin:0 0 16px;">All access to the site is free until the NFL regular season begins on Wednesday, September 9th, 2026. A Pro subscription gives you access to all of the site's tools: Season Implied Totals, Weekly Implied Totals, Season Long Player Projections, Weekly Player Projections, Rest Of Season Player Projections, Trade Analyzer, Articles, Analysis, and personal responses to any fantasy football related questions you have.</p>
+        <p style="font-family:'Lato',sans-serif; font-size:13px; line-height:1.6; color:#555; margin:0 0 16px;">All access to the site is free until the NFL regular season begins on Wednesday, September 9th, 2026. A Pro subscription gives you access to all of the site's tools: Season Implied Totals, Weekly Implied Totals, Season Long Player Projections, Weekly Player Projections, Rest Of Season Player Projections, Trade/Team Analyzer, Articles, Analysis, and personal responses to any fantasy football related questions you have.</p>
         <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('season')">Season Pass — $40 (through Jan 11)</button>
         <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('monthly')">Monthly — $15/mo (starts Sept 9, ends Jan 11)</button>
         <button type="button" class="trade-analyze-btn" style="width:100%;" onclick="startCheckout('weekly')">Weekly — $4/wk (ends Jan 11)</button>
@@ -1180,13 +1191,14 @@ footer {
 <div id="page-trade" class="trade-page" style="display:none;">
   <div class="proj-header">
     <div>
-      <div class="section-label">Trade Analyzer</div>
+      <div class="section-label">Trade/Team Analyzer</div>
       <div class="section-title">Who wins the trade?</div>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">This acts as a trade analyzer or current team analyzer. Enter your current team vs others in your league and we'll tell you whose team we predict to score more points using historical data.</p>
     </div>
   </div>
 
   <div id="trade-locked" class="trade-locked" style="display:none;">
-    <div class="trade-locked-title">🔒 Sign in to use the Trade Analyzer</div>
+    <div class="trade-locked-title">🔒 Sign in to use the Trade/Team Analyzer</div>
     <div class="trade-locked-sub">Create a free account to grade trades and see which side benefits.</div>
     <a class="btn-pro" href="#" onclick="showPage(event,'signup')">Sign up free →</a>
   </div>
@@ -1707,7 +1719,7 @@ function renderAccountPage() {
   if (currentUser.isPro) {
     statusEl.textContent = 'Pro';
     statusEl.style.color = '#3DB87A';
-    noteEl.textContent = 'You have full access to season long and weekly projections, the trade analyzer, and all articles.';
+    noteEl.textContent = 'You have full access to season long and weekly projections, the trade/team analyzer, and all articles.';
     cancelBtn.style.display = 'block';
     cancelBtn.textContent = 'Cancel Subscription';
     tiersEl.style.display = 'none';
