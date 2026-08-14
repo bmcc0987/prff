@@ -1667,6 +1667,29 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
   </div>
 </footer>
 
+<script>
+// Runs synchronously, before the page paints — hides the homepage
+// immediately if the URL isn't actually "/", so a direct visit to (or
+// refresh on) e.g. /trade doesn't flash the homepage first while the rest
+// of the app finishes loading asynchronously. The full router
+// (routeFromLocation, further down) takes over once articles/auth are
+// ready and does the real, complete page setup — this is just the
+// flash-prevention layer.
+(function () {
+  var STATIC_PATH_TO_PAGE = {
+    '/': 'home', '/terms': 'terms', '/privacy': 'privacy', '/contact': 'contact',
+    '/account': 'account', '/signup': 'signup', '/signin': 'signin',
+    '/projections': 'projections', '/trade': 'trade', '/admin': 'admin', '/articles': 'articles',
+  };
+  var path = window.location.pathname;
+  var pageName = STATIC_PATH_TO_PAGE[path];
+  if (!pageName && /^\/articles\//.test(path)) pageName = 'article';
+  if (pageName && pageName !== 'home') {
+    var homeEl = document.getElementById('page-home');
+    if (homeEl) homeEl.style.display = 'none';
+  }
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // --- SUPABASE CONNECTION -----------------------------------------------
@@ -1687,7 +1710,17 @@ const supabaseClient = (typeof window !== 'undefined' && window.supabase)
 // currentUser.isPro gates Pro content.
 let currentUser = null;
 
-function showPage(evt, pageName) {
+// Maps each static page name to its real URL path. 'article' isn't listed
+// here since its path is dynamic (/articles/{id}) — goToArticle handles
+// that case itself.
+const PAGE_PATHS = {
+  home: '/', terms: '/terms', privacy: '/privacy', contact: '/contact',
+  account: '/account', signup: '/signup', signin: '/signin',
+  projections: '/projections', trade: '/trade', admin: '/admin', articles: '/articles',
+};
+
+function showPage(evt, pageName, opts) {
+  opts = opts || {};
   if (evt) evt.preventDefault();
   document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact')
     .forEach(el => el.style.display = 'none');
@@ -1697,6 +1730,17 @@ function showPage(evt, pageName) {
   if (pageName === 'trade') refreshTradeGate();
   if (pageName === 'admin') refreshAdminGate();
   if (pageName === 'account') renderAccountPage();
+
+  // Update the real URL — unless this call came from responding to the
+  // Back/Forward buttons or the initial page load, in which case the URL
+  // is already correct and re-pushing it would create a duplicate/broken
+  // history entry.
+  if (!opts.skipPush) {
+    const path = opts.path || PAGE_PATHS[pageName] || '/';
+    if (window.location.pathname !== path) {
+      history.pushState({ page: pageName, articleId: opts.articleId || null }, '', path);
+    }
+  }
 }
 
 function goToHome(evt) {
@@ -5097,11 +5141,12 @@ function renderHomepageArticles() {
   });
 }
 
-function goToArticle(id) {
+function goToArticle(id, opts) {
+  opts = opts || {};
   const article = publishedArticles[id];
   if (!article) return;
   document.getElementById('article-reader-content').innerHTML = buildArticleReaderHTML(article);
-  showPage(null, 'article');
+  showPage(null, 'article', { skipPush: opts.skipPush, path: '/articles/' + encodeURIComponent(id), articleId: id });
 }
 
 // Shortens "Lamar Jackson" -> "L. Jackson" to match the ticker's compact style.
@@ -5290,6 +5335,49 @@ async function loadAppState() {
 
 // Load whatever's published BEFORE the first render, so it shows up
 // immediately on open rather than popping in after a delayed fetch.
+// --- URL ROUTING -------------------------------------------------------
+// Reads the current URL and shows the matching page, without pushing a new
+// history entry (used for the initial page load and for Back/Forward).
+function routeFromLocation() {
+  const path = window.location.pathname;
+
+  const articleMatch = path.match(/^\/articles\/([^\/]+)\/?$/);
+  if (articleMatch) {
+    const id = decodeURIComponent(articleMatch[1]);
+    if (publishedArticles[id]) {
+      goToArticle(id, { skipPush: true });
+    } else {
+      // Unknown/removed article id — fall back to the articles list rather
+      // than showing a broken empty reader page.
+      showPage(null, 'articles', { skipPush: true, path: '/articles' });
+      history.replaceState({ page: 'articles' }, '', '/articles');
+    }
+    return;
+  }
+
+  const match = Object.entries(PAGE_PATHS).find(([, p]) => p === path);
+  if (match) {
+    const pageName = match[0];
+    if (pageName === 'account' && !currentUser) {
+      showPage(null, 'signin', { skipPush: true, path: '/signin' });
+      history.replaceState({ page: 'signin' }, '', '/signin');
+      return;
+    }
+    showPage(null, pageName, { skipPush: true, path });
+    return;
+  }
+
+  // Unrecognized path (typo, old bookmark, etc.) — show the homepage but
+  // correct the address bar to match, rather than leaving a dead URL
+  // displayed while the homepage silently renders underneath it.
+  showPage(null, 'home', { skipPush: true, path: '/' });
+  history.replaceState({ page: 'home' }, '', '/');
+}
+
+window.addEventListener('popstate', function () {
+  routeFromLocation();
+});
+
 (async function initApp() {
   await loadAppState();
   renderHomepageArticles();
@@ -5304,6 +5392,11 @@ async function loadAppState() {
       await logIn(data.session.user);
     }
   }
+
+  // Resolve whatever URL the visitor actually landed on — a deep link to
+  // an article, a direct visit to /trade, a page refresh, etc. — now that
+  // articles and auth state are both loaded and ready to route against.
+  routeFromLocation();
 })();
 </script>
 
