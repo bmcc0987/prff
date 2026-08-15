@@ -2769,26 +2769,41 @@ function formatDelta(delta) {
 // priority order: Rest of Season projections (if published for this
 // position/week) > Season Long projections (if published) > Weekly Position
 // rankings (the original fallback). Returns { rank, source } or null.
+// Standard "competition ranking" (the same style used in sports standings):
+// players tied on probability all get the rank number where their tie
+// group STARTS, not their raw position in the sorted list. E.g. two
+// players tied at #11/#12 both become #11; the next distinct player after
+// them is #13 (the rank number is skipped, not renumbered), matching how
+// ties are actually reported everywhere else.
+function findTiedRank(sortedRows, name) {
+  const idx = sortedRows.findIndex(r => r.player === name);
+  if (idx === -1) return -1;
+  const prob = sortedRows[idx].prob;
+  let rank = idx;
+  while (rank > 0 && sortedRows[rank - 1].prob === prob) rank--;
+  return rank + 1;
+}
+
 function resolvePlayerRank(name, position, week) {
   const rosData = publishedROS[position + '-' + week];
   if (rosData) {
     const sorted = rosData.rows.slice().sort((a, b) => b.prob - a.prob);
-    const idx = sorted.findIndex(r => r.player === name);
-    if (idx !== -1) return { rank: idx + 1, source: 'Rest of Season' };
+    const rank = findTiedRank(sorted, name);
+    if (rank !== -1) return { rank, source: 'Rest of Season' };
   }
 
   const slData = publishedSeasonLong[position];
   if (slData) {
     const sorted = slData.rows.slice().sort((a, b) => b.prob - a.prob);
-    const idx = sorted.findIndex(r => r.player === name);
-    if (idx !== -1) return { rank: idx + 1, source: 'Season Long' };
+    const rank = findTiedRank(sorted, name);
+    if (rank !== -1) return { rank, source: 'Season Long' };
   }
 
   const weeklyData = publishedRankings[position + '-' + week];
   if (weeklyData) {
     const sorted = weeklyData.rows.slice().sort((a, b) => b.prob - a.prob);
-    const idx = sorted.findIndex(r => r.player === name);
-    if (idx !== -1) return { rank: idx + 1, source: 'Weekly' };
+    const rank = findTiedRank(sorted, name);
+    if (rank !== -1) return { rank, source: 'Weekly' };
   }
 
   return null;
