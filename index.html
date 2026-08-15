@@ -1447,7 +1447,7 @@ footer {
       <datalist id="admin-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:60px;">Rank</th><th style="width:110px;">Player</th><th style="width:70px;">Team</th><th style="width:90px;">Prob %</th><th>Notes</th><th style="width:40px;"></th></tr>
+          <tr><th style="width:60px;">Rank</th><th style="width:220px;">Player</th><th style="width:70px;">Team</th><th style="width:90px;">Prob %</th><th>Notes</th><th style="width:40px;"></th></tr>
         </thead>
         <tbody id="admin-rows"></tbody>
       </table>
@@ -1492,7 +1492,7 @@ footer {
       <datalist id="sl-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:60px;">Rank</th><th style="width:110px;">Player</th><th style="width:70px;">Team</th><th style="width:90px;">Prob %</th><th>Notes</th><th style="width:40px;"></th></tr>
+          <tr><th style="width:60px;">Rank</th><th style="width:220px;">Player</th><th style="width:70px;">Team</th><th style="width:90px;">Prob %</th><th>Notes</th><th style="width:40px;"></th></tr>
         </thead>
         <tbody id="sl-rows"></tbody>
       </table>
@@ -3432,8 +3432,7 @@ async function publishAdminTable() {
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
     const prob = parseFloat(inputs[2].value);
-    const notes = inputs[3] ? inputs[3].value.trim() : '';
-    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob, notes });
+    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob });
   });
 
   if (rows.length === 0) {
