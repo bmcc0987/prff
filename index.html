@@ -3696,7 +3696,7 @@ async function publishRankTable(mode) {
 }
 
 document.addEventListener('input', function (e) {
-  if (e.target.closest('#sl-rows')) updateRankProbSum('seasonlong');
+  if (e.target.closest('#sl-rows')) { updateRankProbSum('seasonlong'); autosaveAdminDraft(); }
   if (e.target.closest('#ros-rows')) updateRankProbSum('ros');
 });
 
@@ -3815,10 +3815,16 @@ function switchAdminTool(tool) {
     loadAdminSLTotalsTable();
   }
   if (tool === 'rankings' && !document.getElementById('admin-rows').children.length) {
-    loadAdminTable();
+    // A locally-saved draft (including notes) takes priority over
+    // re-loading whatever's already published, since the draft represents
+    // more recent, not-yet-published work — otherwise reopening this tool
+    // would silently overwrite exactly the in-progress work being protected.
+    restoreAdminDraft('weekly');
+    if (!document.getElementById('admin-rows').children.length) loadAdminTable();
   }
   if (tool === 'seasonlong' && !document.getElementById('sl-rows').children.length) {
-    smartLoadSeasonLongRankings(document.getElementById('sl-position').value);
+    restoreAdminDraft('seasonlong');
+    if (!document.getElementById('sl-rows').children.length) smartLoadSeasonLongRankings(document.getElementById('sl-position').value);
   }
   if (tool === 'ros' && !document.getElementById('ros-rows').children.length) {
     loadRankTable('ros');
@@ -4656,8 +4662,86 @@ function updateAdminProbSum() {
   el.textContent = equation + ' = ' + sumRounded;
 }
 document.addEventListener('input', function (e) {
-  if (e.target.closest('#admin-rows')) updateAdminProbSum();
+  if (e.target.closest('#admin-rows')) {
+    updateAdminProbSum();
+    autosaveAdminDraft();
+  }
 });
+
+// --- ADMIN DRAFT AUTOSAVE -----------------------------------------------
+// Whatever's currently typed into the Weekly or Season Long admin tables
+// (including notes, which never get published anywhere — this is their
+// only save point) is continuously saved to this browser's localStorage as
+// you type, and restored automatically the next time this page loads.
+// This is separate from actually publishing — it just protects your
+// in-progress work from being lost to a page refresh, reopening the file,
+// or a new version being deployed, none of which currently save anything
+// otherwise.
+const ADMIN_DRAFT_KEY = 'prff_admin_draft_v1';
+
+function readRowsFromTable(rowsId, hasNotes) {
+  const rows = [];
+  document.querySelectorAll('#' + rowsId + ' tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const player = inputs[0].value.trim();
+    if (!player) return;
+    const row = { player, team: inputs[1].value.trim(), prob: inputs[2].value };
+    if (hasNotes && inputs[3]) row.notes = inputs[3].value;
+    rows.push(row);
+  });
+  return rows;
+}
+
+function autosaveAdminDraft() {
+  try {
+    const draft = {
+      weekly: {
+        position: (document.getElementById('admin-position') || {}).value,
+        week: (document.getElementById('admin-week') || {}).value,
+        topN: (document.getElementById('admin-topn') || {}).value,
+        rows: readRowsFromTable('admin-rows', true),
+      },
+      seasonlong: {
+        position: (document.getElementById('sl-position') || {}).value,
+        topN: (document.getElementById('sl-topn') || {}).value,
+        rows: readRowsFromTable('sl-rows', true),
+      },
+    };
+    localStorage.setItem(ADMIN_DRAFT_KEY, JSON.stringify(draft));
+  } catch (e) {
+    console.warn('Could not autosave admin draft:', e);
+  }
+}
+
+// Restores whatever was last typed, if anything was saved. Called once
+// when each admin tool is opened (see switchAdminTool) rather than on
+// every page load site-wide, so it only kicks in when you're actually
+// looking at that editor.
+function restoreAdminDraft(mode) {
+  let draft;
+  try {
+    const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
+    if (!raw) return;
+    draft = JSON.parse(raw);
+  } catch (e) { return; }
+
+  if (mode === 'weekly' && draft.weekly && draft.weekly.rows && draft.weekly.rows.length > 0) {
+    if (document.getElementById('admin-rows').children.length > 0) return; // don't clobber something already loaded/typed
+    if (draft.weekly.position) document.getElementById('admin-position').value = draft.weekly.position;
+    if (draft.weekly.week) document.getElementById('admin-week').value = draft.weekly.week;
+    if (draft.weekly.topN) document.getElementById('admin-topn').value = draft.weekly.topN;
+    draft.weekly.rows.forEach(r => addAdminRow(r.player, r.team, r.prob, r.notes || ''));
+    updateAdminProbSum();
+  }
+
+  if (mode === 'seasonlong' && draft.seasonlong && draft.seasonlong.rows && draft.seasonlong.rows.length > 0) {
+    if (document.getElementById('sl-rows').children.length > 0) return;
+    if (draft.seasonlong.position) document.getElementById('sl-position').value = draft.seasonlong.position;
+    if (draft.seasonlong.topN) document.getElementById('sl-topn').value = draft.seasonlong.topN;
+    draft.seasonlong.rows.forEach(r => addRankRow('seasonlong', r.player, r.team, r.prob, r.notes || ''));
+    updateRankProbSum('seasonlong');
+  }
+}
 
 // --- ADMIN: ARTICLES ---------------------------------------------------
 const publishedArticles = {}; // key: id -> {id,title,tag,access,author,image,body,dateLabel}
