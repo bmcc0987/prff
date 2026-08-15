@@ -1447,7 +1447,7 @@ footer {
       <datalist id="admin-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:60px;">Rank</th><th>Player</th><th style="width:100px;">Team</th><th style="width:110px;">Prob %</th><th style="width:40px;"></th></tr>
+          <tr><th style="width:60px;">Rank</th><th style="width:110px;">Player</th><th style="width:70px;">Team</th><th style="width:90px;">Prob %</th><th>Notes</th><th style="width:40px;"></th></tr>
         </thead>
         <tbody id="admin-rows"></tbody>
       </table>
@@ -1455,8 +1455,12 @@ footer {
       <div class="admin-actions">
         <button class="trade-add-btn" onclick="addAdminRow()">+ Add player</button>
         <button class="trade-add-btn" onclick="sortAdminRows()">↓ Sort by Prob</button>
+        <button class="trade-add-btn" onclick="document.getElementById('admin-csv-import-file').click()">⬆ Import CSV</button>
+        <input type="file" id="admin-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToAdminRows(event)">
+        <button class="trade-add-btn" onclick="exportAdminRowsCSV()">⬇ Export CSV</button>
         <button class="trade-analyze-btn" onclick="publishAdminTable()">Publish</button>
       </div>
+      <div id="admin-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
       <div class="admin-sum-row">Sum: <span id="admin-prob-sum-value">(0)/1 = 0</span></div>
 
@@ -1488,7 +1492,7 @@ footer {
       <datalist id="sl-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:60px;">Rank</th><th>Player</th><th style="width:100px;">Team</th><th style="width:110px;">Prob %</th><th style="width:40px;"></th></tr>
+          <tr><th style="width:60px;">Rank</th><th style="width:110px;">Player</th><th style="width:70px;">Team</th><th style="width:90px;">Prob %</th><th>Notes</th><th style="width:40px;"></th></tr>
         </thead>
         <tbody id="sl-rows"></tbody>
       </table>
@@ -1496,8 +1500,12 @@ footer {
       <div class="admin-actions">
         <button class="trade-add-btn" onclick="addRankRow('seasonlong')">+ Add player</button>
         <button class="trade-add-btn" onclick="sortRankRows('seasonlong')">↓ Sort by Prob</button>
+        <button class="trade-add-btn" onclick="document.getElementById('sl-csv-import-file').click()">⬆ Import CSV</button>
+        <input type="file" id="sl-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToRankRows(event, 'seasonlong')">
+        <button class="trade-add-btn" onclick="exportRankRowsCSV('seasonlong')">⬇ Export CSV</button>
         <button class="trade-analyze-btn" onclick="publishRankTable('seasonlong')">Publish</button>
       </div>
+      <div id="sl-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
       <div class="admin-sum-row">Sum: <span id="sl-prob-sum-value">(0)/1 = 0</span></div>
 
@@ -3101,7 +3109,7 @@ function populateAdminPlayerDatalist() {
   });
 }
 
-function addAdminRow(player, team, prob) {
+function addAdminRow(player, team, prob, notes) {
   adminRowCount++;
   const rowId = 'admin-row-' + adminRowCount;
   const tbody = document.getElementById('admin-rows');
@@ -3109,12 +3117,33 @@ function addAdminRow(player, team, prob) {
   tr.id = rowId;
   tr.innerHTML =
     '<td class="admin-rank-cell">' + (tbody.children.length + 1) + '</td>' +
-    '<td><input type="text" list="admin-player-list" value="' + (player || '') + '" placeholder="Player name"></td>' +
-    '<td><input type="text" value="' + (team || '') + '" placeholder="TEAM" maxlength="4" style="text-transform:uppercase;"></td>' +
-    '<td><input type="number" min="0" max="100" value="' + (prob !== undefined ? prob : '') + '" placeholder="0-100"></td>' +
+    '<td><input type="text" list="admin-player-list" value="' + (player || '') + '" placeholder="Player name" style="width:100%;"></td>' +
+    '<td><input type="text" class="admin-team-input" value="' + (team || '') + '" placeholder="TEAM" maxlength="4" style="text-transform:uppercase;width:100%;" oninput="applyTeamTierColorToInput(this)"></td>' +
+    '<td><input type="number" min="0" max="100" value="' + (prob !== undefined ? prob : '') + '" placeholder="0-100" style="width:100%;"></td>' +
+    '<td><input type="text" class="admin-notes-input" value="' + (notes ? escapeAttr(notes) : '') + '" placeholder="Notes (optional)" style="width:100%;"></td>' +
     '<td><button class="admin-row-remove" onclick="removeAdminRow(\'' + rowId + '\')">×</button></td>';
   tbody.appendChild(tr);
+  applyTeamTierColorToInput(tr.querySelector('.admin-team-input'));
   renumberAdminRows();
+}
+
+// Colors a team input's text green/red if that team is currently a Top 12
+// / Bottom 12 season-long implied-total team — same colors as the public
+// projections table, applied live as the admin types or right after a row
+// is created/imported with a team already filled in.
+function applyTeamTierColorToInput(input) {
+  if (!input) return;
+  const abbr = input.value.trim().toUpperCase();
+  const color = getTeamTierColorMap()[abbr];
+  input.style.color = color || '';
+  input.style.fontWeight = color ? '700' : '';
+}
+
+// Escapes a value for safe use inside an HTML attribute (double quotes,
+// ampersands) — used for the notes field since, unlike player/team, notes
+// are free text and more likely to contain a stray quote or two.
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
 function removeAdminRow(rowId) {
@@ -3139,6 +3168,92 @@ function sortAdminRows() {
   });
   rows.forEach(r => tbody.appendChild(r));
   renumberAdminRows();
+}
+
+// A small, dependency-free CSV parser — good enough for the simple
+// Player/Team/Probability/Notes files this site both exports and expects
+// to import. Handles quoted fields (so a comma or quote inside a Notes
+// field doesn't break the row) without needing an external library.
+function parseSimpleCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.some(v => v.trim() !== '')) rows.push(row);
+        row = [];
+      } else { field += c; }
+    }
+  }
+  if (field !== '' || row.length > 0) { row.push(field); if (row.some(v => v.trim() !== '')) rows.push(row); }
+  return rows;
+}
+
+// Reads a Player, Team, Probability(%), Notes CSV — the same shape this
+// site's own exports use — and replaces the current Weekly editing grid
+// with it. Tolerant of an optional header row and a trailing "%" on the
+// probability column (both present in this site's own exports), so
+// exporting, editing in a spreadsheet, and re-importing just works.
+function importCSVToAdminRows(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const errorEl = document.getElementById('admin-csv-import-error');
+  errorEl.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const parsed = parseSimpleCSV(e.target.result);
+      if (parsed.length === 0) throw new Error('That file appears to be empty.');
+      const first = parsed[0];
+      const looksLikeHeader = isNaN(parseFloat(first[2])) && !/^\d/.test((first[2] || '').replace('%', ''));
+      const dataRows = looksLikeHeader ? parsed.slice(1) : parsed;
+      if (dataRows.length === 0) throw new Error('No player rows found in that file.');
+
+      document.getElementById('admin-rows').innerHTML = '';
+      adminRowCount = 0;
+      dataRows.forEach(r => {
+        const player = (r[0] || '').trim();
+        const team = (r[1] || '').trim().toUpperCase();
+        const prob = parseFloat((r[2] || '').replace('%', ''));
+        const notes = (r[3] || '').trim();
+        if (!player) return;
+        addAdminRow(player, team, isNaN(prob) ? '' : prob, notes);
+      });
+      updateAdminProbSum();
+    } catch (err) {
+      errorEl.textContent = 'Could not import that file: ' + err.message;
+      errorEl.style.display = 'block';
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Exports whatever's currently in the Weekly editing grid (including
+// anything not yet published) — the counterpart to Import CSV above, so
+// you can pull the current draft into a spreadsheet, edit it, and bring it
+// back in.
+function exportAdminRowsCSV() {
+  const rows = [];
+  document.querySelectorAll('#admin-rows tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const player = inputs[0].value.trim();
+    if (!player) return;
+    rows.push([player, inputs[1].value.trim().toUpperCase(), inputs[2].value, inputs[3].value.trim()]);
+  });
+  if (rows.length === 0) return;
+  downloadCSV('weekly-projections-draft.csv', ['Player', 'Team', 'Probability (%)', 'Notes'], rows);
 }
 
 // Loads an already-published table for the selected position/week into the
@@ -3182,27 +3297,31 @@ function probToColor(prob) {
   return 'rgb(' + rgb.join(',') + ')';
 }
 
+// Maps each team abbreviation to a color if it's currently a Top 12 (green)
+// or Bottom 12 / rank 21-32 (red) season-long implied-total team, based on
+// whatever's currently in publishedSeasonLongTotals. Shared by the public
+// projections table AND the Admin editing rows, so "Top 12 = green" means
+// the same thing everywhere on the site. Returns {} if nothing's
+// published yet — callers just won't find a color for any team, no crash.
+function getTeamTierColorMap() {
+  const map = {};
+  if (!publishedSeasonLongTotals || !publishedSeasonLongTotals.rows) return map;
+  const sorted = publishedSeasonLongTotals.rows
+    .filter(r => typeof r.value === 'number')
+    .slice()
+    .sort((a, b) => b.value - a.value);
+  sorted.forEach((r, i) => {
+    const rank = i + 1;
+    const abbr = NFL_TEAM_ABBR[r.team] || r.team; // totals store full names; player/admin rows store abbreviations
+    if (rank <= 12) map[abbr] = '#3DB87A';
+    else if (rank >= 21) map[abbr] = '#c0392b';
+  });
+  return map;
+}
+
 function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, highlightTeamTier) {
   const uid = 'pubtbl-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-  // Maps each team to whether it's a Top 12 or Bottom 12 (rank 21-32)
-  // season-long implied-total team, so the Team column can be colored to
-  // match. Built once per render from the live season-long totals — if
-  // nothing's published yet, this just comes back empty and nothing gets
-  // colored (no crash either way).
-  let teamTierColor = {};
-  if (highlightTeamTier && publishedSeasonLongTotals && publishedSeasonLongTotals.rows) {
-    const sorted = publishedSeasonLongTotals.rows
-      .filter(r => typeof r.value === 'number')
-      .slice()
-      .sort((a, b) => b.value - a.value);
-    sorted.forEach((r, i) => {
-      const rank = i + 1;
-      const abbr = NFL_TEAM_ABBR[r.team] || r.team; // totals store full names; player rows store abbreviations
-      if (rank <= 12) teamTierColor[abbr] = '#3DB87A';
-      else if (rank >= 21) teamTierColor[abbr] = '#c0392b';
-    });
-  }
+  const teamTierColor = highlightTeamTier ? getTeamTierColorMap() : {};
 
   let html = '<div class="pub-table-wrap">';
   if (exportFnName) {
@@ -3313,7 +3432,8 @@ async function publishAdminTable() {
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
     const prob = parseFloat(inputs[2].value);
-    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob });
+    const notes = inputs[3] ? inputs[3].value.trim() : '';
+    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob, notes });
   });
 
   if (rows.length === 0) {
@@ -3331,7 +3451,7 @@ async function publishAdminTable() {
   if (supabaseClient) {
     try {
       await supabaseReplaceRows('weekly_rankings', { pos: position, week: Number(week) },
-        rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN })));
+        rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN, notes: r.notes || null })));
     } catch (e) {
       console.error('Supabase publish failed:', e);
       preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Saved locally, but publishing to the database failed: ' + (e.message || e) + '</div>';
@@ -3371,20 +3491,25 @@ function rankModeKey(mode) {
   return cfg.hasWeek ? pos + '-' + document.getElementById(cfg.weekId).value : pos;
 }
 
-function addRankRow(mode, player, team, prob) {
+function addRankRow(mode, player, team, prob, notes) {
   const cfg = RANK_MODE[mode];
   cfg.rowCount++;
   const rowId = mode + '-row-' + cfg.rowCount;
   const tbody = document.getElementById(cfg.rowsId);
   const tr = document.createElement('tr');
   tr.id = rowId;
+  const notesCell = mode === 'seasonlong'
+    ? '<td><input type="text" class="admin-notes-input" value="' + (notes ? escapeAttr(notes) : '') + '" placeholder="Notes (optional)" style="width:100%;"></td>'
+    : '';
   tr.innerHTML =
     '<td class="admin-rank-cell">' + (tbody.children.length + 1) + '</td>' +
-    '<td><input type="text" list="' + cfg.datalistId + '" value="' + (player || '') + '" placeholder="Player name"></td>' +
-    '<td><input type="text" value="' + (team || '') + '" placeholder="TEAM" maxlength="4" style="text-transform:uppercase;"></td>' +
-    '<td><input type="number" min="0" max="100" value="' + (prob !== undefined ? prob : '') + '" placeholder="0-100"></td>' +
+    '<td><input type="text" list="' + cfg.datalistId + '" value="' + (player || '') + '" placeholder="Player name" style="width:100%;"></td>' +
+    '<td><input type="text" class="admin-team-input" value="' + (team || '') + '" placeholder="TEAM" maxlength="4" style="text-transform:uppercase;width:100%;" oninput="applyTeamTierColorToInput(this)"></td>' +
+    '<td><input type="number" min="0" max="100" value="' + (prob !== undefined ? prob : '') + '" placeholder="0-100" style="width:100%;"></td>' +
+    notesCell +
     '<td><button class="admin-row-remove" onclick="document.getElementById(\'' + rowId + '\').remove(); renumberRankRows(\'' + mode + '\');">×</button></td>';
   tbody.appendChild(tr);
+  applyTeamTierColorToInput(tr.querySelector('.admin-team-input'));
   renumberRankRows(mode);
   updateRankProbSum(mode);
 }
@@ -3407,6 +3532,66 @@ function sortRankRows(mode) {
   });
   rows.forEach(r => tbody.appendChild(r));
   renumberRankRows(mode);
+}
+
+// Same idea as importCSVToAdminRows, for the Season Long (and, if ever
+// wired up, Rest of Season) editing grid. Notes are only read/written for
+// modes that actually have a Notes column (currently just seasonlong).
+function importCSVToRankRows(event, mode) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const errorEl = document.getElementById(mode === 'ros' ? 'ros-csv-import-error' : 'sl-csv-import-error');
+  if (errorEl) errorEl.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const parsed = parseSimpleCSV(e.target.result);
+      if (parsed.length === 0) throw new Error('That file appears to be empty.');
+      const first = parsed[0];
+      const looksLikeHeader = isNaN(parseFloat(first[2])) && !/^\d/.test((first[2] || '').replace('%', ''));
+      const dataRows = looksLikeHeader ? parsed.slice(1) : parsed;
+      if (dataRows.length === 0) throw new Error('No player rows found in that file.');
+
+      const cfg = RANK_MODE[mode];
+      document.getElementById(cfg.rowsId).innerHTML = '';
+      cfg.rowCount = 0;
+      dataRows.forEach(r => {
+        const player = (r[0] || '').trim();
+        const team = (r[1] || '').trim().toUpperCase();
+        const prob = parseFloat((r[2] || '').replace('%', ''));
+        const notes = (r[3] || '').trim();
+        if (!player) return;
+        addRankRow(mode, player, team, isNaN(prob) ? '' : prob, notes);
+      });
+      updateRankProbSum(mode);
+    } catch (err) {
+      if (errorEl) {
+        errorEl.textContent = 'Could not import that file: ' + err.message;
+        errorEl.style.display = 'block';
+      }
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Exports whatever's currently in the editing grid (published or not) —
+// the counterpart to Import CSV above.
+function exportRankRowsCSV(mode) {
+  const cfg = RANK_MODE[mode];
+  const hasNotes = mode === 'seasonlong';
+  const rows = [];
+  document.querySelectorAll('#' + cfg.rowsId + ' tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const player = inputs[0].value.trim();
+    if (!player) return;
+    const row = [player, inputs[1].value.trim().toUpperCase(), inputs[2].value];
+    if (hasNotes) row.push(inputs[3] ? inputs[3].value.trim() : '');
+    rows.push(row);
+  });
+  if (rows.length === 0) return;
+  const headers = hasNotes ? ['Player', 'Team', 'Probability (%)', 'Notes'] : ['Player', 'Team', 'Probability (%)'];
+  downloadCSV(mode + '-projections-draft.csv', headers, rows);
 }
 
 function loadRankTable(mode) {
@@ -3455,7 +3640,8 @@ async function publishRankTable(mode) {
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
     const prob = parseFloat(inputs[2].value);
-    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob });
+    const notes = (mode === 'seasonlong' && inputs[3]) ? inputs[3].value.trim() : '';
+    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob, notes });
   });
 
   if (rows.length === 0) {
@@ -3478,7 +3664,7 @@ async function publishRankTable(mode) {
           rows.map(r => ({ pos: position, week, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
       } else {
         await supabaseReplaceRows('season_long_rankings', { pos: position },
-          rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
+          rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN, notes: r.notes || null })));
       }
     } catch (e) {
       console.error('Supabase publish failed:', e);
