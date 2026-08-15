@@ -1692,6 +1692,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
   var path = window.location.pathname;
   var pageName = STATIC_PATH_TO_PAGE[path];
   if (!pageName && /^\/articles\//.test(path)) pageName = 'article';
+  if (!pageName && /^\/projections\//.test(path)) pageName = 'projections';
   if (pageName && pageName !== 'home') {
     var homeEl = document.getElementById('page-home');
     if (homeEl) homeEl.style.display = 'none';
@@ -1725,6 +1726,18 @@ const PAGE_PATHS = {
   home: '/', terms: '/terms', privacy: '/privacy', contact: '/contact',
   account: '/account', signup: '/signup', signin: '/signin',
   projections: '/projections', trade: '/trade', admin: '/admin', articles: '/articles',
+};
+
+// Sub-tabs within the Projections page get their own real path too —
+// otherwise a refresh always lands back on the default tab regardless of
+// which one was actually open. 'totals-sl' is the default tab, so it just
+// uses the base /projections path with no suffix.
+const PROJ_TAB_PATHS = {
+  'totals-sl': '/projections',
+  'season': '/projections/season-long-players',
+  'totals': '/projections/weekly-totals',
+  'weekly': '/projections/weekly-players',
+  'ros': '/projections/ros-players',
 };
 
 function showPage(evt, pageName, opts) {
@@ -2043,7 +2056,7 @@ function goToProjections(evt) {
 // nav dropdown links.
 function goToProjectionsTab(evt, tab) {
   evt.preventDefault();
-  showPage(null, 'projections');
+  showPage(null, 'projections', { skipPush: true }); // switchProjTab below does the real push, with the correct sub-path
   switchProjTab(tab);
 }
 
@@ -2078,7 +2091,8 @@ function refreshProjectionsGate() {
 
 let activeWeeklyPosition = 'QB';
 
-function switchProjTab(tab) {
+function switchProjTab(tab, opts) {
+  opts = opts || {};
   activeProjTab = tab;
   ['totals', 'totals-sl', 'weekly', 'season', 'ros'].forEach(t => {
     document.getElementById('proj-tab-' + t).classList.toggle('active', t === tab);
@@ -2089,6 +2103,13 @@ function switchProjTab(tab) {
   if (tab === 'totals') populateTotalsWeekSelect();
   if (tab === 'weekly') populateWeeklyProjWeekSelect();
   renderProjectionsPage();
+
+  if (!opts.skipPush) {
+    const path = PROJ_TAB_PATHS[tab] || '/projections';
+    if (window.location.pathname !== path) {
+      history.pushState({ page: 'projections', tab: tab }, '', path);
+    }
+  }
 }
 
 // Fills the Week dropdown (1-18) shown on the Weekly Team Implied Totals tab,
@@ -5636,6 +5657,19 @@ function routeFromLocation() {
       showPage(null, 'articles', { skipPush: true, path: '/articles' });
       history.replaceState({ page: 'articles' }, '', '/articles');
     }
+    return;
+  }
+
+  // Projections sub-tabs (e.g. /projections/season-long-players) — checked
+  // before the generic PAGE_PATHS match below, since that only knows about
+  // whole pages, not tabs within one.
+  if (path === '/projections' || path.startsWith('/projections/')) {
+    const tabEntry = Object.entries(PROJ_TAB_PATHS).find(([, p]) => p === path);
+    const tab = tabEntry ? tabEntry[0] : 'totals-sl';
+    activeProjTab = tab;
+    showPage(null, 'projections', { skipPush: true, path: tabEntry ? path : '/projections' });
+    switchProjTab(tab, { skipPush: true });
+    if (!tabEntry) history.replaceState({ page: 'projections', tab }, '', '/projections');
     return;
   }
 
