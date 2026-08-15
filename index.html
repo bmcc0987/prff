@@ -3450,7 +3450,7 @@ async function publishAdminTable() {
   if (supabaseClient) {
     try {
       await supabaseReplaceRows('weekly_rankings', { pos: position, week: Number(week) },
-        rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN, notes: r.notes || null })));
+        rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN })));
     } catch (e) {
       console.error('Supabase publish failed:', e);
       preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Saved locally, but publishing to the database failed: ' + (e.message || e) + '</div>';
@@ -3663,7 +3663,7 @@ async function publishRankTable(mode) {
           rows.map(r => ({ pos: position, week, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
       } else {
         await supabaseReplaceRows('season_long_rankings', { pos: position },
-          rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN, notes: r.notes || null })));
+          rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
       }
     } catch (e) {
       console.error('Supabase publish failed:', e);
