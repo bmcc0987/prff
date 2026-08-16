@@ -820,7 +820,7 @@ footer {
 
 <div class="pro-banner" id="home-pro-banner">
   <div>
-    <div class="pro-banner-label">Go Pro</div>
+    <div class="pro-banner-label">Subscribe</div>
     <div class="pro-banner-headline">Unlock the full edge</div>
     <div class="pro-banner-sub">Season long projections, weekly projections, analysis, and every article — starting at $40/season</div>
   </div>
@@ -831,7 +831,7 @@ footer {
     <div class="pro-feat">Team Implied Totals</div>
     <div class="pro-feat">Analysis</div>
   </div>
-  <a class="btn-pro" href="#">Start free trial →</a>
+  <a class="btn-pro" href="#" onclick="goToAccount(event)">Subscribe →</a>
 </div>
 
 </div><!-- /page-home -->
@@ -1640,6 +1640,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
       <div class="admin-actions">
         <button class="trade-analyze-btn" style="background:#555;" onclick="saveArticleDraft()">Save Draft</button>
         <button class="trade-analyze-btn" style="margin-left:10px;" onclick="publishArticle()">Publish</button>
+        <button class="trade-analyze-btn" id="article-delete-btn" style="margin-left:10px;background:#c0392b;display:none;" onclick="deleteCurrentArticle()">Delete Article</button>
       </div>
       <div id="article-editor-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:14px; font-weight:700; margin-top:10px;"></div>
 
@@ -5568,6 +5569,7 @@ function loadArticleIntoEditor() {
     document.getElementById('article-editing-type').value = '';
     document.getElementById('article-preview-wrap').style.display = 'none';
     document.getElementById('article-featured-image-preview-wrap').style.display = 'none';
+    document.getElementById('article-delete-btn').style.display = 'none';
     return;
   }
   const isDraft = raw.startsWith('draft:');
@@ -5581,6 +5583,9 @@ function loadArticleIntoEditor() {
   document.getElementById('article-body').value = a.body;
   document.getElementById('article-editing-id').value = a.id;
   document.getElementById('article-editing-type').value = isDraft ? 'draft' : 'published';
+  document.getElementById('article-delete-btn').style.display = 'block';
+  articleDeleteArmed = false;
+  document.getElementById('article-delete-btn').textContent = 'Delete Article';
   const previewWrap = document.getElementById('article-featured-image-preview-wrap');
   const preview = document.getElementById('article-featured-image-preview');
   if (a.image) {
@@ -5592,6 +5597,52 @@ function loadArticleIntoEditor() {
   const articlePreview = document.getElementById('article-preview');
   articlePreview.innerHTML = buildArticleReaderHTML(a);
   document.getElementById('article-preview-wrap').style.display = 'block';
+}
+
+let articleDeleteArmed = false;
+
+// Deletes whatever article is currently loaded in the editor — works for
+// both published articles and drafts. Two clicks required (same pattern as
+// Cancel Subscription) so a stray click can't destroy real content.
+async function deleteCurrentArticle() {
+  const id = document.getElementById('article-editing-id').value;
+  const type = document.getElementById('article-editing-type').value;
+  if (!id) return;
+  const btn = document.getElementById('article-delete-btn');
+  const errorEl = document.getElementById('article-editor-error');
+
+  if (!articleDeleteArmed) {
+    articleDeleteArmed = true;
+    btn.textContent = 'Click again to confirm delete';
+    return;
+  }
+  articleDeleteArmed = false;
+  btn.disabled = true;
+
+  if (supabaseClient) {
+    try {
+      const res = await supabaseClient.from('articles').delete().eq('id', id);
+      if (res.error) throw res.error;
+    } catch (e) {
+      errorEl.textContent = 'Could not delete from the database: ' + e.message;
+      errorEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Delete Article';
+      return;
+    }
+  }
+
+  if (type === 'draft') delete draftArticles[id];
+  else delete publishedArticles[id];
+  saveAppStateLocally();
+
+  errorEl.style.display = 'none';
+  btn.disabled = false;
+  btn.textContent = 'Delete Article';
+  document.getElementById('article-load-select').value = '';
+  loadArticleIntoEditor();
+  populateArticleLoadSelect();
+  renderHomepageArticles();
 }
 
 // Rebuilds every article grid on the site (the homepage's and the dedicated
