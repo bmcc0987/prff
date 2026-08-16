@@ -1166,7 +1166,6 @@ footer {
       <div class="section-label">This week</div>
       <div class="section-title">Projections</div>
     </div>
-    <button type="button" class="trade-analyze-btn" onclick="downloadCheatSheetPDF()">⬇ Download Cheat Sheet (PDF)</button>
   </div>
 
   <div class="proj-tabs">
@@ -2609,6 +2608,20 @@ const LINEUP_SLOTS = { QB: 1, RB: 2, WR: 2, TE: 1 };
 const FLEX_COUNT = 1;
 const FLEX_ELIGIBLE = ['RB', 'WR', 'TE'];
 
+// Builds "(QB/WR/WR/RB/RB/TE/FLEX)" from the actual LINEUP_SLOTS/FLEX_COUNT
+// above, instead of a hardcoded string — so if those requirements are ever
+// changed, every place that describes the lineup automatically stays
+// accurate without needing a separate manual text edit.
+function getLineupSlotDescription() {
+  const parts = [];
+  if (LINEUP_SLOTS.QB) for (let i = 0; i < LINEUP_SLOTS.QB; i++) parts.push('QB');
+  if (LINEUP_SLOTS.WR) for (let i = 0; i < LINEUP_SLOTS.WR; i++) parts.push('WR');
+  if (LINEUP_SLOTS.RB) for (let i = 0; i < LINEUP_SLOTS.RB; i++) parts.push('RB');
+  if (LINEUP_SLOTS.TE) for (let i = 0; i < LINEUP_SLOTS.TE; i++) parts.push('TE');
+  for (let i = 0; i < FLEX_COUNT; i++) parts.push('FLEX');
+  return parts.join('/');
+}
+
 function namesFromContainer(containerId) {
   const inputs = document.querySelectorAll('#' + containerId + ' .trade-input');
   const names = [];
@@ -2785,8 +2798,9 @@ function renderRosterCards(containerId, players, isWinner) {
       const finish = getPositionalFinish(p.name);
       const card = document.createElement('div');
       card.className = 'trade-finish-card';
+      const showGreenFill = isWinner && slotLabel !== 'BENCH'; // bench players didn't contribute to the score, so they shouldn't look like they won anything
       card.innerHTML =
-        (isWinner ? '<div class="trade-finish-fill" style="width:100%;"></div>' : '') +
+        (showGreenFill ? '<div class="trade-finish-fill" style="width:100%;"></div>' : '') +
         '<div class="trade-roster-slot-label">' + slotLabel + '</div>' +
         '<div class="trade-finish-name">' + p.name + '<span class="trade-roster-pos-tag">' + p.pos + '</span></div>' +
         '<div class="trade-finish-proj">Projected rest of season finish: ' + (finish || 'Unranked') + '</div>';
@@ -2946,7 +2960,7 @@ function runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj) {
 
   document.getElementById('trade-history-note').textContent =
     'Ranks pulled from: ' + Array.from(sourcesUsed).join(', ') + ' projections. ' +
-    'Compares each team\'s full starting lineup (QB/WR/WR/RB/RB/TE/FLEX) full-season totals (Week 1 through end of season), ' +
+    'Compares each team\'s full starting lineup full-season totals (Week 1 through end of season), ' +
     'across all 11 seasons on file (2015-2025).';
   document.getElementById('trade-history-section').style.display = 'block';
 
@@ -3082,7 +3096,7 @@ function analyzeTrade() {
 
     document.getElementById('trade-history-note').textContent =
       'Ranks pulled from: ' + Array.from(historyResult.sourcesUsed).join(', ') + ' projections. ' +
-      'Compares each team\'s full post-trade starting lineup (QB/WR/WR/RB/RB/TE/FLEX) full-season totals (Week 1 through end of season), ' +
+      'Compares each team\'s full post-trade starting lineup full-season totals (Week 1 through end of season), ' +
       'across all 11 seasons on file (2015-2025).';
     historySection.style.display = 'block';
     document.getElementById('trade-verdict-sub').style.display = 'none';
@@ -3400,6 +3414,9 @@ function downloadCheatSheetPDF() {
   const tierColors = getTeamTierColorMap();
   const green = hexToRgb('#3DB87A');
   const red = hexToRgb('#c0392b');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 40;
 
   function colorForCell(hookData, teamColIndex) {
     if (hookData.section !== 'body' || hookData.column.index !== teamColIndex) return;
@@ -3410,40 +3427,75 @@ function downloadCheatSheetPDF() {
     hookData.cell.styles.fontStyle = 'bold';
   }
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('Process/Results — Season Long Cheat Sheet', 40, 40);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.text('Generated ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), 40, 56);
-  doc.setTextColor(0);
+  // Every position gets every currently-published player — this covers the
+  // full roster, so page count varies with how many players are actually
+  // published (a position with 100+ players will genuinely take a few
+  // pages; that's real data, not a layout bug). Each position always
+  // starts on its own fresh page, and splits its full list into two
+  // side-by-side columns of the SAME position (not different positions
+  // sharing a page), so if one half needs to continue onto another page,
+  // there's never any ambiguity about what's still being shown.
+  const colGap = 16;
+  const colWidth = (pageWidth - margin * 2 - colGap) / 2;
+  let firstPosition = true;
 
-  let y = 75;
-  const pageHeight = doc.internal.pageSize.getHeight();
   ['QB', 'RB', 'WR', 'TE'].forEach(pos => {
     const data = publishedSeasonLong[pos];
     if (!data || !data.rows || data.rows.length === 0) return;
-    if (y > pageHeight - 100) { doc.addPage(); y = 40; }
-    const sorted = data.rows.slice().sort((a, b) => b.prob - a.prob);
-    const body = sorted.map((r, i) => [String(i + 1), r.player, r.team, r.prob + '%']);
 
-    doc.autoTable({
-      startY: y,
-      head: [[pos, 'Player', 'Team', 'Prob']],
-      body,
-      theme: 'grid',
-      headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 9, cellPadding: 4 },
-      columnStyles: { 0: { cellWidth: 30 }, 2: { cellWidth: 45 }, 3: { cellWidth: 40 } },
-      didParseCell: function (hookData) { colorForCell(hookData, 2); },
-      margin: { left: 40, right: 40 },
+    if (firstPosition) {
+      // Main document title + generated date, once, at the very top of the
+      // first page — subsequent position pages just get their own heading.
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(0);
+      doc.text('Process/Results — Draft Cheat Sheet', margin, 40);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100);
+      doc.text('Generated ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), margin, 54);
+      doc.setTextColor(0);
+    } else {
+      doc.addPage();
+    }
+    const headingY = firstPosition ? 78 : 40;
+    const tableStartY = firstPosition ? 96 : 58;
+    firstPosition = false;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(0);
+    doc.text(pos + ' — ' + data.rows.length + ' players', margin, headingY);
+
+    const sorted = data.rows.slice().sort((a, b) => b.prob - a.prob);
+    const mid = Math.ceil(sorted.length / 2);
+    const halves = [sorted.slice(0, mid), sorted.slice(mid)];
+
+    halves.forEach((half, colIdx) => {
+      if (half.length === 0) return;
+      const startRank = colIdx === 0 ? 1 : mid + 1;
+      const body = half.map((r, idx) => [String(startRank + idx), r.player, r.team]);
+      const x = margin + colIdx * (colWidth + colGap);
+      doc.autoTable({
+        startY: tableStartY,
+        margin: { left: x },
+        tableWidth: colWidth,
+        head: [['#', 'Player', 'Tm']],
+        body,
+        theme: 'grid',
+        headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 2.5 },
+        columnStyles: { 0: { cellWidth: 22 }, 2: { cellWidth: 32 } },
+        didParseCell: function (hookData) { colorForCell(hookData, 2); },
+      });
     });
-    y = doc.lastAutoTable.finalY + 20;
   });
 
+  // Team Implied Totals + legend get their own final page.
+  doc.addPage();
+  let y = 40;
+
   if (publishedSeasonLongTotals && publishedSeasonLongTotals.rows && publishedSeasonLongTotals.rows.length > 0) {
-    if (y > pageHeight - 100) { doc.addPage(); y = 40; }
     const totalsSorted = publishedSeasonLongTotals.rows.slice().sort((a, b) => b.value - a.value);
     const totalsBody = totalsSorted.map((r, i) => {
       const abbr = NFL_TEAM_ABBR[r.team] || r.team;
