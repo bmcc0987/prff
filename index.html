@@ -352,7 +352,7 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 
 /* PROJECTIONS PAGE */
 .proj-page { padding: 20px 48px 48px; min-height: 500px; }
-.proj-header { margin-bottom: 10px; }
+.proj-header { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .proj-locked {
   background: white; border: 1px solid #e2e0da; border-radius: 16px;
   padding: 60px 24px; text-align: center;
@@ -1166,6 +1166,7 @@ footer {
       <div class="section-label">This week</div>
       <div class="section-title">Projections</div>
     </div>
+    <button type="button" class="trade-analyze-btn" onclick="downloadCheatSheetPDF()">⬇ Download Cheat Sheet (PDF)</button>
   </div>
 
   <div class="proj-tabs">
@@ -1700,6 +1701,8 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script>
 // --- SUPABASE CONNECTION -----------------------------------------------
 // Real, permanent backend — replaces the localStorage-only persistence
@@ -2160,6 +2163,22 @@ function switchWeeklyPosition(pos) {
 // totals) and renders whichever category the active tab points to.
 // "Season Long" and "Rest of Season" have no publishing tool yet, so they
 // show an empty state until that's built.
+// Formats a stored ISO timestamp into "Month Day, Year" for display above
+// each projections graphic. Returns null (caller should just omit the
+// blurb) if nothing's been published yet for that specific dataset.
+function formatLastUpdated(isoString) {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function lastUpdatedBlurbHTML(isoString) {
+  const formatted = formatLastUpdated(isoString);
+  if (!formatted) return '';
+  return '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#888;text-align:center;margin:0 0 8px;">Last Update: ' + formatted + '</div>';
+}
+
 function renderProjectionsPage() {
   const container = document.getElementById('proj-published-content');
   const emptyState = document.getElementById('proj-empty-state');
@@ -2176,7 +2195,8 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = buildPublishedTableHTML(activeWeeklyPosition, 'Season Long', data.topN, data.rows, 'exportSeasonLongPositionCSV', true);
+    section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.seasonLong[key]) +
+      buildPublishedTableHTML(activeWeeklyPosition, 'Season Long', data.topN, data.rows, 'exportSeasonLongPositionCSV', true);
     container.appendChild(section);
     return;
   }
@@ -2194,7 +2214,8 @@ function renderProjectionsPage() {
       const [position, week] = key.split('-');
       const data = publishedROS[key];
       const section = document.createElement('div');
-      section.innerHTML = buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows);
+      section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
+        buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows);
       container.appendChild(section);
     });
     return;
@@ -2209,7 +2230,8 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = buildPublishedTotalsHTML('Season Long', publishedSeasonLongTotals.rows, 'exportSeasonImpliedTotalsCSV');
+    section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.seasonLongTotals) +
+      buildPublishedTotalsHTML('Season Long', publishedSeasonLongTotals.rows, 'exportSeasonImpliedTotalsCSV');
     container.appendChild(section);
     return;
   }
@@ -2232,7 +2254,8 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows);
+    section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.teamTotals[selectedWeek]) +
+      buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows);
     container.appendChild(section);
     return;
   }
@@ -2257,7 +2280,8 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows);
+    section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.weekly[key]) +
+      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows);
     container.appendChild(section);
   }
 }
@@ -3355,6 +3379,103 @@ function getTeamTierColorMap() {
   return map;
 }
 
+// #rrggbb -> [r, g, b], since jsPDF's color-setting calls want numeric
+// components rather than a hex string.
+function hexToRgb(hex) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Builds a printable, downloadable cheat sheet: one ranked table per
+// position (QB/RB/WR/TE) from the current Season Long Player Projections,
+// a Team Implied Totals table, and a legend — with the same green/Top-12,
+// red/Bottom-12 team coloring used throughout the rest of the site.
+function downloadCheatSheetPDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('PDF library failed to load — check your internet connection and try again.');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const tierColors = getTeamTierColorMap();
+  const green = hexToRgb('#3DB87A');
+  const red = hexToRgb('#c0392b');
+
+  function colorForCell(hookData, teamColIndex) {
+    if (hookData.section !== 'body' || hookData.column.index !== teamColIndex) return;
+    const abbr = String(hookData.cell.raw || '').trim().toUpperCase();
+    const hex = tierColors[abbr];
+    if (!hex) return;
+    hookData.cell.styles.textColor = hexToRgb(hex);
+    hookData.cell.styles.fontStyle = 'bold';
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Process/Results — Season Long Cheat Sheet', 40, 40);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text('Generated ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), 40, 56);
+  doc.setTextColor(0);
+
+  let y = 75;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  ['QB', 'RB', 'WR', 'TE'].forEach(pos => {
+    const data = publishedSeasonLong[pos];
+    if (!data || !data.rows || data.rows.length === 0) return;
+    if (y > pageHeight - 100) { doc.addPage(); y = 40; }
+    const sorted = data.rows.slice().sort((a, b) => b.prob - a.prob);
+    const body = sorted.map((r, i) => [String(i + 1), r.player, r.team, r.prob + '%']);
+
+    doc.autoTable({
+      startY: y,
+      head: [[pos, 'Player', 'Team', 'Prob']],
+      body,
+      theme: 'grid',
+      headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 4 },
+      columnStyles: { 0: { cellWidth: 30 }, 2: { cellWidth: 45 }, 3: { cellWidth: 40 } },
+      didParseCell: function (hookData) { colorForCell(hookData, 2); },
+      margin: { left: 40, right: 40 },
+    });
+    y = doc.lastAutoTable.finalY + 20;
+  });
+
+  if (publishedSeasonLongTotals && publishedSeasonLongTotals.rows && publishedSeasonLongTotals.rows.length > 0) {
+    if (y > pageHeight - 100) { doc.addPage(); y = 40; }
+    const totalsSorted = publishedSeasonLongTotals.rows.slice().sort((a, b) => b.value - a.value);
+    const totalsBody = totalsSorted.map((r, i) => {
+      const abbr = NFL_TEAM_ABBR[r.team] || r.team;
+      return [String(i + 1), r.team, abbr, r.value];
+    });
+    doc.autoTable({
+      startY: y,
+      head: [['Rank', 'Team', 'Abbr', 'Implied Total']],
+      body: totalsBody,
+      theme: 'grid',
+      headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 4 },
+      didParseCell: function (hookData) { colorForCell(hookData, 2); },
+      margin: { left: 40, right: 40 },
+    });
+    y = doc.lastAutoTable.finalY + 20;
+  }
+
+  if (y > pageHeight - 40) { doc.addPage(); y = 40; }
+  doc.setFontSize(9);
+  doc.setFillColor(green[0], green[1], green[2]);
+  doc.rect(40, y - 8, 8, 8, 'F');
+  doc.setTextColor(0);
+  doc.text('Top 12 season-long implied-total team', 52, y);
+  doc.setFillColor(red[0], red[1], red[2]);
+  doc.rect(240, y - 8, 8, 8, 'F');
+  doc.setTextColor(0);
+  doc.text('Bottom 12 (21-32) season-long implied-total team', 252, y);
+
+  doc.save('process-results-cheat-sheet.pdf');
+}
+
 function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, highlightTeamTier) {
   const uid = 'pubtbl-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const teamTierColor = highlightTeamTier ? getTeamTierColorMap() : {};
@@ -3480,6 +3601,7 @@ async function publishAdminTable() {
   }
 
   publishedRankings[key] = { topN, rows };
+  publishedTimestamps.weekly[key] = new Date().toISOString();
   saveAppStateLocally();
   const previewWrap = document.getElementById('admin-preview-wrap');
   const preview = document.getElementById('admin-preview');
@@ -3688,6 +3810,8 @@ async function publishRankTable(mode) {
   }
 
   cfg.store[key] = { topN, rows };
+  if (mode === 'seasonlong') publishedTimestamps.seasonLong[position] = new Date().toISOString();
+  else publishedTimestamps.ros[key] = new Date().toISOString();
   saveAppStateLocally();
   const previewWrap = document.getElementById(cfg.previewWrapId);
   const preview = document.getElementById(cfg.previewId);
@@ -4407,6 +4531,7 @@ async function publishAdminTotalsTable() {
   }
 
   publishedTeamTotals[week] = { rows };
+  publishedTimestamps.teamTotals[week] = new Date().toISOString();
   saveAppStateLocally();
   const previewWrap = document.getElementById('admintotals-preview-wrap');
   const preview = document.getElementById('admintotals-preview');
@@ -4492,6 +4617,7 @@ async function publishAdminSLTotalsTable() {
   }
 
   publishedSeasonLongTotals = { rows };
+  publishedTimestamps.seasonLongTotals = new Date().toISOString();
   saveAppStateLocally();
   const previewWrap = document.getElementById('sltotals-preview-wrap');
   const preview = document.getElementById('sltotals-preview');
@@ -5570,6 +5696,20 @@ async function supabaseReplaceRows(table, matchCols, newRows) {
 // objects (publishedArticles, publishedSeasonLong, etc.) — the rest of the
 // site's rendering code is unchanged and just reads these same objects like
 // it always has, regardless of where the data actually came from.
+// Tracks when each published dataset was last actually updated, so the
+// Projections page can show a real "Last Updated" date instead of just
+// assuming the data is current. Populated both when loading from Supabase
+// (using the real published_at column) and immediately on a fresh local
+// publish (so the admin's own session shows the correct date without
+// needing a reload).
+const publishedTimestamps = {
+  seasonLong: {},      // { QB: '2026-...', WR: '...', ... }
+  seasonLongTotals: null,
+  weekly: {},           // { 'QB-3': '...', ... }
+  ros: {},               // { 'QB-3': '...', ... }
+  teamTotals: {},        // { '3': '...', ... }
+};
+
 async function loadAppState() {
   if (!supabaseClient) {
     console.warn('Supabase client not available — using locally cached data only.');
@@ -5593,21 +5733,32 @@ async function loadAppState() {
       else draftArticles[row.id] = article;
     });
 
+    // Keeps the LATEST published_at seen for a given key — since a publish
+    // deletes-then-inserts all rows together, they'll normally all share
+    // almost the same timestamp, but taking the max is correct either way.
+    function latestTimestamp(current, candidate) {
+      if (!candidate) return current;
+      if (!current) return candidate;
+      return new Date(candidate) > new Date(current) ? candidate : current;
+    }
+
     function groupByPos(rows) {
       const byPos = {};
       (rows || []).forEach(row => {
         if (!byPos[row.pos]) byPos[row.pos] = { topN: row.top_n, rows: [] };
         byPos[row.pos].rows.push({ player: row.player, team: row.team, prob: Number(row.prob) });
+        publishedTimestamps.seasonLong[row.pos] = latestTimestamp(publishedTimestamps.seasonLong[row.pos], row.published_at);
       });
       Object.keys(byPos).forEach(pos => byPos[pos].rows.sort((a, b) => b.prob - a.prob));
       return byPos;
     }
-    function groupByPosWeek(rows) {
+    function groupByPosWeek(rows, timestampBucket) {
       const byKey = {};
       (rows || []).forEach(row => {
         const key = row.pos + '-' + row.week;
         if (!byKey[key]) byKey[key] = { topN: row.top_n, rows: [] };
         byKey[key].rows.push({ player: row.player, team: row.team, prob: Number(row.prob) });
+        timestampBucket[key] = latestTimestamp(timestampBucket[key], row.published_at);
       });
       Object.keys(byKey).forEach(key => byKey[key].rows.sort((a, b) => b.prob - a.prob));
       return byKey;
@@ -5616,15 +5767,19 @@ async function loadAppState() {
     if (!slRankRes.error) Object.assign(publishedSeasonLong, groupByPos(slRankRes.data));
     if (!slTotRes.error && slTotRes.data && slTotRes.data.length > 0) {
       publishedSeasonLongTotals = { rows: slTotRes.data.map(r => ({ team: r.team, value: Number(r.value) })) };
+      slTotRes.data.forEach(row => {
+        publishedTimestamps.seasonLongTotals = latestTimestamp(publishedTimestamps.seasonLongTotals, row.published_at);
+      });
     }
-    if (!wkRankRes.error) Object.assign(publishedRankings, groupByPosWeek(wkRankRes.data));
-    if (!rosRankRes.error) Object.assign(publishedROS, groupByPosWeek(rosRankRes.data));
+    if (!wkRankRes.error) Object.assign(publishedRankings, groupByPosWeek(wkRankRes.data, publishedTimestamps.weekly));
+    if (!rosRankRes.error) Object.assign(publishedROS, groupByPosWeek(rosRankRes.data, publishedTimestamps.ros));
 
     if (!wkTotRes.error) {
       const byWeek = {};
       (wkTotRes.data || []).forEach(row => {
         if (!byWeek[row.week]) byWeek[row.week] = { rows: [] };
         byWeek[row.week].rows.push({ team: row.team, value: row.value === null ? 'BYE' : Number(row.value) });
+        publishedTimestamps.teamTotals[row.week] = latestTimestamp(publishedTimestamps.teamTotals[row.week], row.published_at);
       });
       Object.assign(publishedTeamTotals, byWeek);
     }
