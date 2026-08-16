@@ -1715,6 +1715,31 @@ const supabaseClient = (typeof window !== 'undefined' && window.supabase)
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
   : null;
 
+// Everything on the site is free to VIEW right now, no account needed —
+// matches the homepage's "free until September 9th" messaging. This
+// automatically flips to requiring a real Pro subscription (not just being
+// signed in) the instant the browser's clock crosses this cutoff — no
+// manual redeploy needed. Hawaii doesn't observe DST, so HST is always
+// UTC-10: 12:01am HST on Sept 9, 2026 = 10:01am UTC the same day.
+//
+// Set MANUAL_PAYWALL_OVERRIDE to true or false to force the paywall on/off
+// regardless of the date (e.g. for testing this behavior early). Leave it
+// as null to use the automatic cutoff.
+const PAYWALL_CUTOFF = new Date('2026-09-09T10:01:00Z');
+const MANUAL_PAYWALL_OVERRIDE = null;
+
+function isPaywallActive() {
+  if (MANUAL_PAYWALL_OVERRIDE !== null) return MANUAL_PAYWALL_OVERRIDE;
+  return new Date() >= PAYWALL_CUTOFF;
+}
+
+// The single check every gated area of the site should use: content is
+// unlocked if the paywall hasn't kicked in yet, OR the visitor has a real,
+// currently-active Pro subscription.
+function contentUnlocked() {
+  return !isPaywallActive() || !!(currentUser && currentUser.isPro);
+}
+
 // --- AUTH ------------------------------------------------------------------
 // Real accounts via Supabase Auth (see below) — replaces the earlier
 // demo-only in-memory store. currentUser.isAdmin gates Admin access;
@@ -2077,7 +2102,7 @@ let activeProjTab = 'totals-sl';
 function refreshProjectionsGate() {
   const locked = document.getElementById('proj-locked');
   const contentWrap = document.getElementById('proj-content-wrap');
-  if (currentUser) {
+  if (contentUnlocked()) {
     locked.style.display = 'none';
     contentWrap.style.display = 'block';
     if (activeProjTab === 'totals') {
@@ -2584,7 +2609,7 @@ function seedRosterGroups(side) {
 function refreshTradeGate() {
   const locked = document.getElementById('trade-locked');
   const builder = document.getElementById('trade-builder');
-  if (currentUser) {
+  if (contentUnlocked()) {
     locked.style.display = 'none';
     builder.style.display = 'block';
     populatePlayerDatalist();
@@ -5659,7 +5684,7 @@ function renderHomepageArticles() {
     ids.slice().reverse().forEach(id => {
       const a = publishedArticles[id];
       const tagClass = a.access === 'Pro' ? 'gray' : '';
-      const lockHtml = (a.access === 'Pro' && !currentUser) ? '<div class="lock-overlay">🔒 Unlock with Pro</div>' : '';
+      const lockHtml = (a.access === 'Pro' && !contentUnlocked()) ? '<div class="lock-overlay">🔒 Unlock with Pro</div>' : '';
       const card = document.createElement('div');
       card.className = 'article-card';
       card.style.cursor = 'pointer';
