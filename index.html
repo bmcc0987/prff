@@ -733,6 +733,7 @@ footer {
     <a class="nav-cta" href="#" onclick="showPage(event,'signup')">Sign Up</a>
   </div>
   <div class="nav-actions" id="nav-actions-loggedin" style="display:none;">
+    <a href="#" id="nav-link-upgrade" onclick="goToUpgrade(event)" style="display:none; font-family:'Lato',sans-serif; font-size:14px; font-weight:700; color:#3DB87A; text-decoration:underline; margin-right:4px;">Upgrade</a>
     <a href="#" id="nav-username" class="nav-account-icon" onclick="goToAccount(event)" title="My Account">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="8" r="4"></circle>
@@ -787,7 +788,8 @@ footer {
     <p>Our unique process uses implied totals to project players using probabilities. Learn more about our PPR Superforecasting method below.</p>
     <div id="hero-subscribe-cta">
       <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
-        <a class="btn-subscribe" href="#articles">Subscribe</a>
+        <a class="btn-subscribe" href="#" onclick="showPage(event,'signup')">Subscribe</a>
+        <a class="btn-go-pro" href="#" onclick="goToUpgrade(event)">Go Pro</a>
       </div>
       <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free until September 9, 2026 (day 1 of the NFL season). Subscribe to access all functions of the site all season long!</p>
     </div>
@@ -1135,10 +1137,43 @@ footer {
   </div>
 </div>
 
+<!-- UPGRADE PAGE (standalone — just the subscription section, reachable
+     from the "Upgrade" link next to the profile icon) -->
+<div id="page-upgrade" style="display:none;">
+  <div class="auth-page">
+    <div class="auth-card" style="max-width:460px;">
+      <label class="auth-label" style="margin-top:0;">Subscription</label>
+      <div id="account-subscription-status-upgrade" style="font-family:'Lato',sans-serif; font-size:16px; font-weight:900; color:#111; margin-bottom:6px;"></div>
+      <div id="account-subscription-note-upgrade" style="font-family:'Lato',sans-serif; font-size:13px; color:#888; margin-bottom:16px;"></div>
+
+      <div id="account-subscribe-tiers-upgrade" style="display:none;">
+        <p style="font-family:'Lato',sans-serif; font-size:13px; line-height:1.6; color:#555; margin:0 0 16px;">All access to the site is free until the NFL regular season begins on Wednesday, September 9th, 2026. A Pro subscription gives you access to all of the site's tools: Season Implied Totals, Weekly Implied Totals, Season Long Player Projections, Weekly Player Projections, Rest Of Season Player Projections, Trade/Team Analyzer, Articles, and Analysis.</p>
+        <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('season','-upgrade')">Season Pass — $20 (through Jan 11)</button>
+        <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('monthly','-upgrade')">Monthly — $10/mo (starts Sept 9, ends Jan 11)</button>
+        <button type="button" class="trade-analyze-btn" style="width:100%;" onclick="startCheckout('weekly','-upgrade')">Weekly — $4/wk (ends Jan 11)</button>
+        <div id="account-checkout-error-upgrade" style="display:none; font-family:'Lato',sans-serif; font-size:13px; color:#c0392b; margin-top:8px;"></div>
+
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid #eee;">
+          <label class="auth-label">Have a promo code?</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input class="auth-input" type="text" id="promo-code-input-upgrade" placeholder="Enter code" style="margin-top:0; flex:1 1 auto; min-width:0; text-transform:uppercase;">
+            <button type="button" class="trade-add-btn" style="flex-shrink:0; width:auto; white-space:nowrap;" onclick="redeemPromoCode('-upgrade')" id="promo-code-btn-upgrade">Apply</button>
+          </div>
+          <div id="promo-code-message-upgrade" style="display:none; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <button type="button" class="trade-analyze-btn" style="width:100%;" id="account-cancel-btn-upgrade" onclick="cancelSubscription('-upgrade')">Cancel Subscription</button>
+
+      <a href="#" class="article-back-link" style="display:block; text-align:center; margin-top:20px;" onclick="goToHome(event)">← Back to home</a>
+    </div>
+  </div>
+</div>
+
 <!-- SIGN UP PAGE -->
 <div id="page-signup" class="auth-page" style="display:none;">
   <div class="auth-card">
-    <div class="auth-title">Create your account</div>
+    <div class="auth-title">Create your FREE account</div>
     <div class="auth-sub">Join Process/Results to unlock articles and projections.</div>
     <div id="signup-error" class="auth-error" style="display:none;"></div>
     <div onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignup();}">
@@ -1723,7 +1758,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
 (function () {
   var STATIC_PATH_TO_PAGE = {
     '/': 'home', '/terms': 'terms', '/privacy': 'privacy', '/contact': 'contact',
-    '/account': 'account', '/signup': 'signup', '/signin': 'signin',
+    '/account': 'account', '/signup': 'signup', '/signin': 'signin', '/upgrade': 'upgrade',
     '/projections': 'projections', '/trade': 'trade', '/admin': 'admin', '/articles': 'articles',
   };
   var path = window.location.pathname;
@@ -1788,7 +1823,7 @@ let currentUser = null;
 // that case itself.
 const PAGE_PATHS = {
   home: '/', terms: '/terms', privacy: '/privacy', contact: '/contact',
-  account: '/account', signup: '/signup', signin: '/signin',
+  account: '/account', signup: '/signup', signin: '/signin', upgrade: '/upgrade',
   projections: '/projections', trade: '/trade', admin: '/admin', articles: '/articles',
 };
 
@@ -1807,7 +1842,7 @@ const PROJ_TAB_PATHS = {
 function showPage(evt, pageName, opts) {
   opts = opts || {};
   if (evt) evt.preventDefault();
-  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact')
+  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact, #page-upgrade')
     .forEach(el => el.style.display = 'none');
   document.getElementById('page-' + pageName).style.display = 'block';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1857,6 +1892,13 @@ function goToAccount(evt) {
   showPage(null, 'account');
 }
 
+function goToUpgrade(evt) {
+  if (evt) evt.preventDefault();
+  if (!currentUser) { showPage(null, 'signin'); return; }
+  showPage(null, 'upgrade');
+  renderSubscriptionSection('-upgrade');
+}
+
 // Fills in the account page from the current session. "Username" is still
 // derived from the email prefix (no separate username field is collected),
 // but "Name" now reflects the real first/last name from sign-up.
@@ -1874,11 +1916,22 @@ function renderAccountPage() {
   document.getElementById('account-password-update-note').style.display = 'none';
   document.getElementById('account-password-reset-note').style.display = 'none';
 
-  const statusEl = document.getElementById('account-subscription-status');
-  const noteEl = document.getElementById('account-subscription-note');
-  const cancelBtn = document.getElementById('account-cancel-btn');
-  const tiersEl = document.getElementById('account-subscribe-tiers');
-  document.getElementById('account-checkout-error').style.display = 'none';
+  renderSubscriptionSection('');
+}
+
+// Shared by the Account page's Subscription section and the standalone
+// Upgrade page — same logic, different element IDs (suffix is '' for
+// Account, '-upgrade' for the Upgrade page), so both always stay in sync
+// with reality without duplicating this logic.
+function renderSubscriptionSection(suffix) {
+  if (!currentUser) return;
+  const statusEl = document.getElementById('account-subscription-status' + suffix);
+  const noteEl = document.getElementById('account-subscription-note' + suffix);
+  const cancelBtn = document.getElementById('account-cancel-btn' + suffix);
+  const tiersEl = document.getElementById('account-subscribe-tiers' + suffix);
+  if (!statusEl) return; // this page/suffix combo isn't on the current page
+  const errorEl = document.getElementById('account-checkout-error' + suffix);
+  if (errorEl) errorEl.style.display = 'none';
   cancelSubscriptionArmed = false;
   cancelBtn.style.background = '';
   if (currentUser.isPro) {
@@ -2003,9 +2056,10 @@ let cancelSubscriptionArmed = false;
 // Calls the create-checkout-session Edge Function for the chosen tier and
 // redirects to Stripe's own hosted checkout page. All the actual payment
 // handling happens on Stripe's page — this site never touches card data.
-async function startCheckout(tier) {
+async function startCheckout(tier, suffix) {
+  suffix = suffix || '';
   if (!currentUser || !supabaseClient) return;
-  const errorEl = document.getElementById('account-checkout-error');
+  const errorEl = document.getElementById('account-checkout-error' + suffix);
   errorEl.style.display = 'none';
   try {
     const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -2031,11 +2085,12 @@ async function startCheckout(tier) {
 // all the real validation (exists, active, not expired, not over its
 // redemption limit, not already used by this person) server-side using the
 // service role key — the browser never gets to flip is_pro itself.
-async function redeemPromoCode() {
+async function redeemPromoCode(suffix) {
+  suffix = suffix || '';
   if (!currentUser || !supabaseClient) return;
-  const input = document.getElementById('promo-code-input');
-  const msg = document.getElementById('promo-code-message');
-  const btn = document.getElementById('promo-code-btn');
+  const input = document.getElementById('promo-code-input' + suffix);
+  const msg = document.getElementById('promo-code-message' + suffix);
+  const btn = document.getElementById('promo-code-btn' + suffix);
   const code = input.value.trim();
   if (!code) {
     msg.style.color = '#c0392b';
@@ -2060,10 +2115,11 @@ async function redeemPromoCode() {
     if (result.error) throw new Error(result.error);
     currentUser.isPro = true;
     updateHomepageProState();
+    updateUpgradeNavVisibility();
     msg.style.color = '#3DB87A';
     msg.textContent = 'Code applied — you now have Pro access through the end of the season!';
     msg.style.display = 'block';
-    setTimeout(renderAccountPage, 2000); // give the success message a moment to be seen before the layout switches to the Pro view
+    setTimeout(function () { renderAccountPage(); renderSubscriptionSection('-upgrade'); }, 2000); // give the success message a moment to be seen before the layout switches to the Pro view
   } catch (e) {
     msg.style.color = '#c0392b';
     msg.textContent = e.message;
@@ -2073,9 +2129,10 @@ async function redeemPromoCode() {
   }
 }
 
-async function cancelSubscription() {
+async function cancelSubscription(suffix) {
+  suffix = suffix || '';
   if (!currentUser || !currentUser.isPro) return;
-  const btn = document.getElementById('account-cancel-btn');
+  const btn = document.getElementById('account-cancel-btn' + suffix);
 
   if (!cancelSubscriptionArmed) {
     cancelSubscriptionArmed = true;
@@ -2090,7 +2147,9 @@ async function cancelSubscription() {
     await supabaseClient.from('profiles').update({ is_pro: false }).eq('id', currentUser.id);
   }
   updateHomepageProState();
+  updateUpgradeNavVisibility();
   renderAccountPage();
+  renderSubscriptionSection('-upgrade');
 }
 
 // Articles now lives on its own dedicated page — no scrolling/hero above it.
@@ -2495,6 +2554,7 @@ async function logIn(authUser) {
   document.getElementById('mobile-nav-admin').style.display = currentUser.isAdmin ? 'block' : 'none';
 
   updateHomepageProState();
+  updateUpgradeNavVisibility();
 }
 
 // The hero "Subscribe / Go Pro" pitch hides once someone is an active Pro
@@ -2526,7 +2586,18 @@ async function logOut(evt) {
   const banner = document.getElementById('home-pro-banner');
   if (banner) banner.style.display = 'flex';
   updateHomepageProState();
+  updateUpgradeNavVisibility();
   showPage(null, 'home');
+}
+
+// The "Upgrade" link next to the profile icon only makes sense for someone
+// who's signed in AND not already Pro — once they upgrade, it should
+// disappear entirely rather than linking to a page that's just going to
+// tell them they're already subscribed.
+function updateUpgradeNavVisibility() {
+  const link = document.getElementById('nav-link-upgrade');
+  if (!link) return;
+  link.style.display = (currentUser && !currentUser.isPro) ? 'inline' : 'none';
 }
 
 // --- TRADE ANALYZER --------------------------------------------------------
@@ -6251,12 +6322,13 @@ function routeFromLocation() {
   const match = Object.entries(PAGE_PATHS).find(([, p]) => p === path);
   if (match) {
     const pageName = match[0];
-    if (pageName === 'account' && !currentUser) {
+    if ((pageName === 'account' || pageName === 'upgrade') && !currentUser) {
       showPage(null, 'signin', { skipPush: true, path: '/signin' });
       history.replaceState({ page: 'signin' }, '', '/signin');
       return;
     }
     showPage(null, pageName, { skipPush: true, path });
+    if (pageName === 'upgrade') renderSubscriptionSection('-upgrade');
     return;
   }
 
