@@ -106,6 +106,11 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .ticker-player .p-pct.high { color: #3DB87A; }
 .ticker-player .p-pct.mid { color: #f0a500; }
 .ticker-player .p-pct.low { color: rgba(255,255,255,0.3); }
+.ticker-player .p-name.ticker-blurred, .ticker-player .p-pct.ticker-blurred {
+  filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
+}
 
 @keyframes ticker {
   0% { transform: translateX(0); }
@@ -979,7 +984,7 @@ footer {
     <p class="article-body-p">If you have questions about these Terms, please contact us at info@prffball.com.</p>
 
     <div class="trade-newroster-divider"></div>
-    <p class="article-body-p" style="font-style:italic; color:#999; font-size:14px;">This document is a starting draft and is not a substitute for legal advice. Before publishing this on your live site, especially once you're accepting real payments, it's worth having an attorney review it — particularly the bracketed placeholders, which need your actual business details filled in.</p>
+    
   </div>
 </div>
 
@@ -1049,7 +1054,7 @@ footer {
     <p class="article-body-p">If you have questions about this Privacy Policy or how we handle your information, please contact us at info@prffball.com.</p>
 
     <div class="trade-newroster-divider"></div>
-    <p class="article-body-p" style="font-style:italic; color:#999; font-size:14px;">This document is a starting draft and is not a substitute for legal advice. Before publishing this on your live site, it's worth having an attorney review it — particularly the bracketed placeholders, which need your actual business and contact details filled in.</p>
+    
   </div>
 </div>
 
@@ -2146,10 +2151,29 @@ async function cancelSubscription(suffix) {
   }
 
   cancelSubscriptionArmed = false;
-  currentUser.isPro = false;
+  btn.disabled = true;
+  btn.textContent = 'Cancelling…';
+
   if (supabaseClient) {
-    await supabaseClient.from('profiles').update({ is_pro: false }).eq('id', currentUser.id);
+    try {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData.session.access_token;
+      const res = await fetch(SUPABASE_URL + '/functions/v1/cancel-subscription', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + accessToken },
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Cancel Subscription';
+      alert('Could not cancel: ' + e.message + '. Your subscription has NOT been changed — please try again or contact support.');
+      return;
+    }
   }
+
+  currentUser.isPro = false;
+  btn.disabled = false;
   updateHomepageProState();
   updateUpgradeNavVisibility();
   renderAccountPage();
@@ -6103,10 +6127,11 @@ function renderTicker() {
     const top8 = data.rows.slice(0, 8);
     let html = '<span class="ticker-section"><span class="ticker-pos-tag ' + pos.toLowerCase() + '">' + pos + '</span>';
     top8.forEach((r, i) => {
+      const blurClass = (i + 1) > 4 ? ' ticker-blurred' : '';
       html += '<div class="ticker-player"><span class="p-rank">' + (i + 1) + '</span>' +
-        '<span class="p-name">' + abbreviateTickerName(r.player) + '</span>' +
+        '<span class="p-name' + blurClass + '">' + abbreviateTickerName(r.player) + '</span>' +
         '<span class="p-team">' + (r.team || '') + '</span>' +
-        '<span class="p-pct ' + tickerPctClass(r.prob) + '">' + r.prob + '%</span></div>';
+        '<span class="p-pct ' + tickerPctClass(r.prob) + blurClass + '">' + r.prob + '%</span></div>';
     });
     html += '</span>';
     return html;
