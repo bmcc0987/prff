@@ -6187,7 +6187,13 @@ function populateFeaturedBlock(suffix, article) {
   document.getElementById('featured-article-headline' + suffix).textContent = article.title;
   document.getElementById('featured-article-excerpt' + suffix).textContent = plainTextExcerpt(article.body, 180);
   const link = document.getElementById('featured-article-link' + suffix);
-  link.onclick = function (e) { e.preventDefault(); goToArticle(article.id); };
+  const openThisArticle = function (e) { e.preventDefault(); goToArticle(article.id); };
+  link.onclick = openThisArticle;
+  // The whole card already looks clickable (cursor:pointer throughout via
+  // CSS) — this makes clicking the image or headline actually work too,
+  // not just the small "Read article" text at the bottom.
+  block.onclick = openThisArticle;
+  block.style.cursor = 'pointer';
   block.style.display = '';
 }
 
