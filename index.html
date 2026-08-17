@@ -5267,9 +5267,36 @@ function autoFillSeasonLongRankings(position) {
 function smartLoadSeasonLongRankings(position) {
   if (publishedSeasonLong[position]) {
     loadRankTable('seasonlong');
+    reattachSavedNotes(position);
   } else {
     autoFillSeasonLongRankings(position);
+    reattachSavedNotes(position);
   }
+}
+
+// Loading published data for a position (e.g. when switching the position
+// dropdown) used to silently wipe out any notes already typed for that
+// position, since published data never carries notes — this re-attaches
+// them from the saved local draft, matched by player name, so switching
+// positions and switching back no longer loses notes.
+function reattachSavedNotes(position) {
+  let draft;
+  try {
+    const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
+    if (!raw) return;
+    draft = JSON.parse(raw);
+  } catch (e) { return; }
+  if (!draft.seasonlong || draft.seasonlong.position !== position || !draft.seasonlong.rows) return;
+
+  const notesByPlayer = {};
+  draft.seasonlong.rows.forEach(r => { if (r.notes) notesByPlayer[r.player] = r.notes; });
+  if (Object.keys(notesByPlayer).length === 0) return;
+
+  document.querySelectorAll('#sl-rows tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const player = inputs[0].value.trim();
+    if (notesByPlayer[player] && inputs[3]) inputs[3].value = notesByPlayer[player];
+  });
 }
 
 // --- Live probability sum for Position rankings -----------------------------
