@@ -106,7 +106,7 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .ticker-player .p-pct.high { color: #3DB87A; }
 .ticker-player .p-pct.mid { color: #f0a500; }
 .ticker-player .p-pct.low { color: rgba(255,255,255,0.3); }
-.ticker-player .p-name.ticker-blurred, .ticker-player .p-pct.ticker-blurred {
+.ticker-player .p-name.ticker-blurred, .ticker-player .p-team.ticker-blurred, .ticker-player .p-pct.ticker-blurred {
   filter: blur(4px);
   user-select: none;
   pointer-events: none;
@@ -6130,7 +6130,7 @@ function renderTicker() {
       const blurClass = (i + 1) > 4 ? ' ticker-blurred' : '';
       html += '<div class="ticker-player"><span class="p-rank">' + (i + 1) + '</span>' +
         '<span class="p-name' + blurClass + '">' + abbreviateTickerName(r.player) + '</span>' +
-        '<span class="p-team">' + (r.team || '') + '</span>' +
+        '<span class="p-team' + blurClass + '">' + (r.team || '') + '</span>' +
         '<span class="p-pct ' + tickerPctClass(r.prob) + blurClass + '">' + r.prob + '%</span></div>';
     });
     html += '</span>';
