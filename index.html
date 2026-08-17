@@ -1449,6 +1449,7 @@ footer {
       <button class="admin-tab" id="admin-tab-ros" onclick="switchAdminTool('ros')">Rest of season projections</button>
       <button class="admin-tab" id="admin-tab-articles" onclick="switchAdminTool('articles')">Articles</button>
       <button class="admin-tab" id="admin-tab-export" onclick="switchAdminTool('export')">Export Data</button>
+      <button class="admin-tab" id="admin-tab-users" onclick="switchAdminTool('users')">Users</button>
     </div>
 
     <div id="admin-tool-totals" style="display:none;">
@@ -1750,6 +1751,24 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
         <button class="trade-analyze-btn" onclick="exportWeeklyProjectionsCSV()">Export Weekly Player Projections</button>
       </div>
       <div id="export-status" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:14px; font-weight:700; margin-top:14px;"></div>
+    </div>
+
+    <div id="admin-tool-users" style="display:none;">
+      <div class="admin-controls" style="margin-bottom:14px;">
+        <button class="trade-analyze-btn" onclick="loadUsersList()">Refresh</button>
+        <button class="trade-analyze-btn" onclick="exportUsersCSV()">Export as CSV (spreadsheet)</button>
+      </div>
+      <div id="users-list-status" style="font-family:'Lato',sans-serif; font-size:14px; color:#888; margin-bottom:10px;">Click Refresh to load.</div>
+      <div style="overflow-x:auto;">
+        <table class="admin-table" style="table-layout:auto;">
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Signed Up</th><th>Status</th><th>Tier</th><th>Purchased/Redeemed</th><th>Pro Expires</th>
+            </tr>
+          </thead>
+          <tbody id="users-list-rows"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -4354,8 +4373,71 @@ function exportWeeklyProjectionsCSV() {
   downloadCSV('weekly-player-projections.csv', ['Position', 'Week', 'Player', 'Team', 'Probability (%)'], data);
 }
 
+let loadedUsersData = [];
+
+async function loadUsersList() {
+  const statusEl = document.getElementById('users-list-status');
+  const tbody = document.getElementById('users-list-rows');
+  if (!currentUser || !supabaseClient) return;
+  statusEl.textContent = 'Loading…';
+  statusEl.style.color = '#888';
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData.session.access_token;
+    const res = await fetch(SUPABASE_URL + '/functions/v1/list-users', {
+      headers: { 'Authorization': 'Bearer ' + accessToken },
+    });
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+
+    loadedUsersData = result.users;
+    tbody.innerHTML = '';
+    result.users.forEach(u => {
+      const tr = document.createElement('tr');
+      const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
+      const signedUp = u.signedUpAt ? new Date(u.signedUpAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      const status = u.isPro ? 'Pro' : 'Free';
+      const statusColor = u.isPro ? '#3DB87A' : '#888';
+      const purchased = u.proPurchasedAt ? new Date(u.proPurchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      const expires = u.proExpiresAt ? new Date(u.proExpiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      tr.innerHTML =
+        '<td>' + name + (u.isAdmin ? ' <span style="color:#3DB87A;font-weight:700;">(admin)</span>' : '') + '</td>' +
+        '<td>' + u.email + '</td>' +
+        '<td>' + signedUp + '</td>' +
+        '<td style="color:' + statusColor + ';font-weight:700;">' + status + '</td>' +
+        '<td>' + (u.proTier || '—') + '</td>' +
+        '<td>' + purchased + '</td>' +
+        '<td>' + expires + '</td>';
+      tbody.appendChild(tr);
+    });
+    const proCount = result.users.filter(u => u.isPro).length;
+    statusEl.textContent = result.users.length + ' total signups, ' + proCount + ' currently Pro.';
+    statusEl.style.color = '#555';
+  } catch (e) {
+    statusEl.textContent = 'Could not load users: ' + e.message;
+    statusEl.style.color = '#c0392b';
+  }
+}
+
+function exportUsersCSV() {
+  if (loadedUsersData.length === 0) {
+    alert('Click Refresh first to load the user list before exporting.');
+    return;
+  }
+  const rows = loadedUsersData.map(u => [
+    [u.firstName, u.lastName].filter(Boolean).join(' '),
+    u.email,
+    u.signedUpAt || '',
+    u.isPro ? 'Pro' : 'Free',
+    u.proTier || '',
+    u.proPurchasedAt || '',
+    u.proExpiresAt || '',
+  ]);
+  downloadCSV('prff-users.csv', ['Name', 'Email', 'Signed Up', 'Status', 'Tier', 'Purchased/Redeemed', 'Pro Expires'], rows);
+}
+
 function switchAdminTool(tool) {
-  ['rankings', 'totals', 'totals-sl', 'seasonlong', 'ros', 'articles', 'export'].forEach(t => {
+  ['rankings', 'totals', 'totals-sl', 'seasonlong', 'ros', 'articles', 'export', 'users'].forEach(t => {
     document.getElementById('admin-tool-' + t).style.display = tool === t ? 'block' : 'none';
     document.getElementById('admin-tab-' + t).classList.toggle('active', tool === t);
   });
@@ -4382,6 +4464,9 @@ function switchAdminTool(tool) {
   }
   if (tool === 'articles') {
     populateArticleLoadSelect();
+  }
+  if (tool === 'users' && !document.getElementById('users-list-rows').children.length) {
+    loadUsersList();
   }
 }
 
