@@ -784,7 +784,7 @@ footer {
       <span class="hero-over">over</span>
       <span class="hero-results">Results</span>
     </div>
-    <p>Our unique process uses implied totals to project players using probabilities. Learn more about our Superforecasting method below.</p>
+    <p>Our unique process uses implied totals to project players using probabilities. Learn more about our PPR Superforecasting method below.</p>
     <div id="hero-subscribe-cta">
       <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
         <a class="btn-subscribe" href="#articles">Subscribe</a>
@@ -1112,7 +1112,7 @@ footer {
       <div id="account-subscription-note" style="font-family:'Lato',sans-serif; font-size:13px; color:#888; margin-bottom:16px;"></div>
 
       <div id="account-subscribe-tiers" style="display:none;">
-        <p style="font-family:'Lato',sans-serif; font-size:13px; line-height:1.6; color:#555; margin:0 0 16px;">All access to the site is free until the NFL regular season begins on Wednesday, September 9th, 2026. A Pro subscription gives you access to all of the site's tools: Season Implied Totals, Weekly Implied Totals, Season Long Player Projections, Weekly Player Projections, Rest Of Season Player Projections, Trade/Team Analyzer, Articles, Analysis, and personal responses to any fantasy football related questions you have.</p>
+        <p style="font-family:'Lato',sans-serif; font-size:13px; line-height:1.6; color:#555; margin:0 0 16px;">All access to the site is free until the NFL regular season begins on Wednesday, September 9th, 2026. A Pro subscription gives you access to all of the site's tools: Season Implied Totals, Weekly Implied Totals, Season Long Player Projections, Weekly Player Projections, Rest Of Season Player Projections, Trade/Team Analyzer, Articles, and Analysis.</p>
         <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('season')">Season Pass — $20 (through Jan 11)</button>
         <button type="button" class="trade-analyze-btn" style="width:100%;margin-bottom:8px;" onclick="startCheckout('monthly')">Monthly — $10/mo (starts Sept 9, ends Jan 11)</button>
         <button type="button" class="trade-analyze-btn" style="width:100%;" onclick="startCheckout('weekly')">Weekly — $4/wk (ends Jan 11)</button>
@@ -1254,6 +1254,10 @@ footer {
     <datalist id="player-list-FLEX"></datalist>
     <datalist id="rostered-players-A"></datalist>
     <datalist id="rostered-players-B"></datalist>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+      <button type="button" id="numbers-mode-toggle" class="trade-add-btn" style="width:auto; white-space:nowrap;" onclick="toggleNumbersMode()">Numbers Mode: Off</button>
+      <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Type player names as usual, or turn this on to type shorthand like QB6, RB5, WR1, TE7 instead.</span>
+    </div>
     <div class="trade-cols">
       <div class="trade-col">
         <input class="trade-col-name" id="trade-teamA-name" value="Team A">
@@ -2599,7 +2603,7 @@ function addPlayerRow(side, type) {
   row.className = 'trade-player-row';
   row.id = 'row-' + rowId;
   row.innerHTML =
-    '<input class="trade-input" list="rostered-players-' + side + '" placeholder="Type a player name" data-side="' + side + '">' +
+    '<input class="trade-input" list="rostered-players-' + side + '" placeholder="' + (numbersMode ? 'e.g. QB6' : 'Type a player name') + '" data-side="' + side + '">' +
     '<button class="trade-remove-btn" onclick="document.getElementById(\'row-' + rowId + '\').remove()">×</button>';
   container.appendChild(row);
 }
@@ -2636,7 +2640,7 @@ function addRosterSlot(side, groupKey) {
   row.className = 'trade-player-row';
   row.id = 'row-' + rowId;
   row.innerHTML =
-    '<input class="trade-input" list="' + datalistId + '" placeholder="Type a player name" data-side="' + side + '" oninput="refreshRosteredPlayers(\'' + side + '\')">' +
+    '<input class="trade-input" list="' + datalistId + '" placeholder="' + (numbersMode ? 'e.g. QB6' : 'Type a player name') + '" data-side="' + side + '" oninput="refreshRosteredPlayers(\'' + side + '\')">' +
     '<button class="trade-remove-btn" onclick="document.getElementById(\'row-' + rowId + '\').remove(); refreshRosteredPlayers(\'' + side + '\');">×</button>';
   container.appendChild(row);
 }
@@ -2701,8 +2705,53 @@ function namesFromContainer(containerId) {
 }
 
 // Turns a list of player names into {name, pos, value} objects, dropping unrecognized names.
+// Numbers Mode: lets someone type "QB6" instead of a real player name,
+// meaning "whoever is currently ranked #6 among QBs in Season Long
+// Player Projections." Purely an input-parsing convenience — once
+// resolved to a real name, it flows through the exact same analysis
+// pipeline as if that name had been typed directly.
+let numbersMode = false;
+
+function resolveNumbersModeShorthand(raw) {
+  const trimmed = (raw || '').trim();
+  const match = trimmed.match(/^([A-Za-z]{2,3})\s*0*(\d+)$/);
+  if (!match) return null;
+  const pos = match[1].toUpperCase();
+  const rank = parseInt(match[2], 10);
+  const data = publishedSeasonLong[pos];
+  if (!data || !data.rows || rank < 1) return null;
+  const sorted = data.rows.slice().sort((a, b) => b.prob - a.prob);
+  const player = sorted[rank - 1];
+  return player ? player.player : null;
+}
+
+function toggleNumbersMode() {
+  numbersMode = !numbersMode;
+  const btn = document.getElementById('numbers-mode-toggle');
+  const hint = document.getElementById('numbers-mode-hint');
+  btn.textContent = 'Numbers Mode: ' + (numbersMode ? 'On' : 'Off');
+  btn.style.background = numbersMode ? '#3DB87A' : '';
+  btn.style.borderColor = numbersMode ? '#3DB87A' : '';
+  btn.style.color = numbersMode ? 'white' : '';
+  hint.textContent = numbersMode
+    ? 'Type shorthand like QB6, RB5, WR1, TE7 — meaning "whoever is currently ranked that spot in Season Long Player Projections."'
+    : 'Type player names as usual, or turn this on to type shorthand like QB6, RB5, WR1, TE7 instead.';
+  // Update every player-name input already on the page too, not just ones
+  // added after toggling.
+  document.querySelectorAll('#trade-builder .trade-input').forEach(input => {
+    input.placeholder = numbersMode ? 'e.g. QB6' : 'Type a player name';
+  });
+}
+
 function toPlayerObjects(names) {
-  return names
+  const resolvedNames = names.map(raw => {
+    if (numbersMode) {
+      const resolved = resolveNumbersModeShorthand(raw);
+      if (resolved) return resolved;
+    }
+    return raw;
+  });
+  return resolvedNames
     .map(name => playerValues[name] ? { name, pos: playerValues[name].pos, value: playerValues[name].value } : null)
     .filter(Boolean);
 }
