@@ -1256,7 +1256,7 @@ footer {
     <datalist id="rostered-players-B"></datalist>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
       <button type="button" id="numbers-mode-toggle" class="trade-add-btn" style="width:auto; white-space:nowrap;" onclick="toggleNumbersMode()">Numbers Mode: Off</button>
-      <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Type player names as usual, or turn this on to type shorthand like QB6, RB5, WR1, TE7 instead.</span>
+      <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Turn this on to type in player values like QB6, RB5, WR1 instead.</span>
     </div>
     <div class="trade-cols">
       <div class="trade-col">
@@ -2725,6 +2725,52 @@ function resolveNumbersModeShorthand(raw) {
   return player ? player.player : null;
 }
 
+// Fixed roster sizes used to generate the Numbers Mode shorthand list
+// (QB1...QB32, etc.) — intentionally NOT derived from however many are
+// currently published, so the full range is always available to type even
+// if not every position has been fully published yet.
+const NUMBERS_MODE_POSITION_COUNTS = { QB: 32, RB: 70, WR: 109, TE: 67 };
+
+function buildShorthandOptions(positions) {
+  const options = [];
+  positions.forEach(pos => {
+    const count = NUMBERS_MODE_POSITION_COUNTS[pos] || 0;
+    for (let i = 1; i <= count; i++) options.push(pos + i);
+  });
+  return options;
+}
+
+function fillDatalist(listId, values) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  list.innerHTML = '';
+  values.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    list.appendChild(opt);
+  });
+}
+
+// Swaps every position-specific datalist between real player names (Numbers
+// Mode off) and shorthand codes like "QB6" (Numbers Mode on). Called once
+// when the Trade/Team Analyzer first opens, and again every time the mode
+// is toggled — unlike populatePlayerDatalist, this always rebuilds rather
+// than skipping if already populated, since it needs to actively swap
+// content types back and forth.
+function applyNumbersModeDatalists() {
+  const byPos = { QB: [], WR: [], RB: [], TE: [] };
+  Object.keys(playerValues).sort().forEach(name => {
+    const pos = playerValues[name].pos;
+    if (byPos[pos]) byPos[pos].push(name);
+  });
+
+  ['QB', 'WR', 'RB', 'TE'].forEach(pos => {
+    fillDatalist('player-list-' + pos, numbersMode ? buildShorthandOptions([pos]) : byPos[pos]);
+  });
+  fillDatalist('player-list-FLEX', numbersMode ? buildShorthandOptions(FLEX_ELIGIBLE) : byPos.RB.concat(byPos.WR, byPos.TE).sort());
+  fillDatalist('player-list', numbersMode ? buildShorthandOptions(['QB', 'RB', 'WR', 'TE']) : Object.keys(playerValues).sort());
+}
+
 function toggleNumbersMode() {
   numbersMode = !numbersMode;
   const btn = document.getElementById('numbers-mode-toggle');
@@ -2735,12 +2781,13 @@ function toggleNumbersMode() {
   btn.style.color = numbersMode ? 'white' : '';
   hint.textContent = numbersMode
     ? 'Type shorthand like QB6, RB5, WR1, TE7 — meaning "whoever is currently ranked that spot in Season Long Player Projections."'
-    : 'Type player names as usual, or turn this on to type shorthand like QB6, RB5, WR1, TE7 instead.';
+    : 'Turn this on to type in player values like QB6, RB5, WR1 instead.';
   // Update every player-name input already on the page too, not just ones
   // added after toggling.
   document.querySelectorAll('#trade-builder .trade-input').forEach(input => {
     input.placeholder = numbersMode ? 'e.g. QB6' : 'Type a player name';
   });
+  applyNumbersModeDatalists();
 }
 
 function toPlayerObjects(names) {
