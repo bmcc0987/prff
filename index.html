@@ -806,6 +806,15 @@ footer {
     </div>
     <a class="see-all" href="#" onclick="goToArticlesPage(event)">View all articles →</a>
   </div>
+  <div class="featured-article" id="featured-article-block" style="display:none;">
+    <div class="featured-img-wrap"><img id="featured-article-img" src="hero-photo.png" alt="" /></div>
+    <div class="featured-body">
+      <div class="article-tag" id="featured-article-tag">Analysis · Free</div>
+      <div class="featured-headline" id="featured-article-headline"></div>
+      <div class="featured-excerpt" id="featured-article-excerpt"></div>
+      <a class="read-btn" href="#" id="featured-article-link">Read article →</a>
+    </div>
+  </div>
   <div class="articles-grid articles-grid-dynamic">
     <div class="article-card"><div class="article-thumb"><img src="hero-photo.png" alt="" /></div><div class="article-body"><div class="article-tag">Weekly projections · Free</div><div class="article-headline">Week 1 RB rankings: who gets the workload?</div><div class="article-meta">May 26 · 8 min read</div></div></div>
     <div class="article-card"><div class="article-thumb"><img src="hero-photo.png" alt="" /></div><div class="article-body"><div class="article-tag blue">Rookie analysis · Free</div><div class="article-headline">C. Boozer at #1: the case for and against</div><div class="article-meta">May 25 · 6 min read</div></div></div>
@@ -845,6 +854,15 @@ footer {
         <div class="section-title">Articles</div>
       </div>
       <a class="see-all" href="#">View all articles →</a>
+    </div>
+    <div class="featured-article" id="featured-article-block-page" style="display:none;">
+      <div class="featured-img-wrap"><img id="featured-article-img-page" src="hero-photo.png" alt="" /></div>
+      <div class="featured-body">
+        <div class="article-tag" id="featured-article-tag-page">Analysis · Free</div>
+        <div class="featured-headline" id="featured-article-headline-page"></div>
+        <div class="featured-excerpt" id="featured-article-excerpt-page"></div>
+        <a class="read-btn" href="#" id="featured-article-link-page">Read article →</a>
+      </div>
     </div>
     <div class="articles-grid articles-grid-dynamic">
       <div class="article-card"><div class="article-thumb"><img src="hero-photo.png" alt="" /></div><div class="article-body"><div class="article-tag">Weekly projections · Free</div><div class="article-headline">Week 1 RB rankings: who gets the workload?</div><div class="article-meta">May 26 · 8 min read</div></div></div>
@@ -1149,7 +1167,11 @@ footer {
       <input class="auth-input" type="email" id="signin-email" placeholder="you@email.com" required>
       <label class="auth-label">Password</label>
       <input class="auth-input" type="password" id="signin-password" placeholder="Your password" required>
-      <div style="text-align:right;margin-top:-6px;margin-bottom:14px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-top:12px; margin-bottom:6px;">
+        <input type="checkbox" id="signin-remember" checked style="width:16px; height:16px; margin:0; cursor:pointer;">
+        <label for="signin-remember" style="font-family:'Lato',sans-serif; font-size:13px; color:#555; cursor:pointer; user-select:none;">Remember me on this device</label>
+      </div>
+      <div style="text-align:right;margin-top:-2px;margin-bottom:14px;">
         <a href="#" onclick="handleForgotPassword(event)" style="font-family:'Lato',sans-serif;font-size:13px;color:#3DB87A;">Forgot password?</a>
       </div>
       <button type="button" class="auth-btn" onclick="handleSignin()">Sign in</button>
@@ -1592,6 +1614,15 @@ footer {
           <label class="auth-label">Author</label>
           <input class="auth-input" type="text" id="article-author" value="Process/Results Staff" style="width:220px;">
         </div>
+        <div class="admin-field">
+          <label class="auth-label">Display order <span class="trade-optional-tag">optional</span></label>
+          <input class="auth-input" type="number" id="article-display-order" placeholder="e.g. 1" style="width:120px;">
+        </div>
+      </div>
+
+      <div class="admin-field" style="margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="article-featured" style="width:16px; height:16px; margin:0; cursor:pointer;">
+        <label for="article-featured" style="font-family:'Lato',sans-serif; font-size:14px; color:#333; cursor:pointer; user-select:none;">Feature this article (shows in the large spot above the article grid — only one article can be featured at a time)</label>
       </div>
 
       <div class="admin-field" style="margin-bottom:16px;">
@@ -1711,7 +1742,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
 // each table (see 01_schema.sql), not from hiding this key.
 const SUPABASE_URL = 'https://krlvxjuzmdyotfvurhhn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_wb6ZHzQyp0n5ODQIXMZvmQ_asSdWw_a';
-const supabaseClient = (typeof window !== 'undefined' && window.supabase)
+let supabaseClient = (typeof window !== 'undefined' && window.supabase)
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
   : null;
 
@@ -2361,6 +2392,7 @@ async function handleSignup() {
 async function handleSignin() {
   const email = document.getElementById('signin-email').value.trim().toLowerCase();
   const password = document.getElementById('signin-password').value;
+  const remember = document.getElementById('signin-remember').checked;
   const errorEl = document.getElementById('signin-error');
 
   if (!email || !password) {
@@ -2372,6 +2404,17 @@ async function handleSignin() {
     errorEl.textContent = 'Sign-in is unavailable right now — the database connection is not set up.';
     errorEl.style.display = 'block';
     return;
+  }
+
+  // "Remember me" unchecked -> keep the session in sessionStorage, so it
+  // disappears the moment this tab/browser closes, instead of the default
+  // localStorage behavior (which survives closing and reopening the
+  // browser entirely). Recreating the client here, right before signing
+  // in, is what actually controls where Supabase writes the session.
+  if (window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { storage: remember ? window.localStorage : window.sessionStorage, persistSession: true },
+    });
   }
 
   const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
@@ -5454,21 +5497,34 @@ async function publishArticle() {
   const body = document.getElementById('article-body').value;
   const existingId = document.getElementById('article-editing-id').value;
   const editingType = document.getElementById('article-editing-type').value;
+  const displayOrderRaw = document.getElementById('article-display-order').value.trim();
+  const displayOrder = displayOrderRaw === '' ? null : parseInt(displayOrderRaw, 10);
+  const featured = document.getElementById('article-featured').checked;
 
   const id = existingId || (slugify(title) + '-' + (++articleIdCounter));
   const dateLabel = (existingId && publishedArticles[existingId])
     ? publishedArticles[existingId].dateLabel
     : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  publishedArticles[id] = { id, title, tag, access, author, image, body, dateLabel };
+  // Only one article can be featured at a time — un-feature whichever one
+  // currently holds that spot before setting this one.
+  if (featured) {
+    Object.values(publishedArticles).forEach(a => { if (a.id !== id) a.featured = false; });
+  }
+  publishedArticles[id] = { id, title, tag, access, author, image, body, dateLabel, displayOrder, featured };
   // Publishing a draft promotes it — it no longer lives in the draft list.
   if (editingType === 'draft' && draftArticles[id]) delete draftArticles[id];
   saveAppStateLocally();
 
   if (supabaseClient) {
     try {
+      if (featured) {
+        const unfeatureRes = await supabaseClient.from('articles').update({ featured: false }).neq('id', id);
+        if (unfeatureRes.error) throw unfeatureRes.error;
+      }
       const res = await supabaseClient.from('articles').upsert({
-        id, title, tag, access, author, image: image || null, body, date_label: dateLabel, status: 'published'
+        id, title, tag, access, author, image: image || null, body, date_label: dateLabel, status: 'published',
+        display_order: displayOrder, featured
       });
       if (res.error) throw res.error;
     } catch (e) {
@@ -5592,6 +5648,8 @@ function loadArticleIntoEditor() {
     document.getElementById('article-body').value = '';
     document.getElementById('article-editing-id').value = '';
     document.getElementById('article-editing-type').value = '';
+    document.getElementById('article-display-order').value = '';
+    document.getElementById('article-featured').checked = false;
     document.getElementById('article-preview-wrap').style.display = 'none';
     document.getElementById('article-featured-image-preview-wrap').style.display = 'none';
     document.getElementById('article-delete-btn').style.display = 'none';
@@ -5608,6 +5666,8 @@ function loadArticleIntoEditor() {
   document.getElementById('article-body').value = a.body;
   document.getElementById('article-editing-id').value = a.id;
   document.getElementById('article-editing-type').value = isDraft ? 'draft' : 'published';
+  document.getElementById('article-display-order').value = (a.displayOrder === null || a.displayOrder === undefined) ? '' : a.displayOrder;
+  document.getElementById('article-featured').checked = !!a.featured;
   document.getElementById('article-delete-btn').style.display = 'block';
   articleDeleteArmed = false;
   document.getElementById('article-delete-btn').textContent = 'Delete Article';
@@ -5673,15 +5733,69 @@ async function deleteCurrentArticle() {
 // Rebuilds every article grid on the site (the homepage's and the dedicated
 // Articles page's) from published articles, newest first. If nothing's
 // published yet, the static placeholder cards already in the HTML stay put.
+// Strips article-syntax markup down to plain readable text for the
+// featured card's short excerpt, since articles don't have a separate
+// excerpt field.
+function plainTextExcerpt(body, maxLen) {
+  const plain = body
+    .split('\n')
+    .filter(line => !line.trim().startsWith('|') && !line.trim().startsWith('%%'))
+    .join(' ')
+    .replace(/#+\s*/g, '')
+    .replace(/[•\t]/g, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain.length > maxLen ? plain.slice(0, maxLen).trim() + '…' : plain;
+}
+
+function populateFeaturedBlock(suffix, article) {
+  const block = document.getElementById('featured-article-block' + suffix);
+  if (!block) return;
+  if (!article) { block.style.display = 'none'; return; }
+  document.getElementById('featured-article-img' + suffix).src = article.image || 'hero-photo.png';
+  document.getElementById('featured-article-tag' + suffix).textContent = article.tag + ' · ' + article.access;
+  document.getElementById('featured-article-headline' + suffix).textContent = article.title;
+  document.getElementById('featured-article-excerpt' + suffix).textContent = plainTextExcerpt(article.body, 180);
+  const link = document.getElementById('featured-article-link' + suffix);
+  link.onclick = function (e) { e.preventDefault(); goToArticle(article.id); };
+  block.style.display = '';
+}
+
+// Sort order: articles with an explicit Display Order (set in Admin) come
+// first, lowest number first. Everything else falls back to newest-first,
+// same as before that field existed.
+function sortedArticleIds() {
+  const ids = Object.keys(publishedArticles);
+  const withOrder = ids.filter(id => publishedArticles[id].displayOrder !== null && publishedArticles[id].displayOrder !== undefined && !isNaN(publishedArticles[id].displayOrder));
+  const withoutOrder = ids.filter(id => !withOrder.includes(id));
+  withOrder.sort((a, b) => publishedArticles[a].displayOrder - publishedArticles[b].displayOrder);
+  withoutOrder.reverse(); // newest-first, matching original behavior
+  return withOrder.concat(withoutOrder);
+}
+
 function renderHomepageArticles() {
   const ids = Object.keys(publishedArticles);
+  const sortedIds = sortedArticleIds();
+
+  // Featured: whichever article is explicitly marked, or the newest one
+  // if nobody's been marked yet. Shown once in the large spot, and left
+  // out of the grid below so it isn't duplicated.
+  const featuredId = sortedIds.find(id => publishedArticles[id].featured) || (ids.length > 0 ? ids[ids.length - 1] : null);
+  const featuredArticle = featuredId ? publishedArticles[featuredId] : null;
+  populateFeaturedBlock('', featuredArticle);
+  populateFeaturedBlock('-page', featuredArticle);
 
   const grids = document.querySelectorAll('.articles-grid-dynamic');
   if (ids.length === 0 || grids.length === 0) return;
 
+  const gridIds = sortedIds.filter(id => id !== featuredId);
+
   grids.forEach(grid => {
     grid.innerHTML = '';
-    ids.slice().reverse().forEach(id => {
+    gridIds.forEach(id => {
       const a = publishedArticles[id];
       const tagClass = a.access === 'Pro' ? 'gray' : '';
       const lockHtml = (a.access === 'Pro' && !contentUnlocked()) ? '<div class="lock-overlay">🔒 Unlock with Pro</div>' : '';
@@ -5855,7 +5969,7 @@ async function loadAppState() {
     if (artRes.error) throw artRes.error;
 
     (artRes.data || []).forEach(row => {
-      const article = { id: row.id, title: row.title, tag: row.tag, access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label };
+      const article = { id: row.id, title: row.title, tag: row.tag, access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
       if (row.status === 'published') publishedArticles[row.id] = article;
       else draftArticles[row.id] = article;
     });
