@@ -3071,6 +3071,31 @@ function renderFinishList(containerId, names, isWinner) {
 // scored the most. Whoever wins the most seasons gets the FLEX spot. If two
 // or more candidates tie on season-wins, all of them are returned — there's
 // no principled way to break a genuine tie, so both start.
+// Reads each roster group separately, tagging every player with which UI
+// group they came from — group membership now directly determines
+// starting status (every name in a non-Bench group starts, period; no
+// ranking or competition for a fixed number of slots). Only "Bench" means
+// non-starting.
+function playersByGroupFromRoster(side) {
+  const result = { QB: [], WR: [], RB: [], TE: [], FLEX: [], BENCH: [] };
+  Object.keys(result).forEach(groupKey => {
+    const container = document.getElementById('trade-team' + side + '-roster-' + groupKey);
+    if (!container) return;
+    container.querySelectorAll('.trade-input').forEach(input => {
+      const raw = input.value.trim();
+      if (!raw) return;
+      let name = raw;
+      if (numbersMode) {
+        const resolved = resolveNumbersModeShorthand(raw);
+        if (resolved) name = resolved;
+      }
+      if (!playerValues[name]) return; // unrecognized name — skip rather than crash
+      result[groupKey].push({ name, pos: playerValues[name].pos, value: playerValues[name].value, group: groupKey });
+    });
+  });
+  return result;
+}
+
 function pickFlexWinners(candidates) {
   const week = getCurrentTradeWeek();
   const withData = candidates.map(p => {
@@ -3107,60 +3132,29 @@ function pickFlexWinners(candidates) {
   return { winners, note };
 }
 
-function buildLineupSlotGroups(players) {
-  // Dedupe by name first — guards against the same player accidentally
-  // appearing twice (e.g. entered in "Rest of roster" AND received in the trade).
-  const seen = new Set();
-  const pool = players.filter(p => (seen.has(p.name) ? false : (seen.add(p.name), true)));
-
-  // Starters are determined by current published rank, not by which slot the
-  // player happens to be typed into or any static preseason value — the
-  // best-ranked player at each position always starts, even if a
-  // worse-ranked player at that position was entered "first" or a
-  // better-ranked one was entered further down the roster. Unranked players
-  // (no published Rest of Season / Season Long / Weekly rank) sort last,
-  // since there's no data saying they're better than a ranked teammate.
-  const week = getCurrentTradeWeek();
-  function rankOf(p) {
-    const resolved = resolvePlayerRank(p.name, p.pos, week);
-    return resolved ? resolved.rank : Infinity;
-  }
-
+// Every player is already tagged with which UI group they came from
+// (playersByGroupFromRoster above, or synthesized for trade-received
+// players — see analyzeTrade). This just routes each one to its matching
+// slot directly: no ranking, no competition, no fixed required count.
+// Bench is the only "doesn't start" group.
+function buildLineupSlotGroups(playersByGroup) {
   const groups = { QB: [], WR: [], RB: [], TE: [], FLEX: [], BENCH: [] };
-  const REQUIRED = { QB: 1, WR: 2, RB: 2, TE: 1 };
-  Object.keys(REQUIRED).forEach(pos => {
-    const atPos = pool.filter(p => p.pos === pos).sort((a, b) => rankOf(a) - rankOf(b));
-    const picked = atPos.slice(0, REQUIRED[pos]);
-    picked.forEach(p => { groups[pos].push(p); pool.splice(pool.indexOf(p), 1); });
-  });
-  // FLEX is RB/WR/TE only, decided by real historical head-to-head
-  // production across all 11 seasons rather than by rank number.
-  const flexPool = pool.filter(p => ['RB', 'WR', 'TE'].includes(p.pos));
-  const flexResult = pickFlexWinners(flexPool);
-  if (flexResult.winners.length > 0) {
-    groups.FLEX.push(...flexResult.winners);
-    flexResult.winners.forEach(p => {
-      const idx = pool.indexOf(p);
-      if (idx !== -1) pool.splice(idx, 1);
+  const seen = new Set();
+  ['QB', 'WR', 'RB', 'TE', 'FLEX', 'BENCH'].forEach(groupKey => {
+    (playersByGroup[groupKey] || []).forEach(p => {
+      if (seen.has(p.name)) return; // guard against the same player entered twice
+      seen.add(p.name);
+      groups[groupKey].push(p);
     });
-    if (flexResult.note) groups.flexNote = flexResult.note;
-  } else if (flexPool.length > 0) {
-    // No historical season data available for any candidate — fall back to
-    // best live rank so FLEX still gets filled.
-    flexPool.sort((a, b) => rankOf(a) - rankOf(b));
-    groups.FLEX.push(flexPool[0]);
-    pool.splice(pool.indexOf(flexPool[0]), 1);
-  }
-  groups.BENCH = pool; // everyone else, any position, in whatever order remains
-
+  });
   return groups;
 }
 
-function renderRosterCards(containerId, players, isWinner) {
+function renderRosterCards(containerId, playersByGroup, isWinner) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
 
-  const groups = buildLineupSlotGroups(players);
+  const groups = buildLineupSlotGroups(playersByGroup);
   const slotOrder = ['QB', 'WR', 'RB', 'TE', 'FLEX', 'BENCH'];
 
   slotOrder.forEach(slotLabel => {
@@ -3270,7 +3264,7 @@ function getCurrentTradeWeek() {
 // left empty but both teams' rosters are filled in. No trade actually
 // happens here, so this skips the Receives columns and new-roster display
 // entirely and just answers "who scores more, and how often."
-function runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj) {
+function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups) {
   const week = getCurrentTradeWeek();
 
   document.getElementById('trade-receives-section').style.display = 'none';
@@ -3280,10 +3274,11 @@ function runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj) {
   document.getElementById('trade-history-statB').style.display = 'none';
   document.getElementById('trade-result').style.display = 'block';
 
-  // Same starters-only methodology as the trade analyzer (QB/WR/WR/RB/RB/TE/FLEX),
-  // so a team comparison and a trade comparison mean the same thing.
-  const startersA = buildLineupSlotGroups(rosterAObj);
-  const startersB = buildLineupSlotGroups(rosterBObj);
+  // Starters = every player in a non-Bench group, exactly as entered —
+  // whatever you've typed into QB/WR/RB/TE/Flex IS the starting lineup,
+  // no ranking or competition involved. Only Bench never counts.
+  const startersA = buildLineupSlotGroups(rosterAGroups);
+  const startersB = buildLineupSlotGroups(rosterBGroups);
   const starterListA = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersA[slot]);
   const starterListB = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersB[slot]);
 
@@ -3304,8 +3299,8 @@ function runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj) {
     document.getElementById('trade-verdict-sub').textContent =
       'Every starter on both rosters needs a published Rest of Season, Season Long, or Weekly rank (Week ' + week + ') for this comparison to work.';
     document.getElementById('trade-verdict-sub').style.display = 'block';
-    renderRosterCards('trade-newroster-listA', rosterAObj, false);
-    renderRosterCards('trade-newroster-listB', rosterBObj, false);
+    renderRosterCards('trade-newroster-listA', rosterAGroups, false);
+    renderRosterCards('trade-newroster-listB', rosterBGroups, false);
     return;
   }
 
@@ -3318,8 +3313,8 @@ function runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj) {
     document.getElementById('trade-history-section').style.display = 'none';
     document.getElementById('trade-verdict').textContent = 'Can\'t compare yet — missing historical data for one or more ranks.';
     document.getElementById('trade-verdict-sub').style.display = 'none';
-    renderRosterCards('trade-newroster-listA', rosterAObj, false);
-    renderRosterCards('trade-newroster-listB', rosterBObj, false);
+    renderRosterCards('trade-newroster-listA', rosterAGroups, false);
+    renderRosterCards('trade-newroster-listB', rosterBGroups, false);
     return;
   }
 
@@ -3339,23 +3334,23 @@ function runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj) {
     winnerName + ' is projected to outscore ' + loserName + '.';
   document.getElementById('trade-verdict-sub').style.display = 'none';
 
-  renderRosterCards('trade-newroster-listA', rosterAObj, winnerName === nameA);
-  renderRosterCards('trade-newroster-listB', rosterBObj, winnerName === nameB);
+  renderRosterCards('trade-newroster-listA', rosterAGroups, winnerName === nameA);
+  renderRosterCards('trade-newroster-listB', rosterBGroups, winnerName === nameB);
 }
 
 // Runs a direct team-vs-team comparison using only each team's Rest of
 // Roster fields — the offer boxes aren't used at all here, since this is
 // for comparing two teams generally, not evaluating a specific trade.
 function analyzeTeams() {
-  const rosterA = namesFromContainer('trade-teamA-roster-rows');
-  const rosterB = namesFromContainer('trade-teamB-roster-rows');
+  const rosterAGroups = playersByGroupFromRoster('A');
+  const rosterBGroups = playersByGroupFromRoster('B');
   const nameA = document.getElementById('trade-teamA-name').value.trim() || 'Team A';
   const nameB = document.getElementById('trade-teamB-name').value.trim() || 'Team B';
 
-  const rosterAObj = toPlayerObjects(rosterA);
-  const rosterBObj = toPlayerObjects(rosterB);
+  const totalA = Object.values(rosterAGroups).flat().length;
+  const totalB = Object.values(rosterBGroups).flat().length;
 
-  if (rosterAObj.length === 0 || rosterBObj.length === 0) {
+  if (totalA === 0 || totalB === 0) {
     document.getElementById('trade-receives-section').style.display = 'none';
     document.getElementById('trade-newroster-section').style.display = 'none';
     document.getElementById('trade-history-section').style.display = 'none';
@@ -3365,27 +3360,27 @@ function analyzeTeams() {
     return;
   }
 
-  runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj);
+  runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups);
 }
 
 function analyzeTrade() {
   const offeredA = namesFromContainer('trade-teamA-rows');   // players Team A gives up
   const offeredB = namesFromContainer('trade-teamB-rows');   // players Team B gives up
-  const rosterA = namesFromContainer('trade-teamA-roster-rows'); // Team A's other bench players
-  const rosterB = namesFromContainer('trade-teamB-roster-rows'); // Team B's other bench players
+  const rosterAGroups = playersByGroupFromRoster('A');
+  const rosterBGroups = playersByGroupFromRoster('B');
   const nameA = document.getElementById('trade-teamA-name').value.trim() || 'Team A';
   const nameB = document.getElementById('trade-teamB-name').value.trim() || 'Team B';
 
   const offeredAObj = toPlayerObjects(offeredA);
   const offeredBObj = toPlayerObjects(offeredB);
-  const rosterAObj = toPlayerObjects(rosterA);
-  const rosterBObj = toPlayerObjects(rosterB);
+  const totalRosterA = Object.values(rosterAGroups).flat().length;
+  const totalRosterB = Object.values(rosterBGroups).flat().length;
 
   // No trade offer entered on either side, but both full rosters are filled
   // in — treat this as a direct "compare these two teams" request instead
   // of a trade, with a simple verdict and none of the trade-specific UI.
-  if (offeredAObj.length === 0 && offeredBObj.length === 0 && rosterAObj.length > 0 && rosterBObj.length > 0) {
-    runFullRosterComparison(nameA, nameB, rosterAObj, rosterBObj);
+  if (offeredAObj.length === 0 && offeredBObj.length === 0 && totalRosterA > 0 && totalRosterB > 0) {
+    runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups);
     return;
   }
 
@@ -3402,33 +3397,44 @@ function analyzeTrade() {
 
   document.getElementById('trade-receives-section').style.display = 'grid';
   document.getElementById('trade-newroster-section').style.display = 'block';
-  const hasRosterContext = rosterAObj.length > 0 || rosterBObj.length > 0;
+  const hasRosterContext = totalRosterA > 0 || totalRosterB > 0;
 
   // --- Try the historical rank-vs-rank method first ---------------------
   // Compares each team's full POST-TRADE STARTING LINEUP directly against
-  // the other's (not "what I received vs what I gave up" in isolation,
-  // which unfairly favors whichever side has more roster context players
-  // listed). Uses the same QB/WR/WR/RB/RB/TE/FLEX slot logic as the roster
-  // display below, so "who has the better team after this trade" is
-  // measured the same way the roster is shown.
+  // the other's. Every player already on the roster (in a non-Bench group)
+  // keeps starting; every player received in the trade becomes an
+  // additional starter at their real position (tagged with .group = their
+  // position, same as if you'd typed them into that position's group
+  // yourself); anyone traded away is removed by name.
   const week = getCurrentTradeWeek();
 
-  const dedupeByName = (players) => {
-    const seen = new Set();
-    return players.filter(p => (seen.has(p.name) ? false : (seen.add(p.name), true)));
-  };
-
-  // A player might be listed in "Rest of Roster" AND offered away in the
-  // trade at the same time (e.g. someone lists their whole roster including
-  // the player they're trading). Filter those out of the roster context
-  // first, so the post-trade roster doesn't still show a player who was
-  // just traded away.
   const offeredANames = new Set(offeredAObj.map(p => p.name));
   const offeredBNames = new Set(offeredBObj.map(p => p.name));
-  const newRosterA = dedupeByName(rosterAObj.filter(p => !offeredANames.has(p.name)).concat(offeredBObj));
-  const newRosterB = dedupeByName(rosterBObj.filter(p => !offeredBNames.has(p.name)).concat(offeredAObj));
-  const startersA = buildLineupSlotGroups(newRosterA);
-  const startersB = buildLineupSlotGroups(newRosterB);
+
+  function removeByName(group, namesToRemove) {
+    return group.filter(p => !namesToRemove.has(p.name));
+  }
+  function tagAsGroup(players) {
+    return players.map(p => ({ ...p, group: p.pos }));
+  }
+  function combineRosterWithTrade(rosterGroups, namesGivenAway, receivedPlayers) {
+    const result = {};
+    ['QB', 'WR', 'RB', 'TE', 'BENCH'].forEach(key => {
+      result[key] = removeByName(rosterGroups[key] || [], namesGivenAway);
+    });
+    result.FLEX = removeByName(rosterGroups.FLEX || [], namesGivenAway);
+    // Received players slot in at their real position, unconditionally —
+    // same treatment as if they'd been typed into that position's group.
+    tagAsGroup(receivedPlayers).forEach(p => {
+      if (result[p.group]) result[p.group].push(p);
+    });
+    return result;
+  }
+
+  const newRosterAGroups = combineRosterWithTrade(rosterAGroups, offeredANames, offeredBObj);
+  const newRosterBGroups = combineRosterWithTrade(rosterBGroups, offeredBNames, offeredAObj);
+  const startersA = buildLineupSlotGroups(newRosterAGroups);
+  const startersB = buildLineupSlotGroups(newRosterBGroups);
   const starterListA = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersA[slot]);
   const starterListB = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersB[slot]);
 
@@ -3477,11 +3483,13 @@ function analyzeTrade() {
   } else {
     historySection.style.display = 'none';
     // --- Fallback: old lineup-value / simple-value method ---------------
+    const flatRosterA = Object.values(rosterAGroups).flat();
+    const flatRosterB = Object.values(rosterBGroups).flat();
     if (hasRosterContext) {
-      const beforeA = computeOptimalLineup(offeredAObj.concat(rosterAObj));
-      const afterA = computeOptimalLineup(offeredBObj.concat(rosterAObj));
-      const beforeB = computeOptimalLineup(offeredBObj.concat(rosterBObj));
-      const afterB = computeOptimalLineup(offeredAObj.concat(rosterBObj));
+      const beforeA = computeOptimalLineup(offeredAObj.concat(flatRosterA));
+      const afterA = computeOptimalLineup(offeredBObj.concat(flatRosterA));
+      const beforeB = computeOptimalLineup(offeredBObj.concat(flatRosterB));
+      const afterB = computeOptimalLineup(offeredAObj.concat(flatRosterB));
       winnerName = (afterA.total - beforeA.total) >= (afterB.total - beforeB.total) ? nameA : nameB;
     } else {
       winnerName = sumValues(offeredBObj) >= sumValues(offeredAObj) ? nameA : nameB;
@@ -3500,8 +3508,8 @@ function analyzeTrade() {
   document.getElementById('trade-newroster-heading').style.display = 'block';
   document.getElementById('trade-newroster-labelA').textContent = nameA + "'s New Projected Starting Lineup";
   document.getElementById('trade-newroster-labelB').textContent = nameB + "'s New Projected Starting Lineup";
-  renderRosterCards('trade-newroster-listA', newRosterA, winnerName === nameA);
-  renderRosterCards('trade-newroster-listB', newRosterB, winnerName === nameB);
+  renderRosterCards('trade-newroster-listA', newRosterAGroups, winnerName === nameA);
+  renderRosterCards('trade-newroster-listB', newRosterBGroups, winnerName === nameB);
 
   document.getElementById('trade-result').style.display = 'block';
 }
