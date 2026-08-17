@@ -1894,7 +1894,7 @@ function goToAccount(evt) {
 
 function goToUpgrade(evt) {
   if (evt) evt.preventDefault();
-  if (!currentUser) { showPage(null, 'signin'); return; }
+  if (!currentUser) { showPage(null, 'signup'); return; }
   showPage(null, 'upgrade');
   renderSubscriptionSection('-upgrade');
 }
@@ -6322,9 +6322,14 @@ function routeFromLocation() {
   const match = Object.entries(PAGE_PATHS).find(([, p]) => p === path);
   if (match) {
     const pageName = match[0];
-    if ((pageName === 'account' || pageName === 'upgrade') && !currentUser) {
+    if (pageName === 'account' && !currentUser) {
       showPage(null, 'signin', { skipPush: true, path: '/signin' });
       history.replaceState({ page: 'signin' }, '', '/signin');
+      return;
+    }
+    if (pageName === 'upgrade' && !currentUser) {
+      showPage(null, 'signup', { skipPush: true, path: '/signup' });
+      history.replaceState({ page: 'signup' }, '', '/signup');
       return;
     }
     showPage(null, pageName, { skipPush: true, path });
