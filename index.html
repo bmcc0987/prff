@@ -1246,6 +1246,8 @@ footer {
   </div>
 
   <div id="trade-builder" style="display:none;">
+    <div id="numbers-mode-dropdown" style="display:none; position:absolute; z-index:50; background:white; border:1px solid #d6d4cf; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.12); max-height:220px; overflow-y:auto; min-width:100px;"></div>
+
     <datalist id="player-list"></datalist>
     <datalist id="player-list-QB"></datalist>
     <datalist id="player-list-WR"></datalist>
@@ -2603,7 +2605,7 @@ function addPlayerRow(side, type) {
   row.className = 'trade-player-row';
   row.id = 'row-' + rowId;
   row.innerHTML =
-    '<input class="trade-input" list="rostered-players-' + side + '" placeholder="' + (numbersMode ? 'e.g. QB6' : 'Type a player name') + '" data-side="' + side + '">' +
+    '<input class="trade-input" ' + (numbersMode ? 'data-list-id="rostered-players-' + side + '"' : 'list="rostered-players-' + side + '"') + ' placeholder="' + (numbersMode ? 'e.g. QB6' : 'Type a player name') + '" data-side="' + side + '">' +
     '<button class="trade-remove-btn" onclick="document.getElementById(\'row-' + rowId + '\').remove()">×</button>';
   container.appendChild(row);
 }
@@ -2640,7 +2642,7 @@ function addRosterSlot(side, groupKey) {
   row.className = 'trade-player-row';
   row.id = 'row-' + rowId;
   row.innerHTML =
-    '<input class="trade-input" list="' + datalistId + '" placeholder="' + (numbersMode ? 'e.g. QB6' : 'Type a player name') + '" data-side="' + side + '" oninput="refreshRosteredPlayers(\'' + side + '\')">' +
+    '<input class="trade-input" ' + (numbersMode ? 'data-list-id="' + datalistId + '"' : 'list="' + datalistId + '"') + ' placeholder="' + (numbersMode ? 'e.g. QB6' : 'Type a player name') + '" data-side="' + side + '" oninput="refreshRosteredPlayers(\'' + side + '\')">' +
     '<button class="trade-remove-btn" onclick="document.getElementById(\'row-' + rowId + '\').remove(); refreshRosteredPlayers(\'' + side + '\');">×</button>';
   container.appendChild(row);
 }
@@ -2771,6 +2773,75 @@ function applyNumbersModeDatalists() {
   fillDatalist('player-list', numbersMode ? buildShorthandOptions(['QB', 'RB', 'WR', 'TE']) : Object.keys(playerValues).sort());
 }
 
+// Native <datalist> filters its suggestions to match whatever's already
+// typed, which is the opposite of what we want here — clicking a box that
+// already says "QB1" should still offer every QB, not just QB1/QB10-19.
+// This replaces that native behavior with a simple custom dropdown while
+// Numbers Mode is on, showing the FULL list every time regardless of
+// what's currently in the box.
+function getNumbersModeListForInput(input) {
+  const rosterMatch = input.closest('[id^="trade-team"][id*="-roster-"]');
+  if (rosterMatch) {
+    const groupKey = rosterMatch.id.split('-roster-')[1];
+    if (groupKey === 'FLEX') return buildShorthandOptions(FLEX_ELIGIBLE);
+    if (groupKey === 'BENCH') return buildShorthandOptions(['QB', 'RB', 'WR', 'TE']);
+    if (NUMBERS_MODE_POSITION_COUNTS[groupKey]) return buildShorthandOptions([groupKey]);
+  }
+  // Offer rows (not tied to one position) — offer the full combined list.
+  return buildShorthandOptions(['QB', 'RB', 'WR', 'TE']);
+}
+
+let numbersModeDropdownTarget = null;
+
+function showNumbersModeDropdown(input) {
+  const dropdown = document.getElementById('numbers-mode-dropdown');
+  const options = getNumbersModeListForInput(input);
+  dropdown.innerHTML = options.map(v =>
+    '<div class="numbers-mode-option" style="padding:7px 14px; font-family:\'Lato\',sans-serif; font-size:13px; cursor:pointer;">' + v + '</div>'
+  ).join('');
+  const rect = input.getBoundingClientRect();
+  dropdown.style.left = (rect.left + window.scrollX) + 'px';
+  dropdown.style.top = (rect.bottom + window.scrollY + 2) + 'px';
+  dropdown.style.width = Math.max(rect.width, 100) + 'px';
+  dropdown.style.display = 'block';
+  numbersModeDropdownTarget = input;
+}
+
+function hideNumbersModeDropdown() {
+  document.getElementById('numbers-mode-dropdown').style.display = 'none';
+  numbersModeDropdownTarget = null;
+}
+
+// Event delegation, since player-input rows get added/removed dynamically
+// — attaching individual listeners to each one would miss new rows.
+document.addEventListener('focusin', function (e) {
+  if (numbersMode && e.target.classList && e.target.classList.contains('trade-input')) {
+    showNumbersModeDropdown(e.target);
+  }
+});
+document.addEventListener('click', function (e) {
+  const dropdown = document.getElementById('numbers-mode-dropdown');
+  if (e.target.classList && e.target.classList.contains('numbers-mode-option') && numbersModeDropdownTarget) {
+    numbersModeDropdownTarget.value = e.target.textContent;
+    numbersModeDropdownTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    hideNumbersModeDropdown();
+    return;
+  }
+  if (!dropdown.contains(e.target) && !(e.target.classList && e.target.classList.contains('trade-input'))) {
+    hideNumbersModeDropdown();
+  }
+});
+document.addEventListener('mouseover', function (e) {
+  if (e.target.classList && e.target.classList.contains('numbers-mode-option')) {
+    e.target.style.background = '#f0f9f4';
+  }
+});
+document.addEventListener('mouseout', function (e) {
+  if (e.target.classList && e.target.classList.contains('numbers-mode-option')) {
+    e.target.style.background = '';
+  }
+});
+
 function toggleNumbersMode() {
   numbersMode = !numbersMode;
   const btn = document.getElementById('numbers-mode-toggle');
@@ -2786,6 +2857,18 @@ function toggleNumbersMode() {
   // added after toggling.
   document.querySelectorAll('#trade-builder .trade-input').forEach(input => {
     input.placeholder = numbersMode ? 'e.g. QB6' : 'Type a player name';
+    // Removing the native "list" attribute while Numbers Mode is on stops
+    // the browser's own datalist dropdown from also popping up alongside
+    // our custom one — remembered via data-list-id so it can be restored.
+    if (numbersMode) {
+      if (input.hasAttribute('list')) {
+        input.setAttribute('data-list-id', input.getAttribute('list'));
+        input.removeAttribute('list');
+      }
+    } else {
+      const savedList = input.getAttribute('data-list-id');
+      if (savedList) input.setAttribute('list', savedList);
+    }
   });
   applyNumbersModeDatalists();
 }
