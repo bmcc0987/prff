@@ -1534,7 +1534,9 @@ footer {
 
       <div class="admin-actions">
         <button class="trade-add-btn" onclick="addAdminRow()">+ Add player</button>
-        <button class="trade-add-btn" onclick="sortAdminRows()">↓ Sort by Prob</button>
+        <button class="trade-add-btn" onclick="sortAdminRows('prob')">↓ Sort by Prob</button>
+        <button class="trade-add-btn" onclick="sortAdminRows('player')">A-Z Sort by Player</button>
+        <button class="trade-add-btn" onclick="sortAdminRows('team')">A-Z Sort by Team</button>
         <button class="trade-add-btn" onclick="document.getElementById('admin-csv-import-file').click()">⬆ Import CSV</button>
         <input type="file" id="admin-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToAdminRows(event)">
         <button class="trade-add-btn" onclick="exportAdminRowsCSV()">⬇ Export CSV</button>
@@ -1565,7 +1567,7 @@ footer {
           <label class="auth-label">Top N</label>
           <input class="admin-input-small" type="number" id="sl-topn" min="1" max="50" value="12">
         </div>
-        <button class="trade-add-btn" style="margin-top:20px;" onclick="loadRankTable('seasonlong')">Load existing</button>
+        <button class="trade-add-btn" style="margin-top:20px;" onclick="smartLoadSeasonLongRankings(document.getElementById('sl-position').value)">Load existing</button>
       </div>
       <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">One set of rankings for the whole season — no week attached. Re-publish any time to update it.</div>
 
@@ -1579,7 +1581,9 @@ footer {
 
       <div class="admin-actions">
         <button class="trade-add-btn" onclick="addRankRow('seasonlong')">+ Add player</button>
-        <button class="trade-add-btn" onclick="sortRankRows('seasonlong')">↓ Sort by Prob</button>
+        <button class="trade-add-btn" onclick="sortRankRows('seasonlong', 'prob')">↓ Sort by Prob</button>
+        <button class="trade-add-btn" onclick="sortRankRows('seasonlong', 'player')">A-Z Sort by Player</button>
+        <button class="trade-add-btn" onclick="sortRankRows('seasonlong', 'team')">A-Z Sort by Team</button>
         <button class="trade-add-btn" onclick="document.getElementById('sl-csv-import-file').click()">⬆ Import CSV</button>
         <input type="file" id="sl-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToRankRows(event, 'seasonlong')">
         <button class="trade-add-btn" onclick="exportRankRowsCSV('seasonlong')">⬇ Export CSV</button>
@@ -3653,12 +3657,17 @@ function renumberAdminRows() {
   });
 }
 
-function sortAdminRows() {
+function sortAdminRows(key) {
+  key = key || 'prob';
   const tbody = document.getElementById('admin-rows');
   const rows = Array.from(tbody.children);
   rows.sort((a, b) => {
-    const probA = parseFloat(a.querySelector('input[type="number"]').value) || 0;
-    const probB = parseFloat(b.querySelector('input[type="number"]').value) || 0;
+    const inputsA = a.querySelectorAll('input');
+    const inputsB = b.querySelectorAll('input');
+    if (key === 'player') return inputsA[0].value.trim().localeCompare(inputsB[0].value.trim());
+    if (key === 'team') return inputsA[1].value.trim().localeCompare(inputsB[1].value.trim());
+    const probA = parseFloat(inputsA[2].value) || 0;
+    const probB = parseFloat(inputsB[2].value) || 0;
     return probB - probA;
   });
   rows.forEach(r => tbody.appendChild(r));
@@ -4182,13 +4191,18 @@ function renumberRankRows(mode) {
   });
 }
 
-function sortRankRows(mode) {
+function sortRankRows(mode, key) {
+  key = key || 'prob';
   const cfg = RANK_MODE[mode];
   const tbody = document.getElementById(cfg.rowsId);
   const rows = Array.from(tbody.children);
   rows.sort((a, b) => {
-    const pa = parseFloat(a.querySelector('input[type="number"]').value) || 0;
-    const pb = parseFloat(b.querySelector('input[type="number"]').value) || 0;
+    const inputsA = a.querySelectorAll('input');
+    const inputsB = b.querySelectorAll('input');
+    if (key === 'player') return inputsA[0].value.trim().localeCompare(inputsB[0].value.trim());
+    if (key === 'team') return inputsA[1].value.trim().localeCompare(inputsB[1].value.trim());
+    const pa = parseFloat(inputsA[2].value) || 0;
+    const pb = parseFloat(inputsB[2].value) || 0;
     return pb - pa;
   });
   rows.forEach(r => tbody.appendChild(r));
@@ -4347,7 +4361,15 @@ async function publishRankTable(mode) {
 }
 
 document.addEventListener('input', function (e) {
-  if (e.target.closest('#sl-rows')) { updateRankProbSum('seasonlong'); autosaveAdminDraft(); }
+  if (e.target.closest('#sl-rows')) {
+    updateRankProbSum('seasonlong');
+    autosaveAdminDraft();
+    if (e.target.classList.contains('admin-notes-input')) {
+      const tr = e.target.closest('tr');
+      const player = tr.querySelector('input').value.trim();
+      scheduleLiveNoteSave('seasonlong', document.getElementById('sl-position').value, null, player, e.target.value);
+    }
+  }
   if (e.target.closest('#ros-rows')) updateRankProbSum('ros');
 });
 
@@ -5460,6 +5482,13 @@ document.addEventListener('input', function (e) {
   if (e.target.closest('#admin-rows')) {
     updateAdminProbSum();
     autosaveAdminDraft();
+    if (e.target.classList.contains('admin-notes-input')) {
+      const tr = e.target.closest('tr');
+      const player = tr.querySelector('input').value.trim();
+      const position = document.getElementById('admin-position').value;
+      const week = Number(document.getElementById('admin-week').value);
+      scheduleLiveNoteSave('weekly', position, week, player, e.target.value);
+    }
   }
 });
 
@@ -5485,6 +5514,40 @@ function readRowsFromTable(rowsId, hasNotes) {
     rows.push(row);
   });
   return rows;
+}
+
+// Live autosave for notes specifically — separate from and in addition to
+// the local browser draft. About 2 seconds after you stop typing in a
+// notes box, that one player's note gets saved directly to the private
+// player_notes table in the background, with no Publish click needed.
+// Each row gets its own timer (keyed by mode-position-week-player) so
+// typing in one row doesn't reset or cancel another row's pending save.
+const noteSaveTimers = {};
+function scheduleLiveNoteSave(mode, position, week, player, notesValue) {
+  if (!supabaseClient || !player) return;
+  const key = mode + '-' + position + '-' + (week ?? '') + '-' + player;
+  if (noteSaveTimers[key]) clearTimeout(noteSaveTimers[key]);
+  noteSaveTimers[key] = setTimeout(async () => {
+    delete noteSaveTimers[key];
+    try {
+      if (notesValue.trim()) {
+        await supabaseClient.from('player_notes').upsert(
+          { mode, position, week: week ?? null, player, notes: notesValue.trim() },
+          { onConflict: 'mode,position,week,player' }
+        );
+      } else {
+        // Empty note — remove any existing saved row rather than leaving a blank one behind.
+        let del = supabaseClient.from('player_notes').delete().eq('mode', mode).eq('position', position).eq('player', player);
+        del = week != null ? del.eq('week', week) : del.is('week', null);
+        await del;
+      }
+      // Keep the in-memory cache in sync too, so switching away and back
+      // (which reads from PRIVATE_NOTES as a fallback) sees the latest value.
+      PRIVATE_NOTES[key] = notesValue.trim();
+    } catch (e) {
+      console.warn('Live note autosave failed for', player, ':', e);
+    }
+  }, 2000);
 }
 
 function autosaveAdminDraft() {
