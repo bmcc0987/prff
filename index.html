@@ -3526,6 +3526,43 @@ function analyzeTrade() {
 const publishedRankings = {}; // key "QB-4" -> { topN, rows: [{player, team, prob}] }
 let adminRowCount = 0;
 
+// Fetched once per admin session — RLS on player_notes means this only
+// ever succeeds for a real admin, so no need to gate the fetch attempt
+// itself. Keyed as "mode-position-week-player" (week is empty string for
+// season long) so any row can look itself up directly.
+let PRIVATE_NOTES = {};
+let privateNotesPromise = null;
+function loadPrivateNotes() {
+  if (privateNotesPromise) return privateNotesPromise;
+  if (!supabaseClient) return Promise.resolve();
+  privateNotesPromise = (async () => {
+    try {
+      const { data, error } = await supabaseClient.from('player_notes').select('*');
+      if (error) throw error;
+      PRIVATE_NOTES = {};
+      (data || []).forEach(r => {
+        PRIVATE_NOTES[r.mode + '-' + r.position + '-' + (r.week ?? '') + '-' + r.player] = r.notes;
+      });
+    } catch (e) {
+      console.warn('Could not load private notes:', e);
+    }
+  })();
+  return privateNotesPromise;
+}
+
+// Fills in a .notes property on each row from PRIVATE_NOTES, wherever a
+// row doesn't already have one — used as a backup when notes aren't (or
+// no longer are) available from the local browser draft, e.g. a different
+// browser, device, or after local storage was cleared.
+function mergePrivateNotesIntoRows(mode, position, week, rows) {
+  rows.forEach(r => {
+    if (r.notes) return; // local draft's note already present, don't override it
+    const key = mode + '-' + position + '-' + (week ?? '') + '-' + r.player;
+    if (PRIVATE_NOTES[key]) r.notes = PRIVATE_NOTES[key];
+  });
+  return rows;
+}
+
 function refreshAdminGate() {
   const locked = document.getElementById('admin-locked');
   const builder = document.getElementById('admin-builder');
@@ -3533,6 +3570,7 @@ function refreshAdminGate() {
     locked.style.display = 'none';
     builder.style.display = 'block';
     populateAdminPlayerDatalist();
+    loadPrivateNotes();
     if (!document.getElementById('sltotals-rows').children.length) {
       loadAdminSLTotalsTable();
     }
@@ -4053,7 +4091,8 @@ async function publishAdminTable() {
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
     const prob = parseFloat(inputs[2].value);
-    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob });
+    const notes = inputs[3] ? inputs[3].value.trim() : '';
+    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob, notes });
   });
 
   if (rows.length === 0) {
@@ -4073,6 +4112,7 @@ async function publishAdminTable() {
     try {
       await supabaseReplaceRows('weekly_rankings', { pos: position, week: Number(week) },
         rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN })));
+      await publishNotesForRows('weekly', position, Number(week), rows);
     } catch (e) {
       console.error('Supabase publish failed:', e);
       preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Saved locally, but publishing to the database failed: ' + (e.message || e) + '</div>';
@@ -4285,9 +4325,11 @@ async function publishRankTable(mode) {
         const week = Number(document.getElementById(cfg.weekId).value);
         await supabaseReplaceRows('ros_rankings', { pos: position, week },
           rows.map(r => ({ pos: position, week, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
+        await publishNotesForRows(mode, position, week, rows);
       } else {
         await supabaseReplaceRows('season_long_rankings', { pos: position },
           rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
+        await publishNotesForRows(mode, position, null, rows);
       }
     } catch (e) {
       console.error('Supabase publish failed:', e);
@@ -5241,7 +5283,7 @@ function autoFillPositionRankings(position, week) {
 // edits and sort order are preserved) instead of overwriting it with a
 // fresh auto-fill from team tiers. Only auto-fills for positions that
 // haven't been published yet.
-function smartLoadPositionRankings(position, week) {
+async function smartLoadPositionRankings(position, week) {
   if (restoreDraftForWeeklyPosition(position, week)) return;
   const key = position + '-' + week;
   if (publishedRankings[key]) {
@@ -5249,6 +5291,8 @@ function smartLoadPositionRankings(position, week) {
   } else {
     autoFillPositionRankings(position, week);
   }
+  await loadPrivateNotes();
+  fillInPrivateNotes('weekly', position, week, 'admin-rows');
 }
 
 function restoreDraftForWeeklyPosition(position, week) {
@@ -5331,13 +5375,29 @@ function autoFillSeasonLongRankings(position) {
 
 // Same idea as smartLoadPositionRankings: if this position has already been
 // published for Season Long, load that instead of overwriting it.
-function smartLoadSeasonLongRankings(position) {
+async function smartLoadSeasonLongRankings(position) {
   if (restoreDraftForPosition('seasonlong', position)) return;
   if (publishedSeasonLong[position]) {
     loadRankTable('seasonlong');
   } else {
     autoFillSeasonLongRankings(position);
   }
+  await loadPrivateNotes();
+  fillInPrivateNotes('seasonlong', position, null, 'sl-rows');
+}
+
+// Fills the notes box for any currently-empty row from PRIVATE_NOTES —
+// applied after loading from published/seed data (the local-draft path
+// already carries its own notes and doesn't need this).
+function fillInPrivateNotes(mode, position, week, rowsId) {
+  document.querySelectorAll('#' + rowsId + ' tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const player = inputs[0].value.trim();
+    const notesInput = inputs[3];
+    if (!player || !notesInput || notesInput.value) return;
+    const key = mode + '-' + position + '-' + (week ?? '') + '-' + player;
+    if (PRIVATE_NOTES[key]) notesInput.value = PRIVATE_NOTES[key];
+  });
 }
 
 // Every position now gets its own saved slot (see autosaveAdminDraft) — this
@@ -6428,6 +6488,35 @@ async function supabaseReplaceRows(table, matchCols, newRows) {
   if (newRows.length > 0) {
     const insRes = await supabaseClient.from(table).insert(newRows);
     if (insRes.error) throw insRes.error;
+  }
+}
+
+// Publishes notes to a completely separate, admin-only table — not a
+// column on the public rankings tables. RLS on player_notes refuses this
+// table to anyone who isn't an admin, so this is genuinely private, not
+// just left out of the page's HTML. Only rows with an actual note get
+// stored; empty notes are skipped so this table doesn't fill up with
+// blanks for every player.
+async function publishNotesForRows(mode, position, week, rows) {
+  if (!supabaseClient) return;
+  const notesRows = rows
+    .filter(r => r.notes && r.notes.trim())
+    .map(r => ({ mode, position, week: week ?? null, player: r.player, notes: r.notes.trim() }));
+  try {
+    // Written directly rather than through supabaseReplaceRows, since that
+    // helper's .neq() trick doesn't correctly match "week is null" rows
+    // (SQL NULL comparisons don't work like regular values) — needed here
+    // for Season Long, which has no week at all.
+    let del = supabaseClient.from('player_notes').delete().eq('mode', mode).eq('position', position);
+    del = week != null ? del.eq('week', week) : del.is('week', null);
+    const delRes = await del;
+    if (delRes.error) throw delRes.error;
+    if (notesRows.length > 0) {
+      const insRes = await supabaseClient.from('player_notes').insert(notesRows);
+      if (insRes.error) throw insRes.error;
+    }
+  } catch (e) {
+    console.warn('Could not publish notes (rankings themselves still published fine):', e);
   }
 }
 
