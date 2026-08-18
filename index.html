@@ -1521,7 +1521,7 @@ footer {
           <label class="auth-label">Top N</label>
           <input class="admin-input-small" type="number" id="admin-topn" min="1" max="50" value="12">
         </div>
-        <button class="trade-add-btn" style="margin-top:20px;" onclick="loadAdminTable()">Load existing</button>
+        <button class="trade-add-btn" style="margin-top:20px;" onclick="smartLoadPositionRankings(document.getElementById('admin-position').value, document.getElementById('admin-week').value)">Load existing</button>
       </div>
 
       <datalist id="admin-player-list"></datalist>
@@ -5168,11 +5168,12 @@ async function publishAdminSLTotalsTable() {
   preview.innerHTML = buildPublishedTotalsHTML('Season Long', rows);
   previewWrap.style.display = 'block';
 
-  // Jump to Season Long Player Projections. Uses smart load so this never
-  // overwrites already-published/edited player data — it only fills in
-  // positions that don't have anything published yet.
+  // Jump to Season Long Player Projections. switchAdminTool already handles
+  // loading correctly on its own (draft first, published data only as a
+  // fallback) — calling smartLoadSeasonLongRankings again here was
+  // redundant and would silently overwrite a correctly-restored draft
+  // (including notes) with fresh published data.
   switchAdminTool('seasonlong');
-  smartLoadSeasonLongRankings(document.getElementById('sl-position').value);
 }
 
 // Probability each player is awarded based on their team's implied-total tier.
@@ -5236,12 +5237,32 @@ function autoFillPositionRankings(position, week) {
 // fresh auto-fill from team tiers. Only auto-fills for positions that
 // haven't been published yet.
 function smartLoadPositionRankings(position, week) {
+  if (restoreDraftForWeeklyPosition(position, week)) return;
   const key = position + '-' + week;
   if (publishedRankings[key]) {
     loadAdminTable();
   } else {
     autoFillPositionRankings(position, week);
   }
+}
+
+function restoreDraftForWeeklyPosition(position, week) {
+  let draft;
+  try {
+    const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
+    if (!raw) return false;
+    draft = JSON.parse(raw);
+  } catch (e) { return false; }
+
+  const saved = draft.weekly && draft.weekly.byKey && draft.weekly.byKey[position + '-' + week];
+  if (!saved || !saved.rows || saved.rows.length === 0) return false;
+
+  const tbody = document.getElementById('admin-rows');
+  tbody.innerHTML = '';
+  if (saved.topN) document.getElementById('admin-topn').value = saved.topN;
+  saved.rows.forEach(r => addAdminRow(r.player, r.team, r.prob, r.notes || ''));
+  updateAdminProbSum();
+  return true;
 }
 
 // Same tiering logic as buildTeamTierMap, but sourced from Season Long Team
@@ -5306,38 +5327,41 @@ function autoFillSeasonLongRankings(position) {
 // Same idea as smartLoadPositionRankings: if this position has already been
 // published for Season Long, load that instead of overwriting it.
 function smartLoadSeasonLongRankings(position) {
+  if (restoreDraftForPosition('seasonlong', position)) return;
   if (publishedSeasonLong[position]) {
     loadRankTable('seasonlong');
-    reattachSavedNotes(position);
   } else {
     autoFillSeasonLongRankings(position);
-    reattachSavedNotes(position);
   }
 }
 
-// Loading published data for a position (e.g. when switching the position
-// dropdown) used to silently wipe out any notes already typed for that
-// position, since published data never carries notes — this re-attaches
-// them from the saved local draft, matched by player name, so switching
-// positions and switching back no longer loses notes.
-function reattachSavedNotes(position) {
+// Every position now gets its own saved slot (see autosaveAdminDraft) — this
+// checks that slot before ever loading published/seed data, so switching
+// positions and switching back always shows exactly what you last had
+// there, notes included, no matter how many other positions you've since
+// worked on in between.
+function restoreDraftForPosition(mode, position) {
   let draft;
   try {
     const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
-    if (!raw) return;
+    if (!raw) return false;
     draft = JSON.parse(raw);
-  } catch (e) { return; }
-  if (!draft.seasonlong || draft.seasonlong.position !== position || !draft.seasonlong.rows) return;
+  } catch (e) { return false; }
 
-  const notesByPlayer = {};
-  draft.seasonlong.rows.forEach(r => { if (r.notes) notesByPlayer[r.player] = r.notes; });
-  if (Object.keys(notesByPlayer).length === 0) return;
+  const tbodyId = mode === 'seasonlong' ? 'sl-rows' : 'admin-rows';
+  const topNId = mode === 'seasonlong' ? 'sl-topn' : 'admin-topn';
+  const saved = mode === 'seasonlong'
+    ? draft.seasonlong && draft.seasonlong.byPosition && draft.seasonlong.byPosition[position]
+    : null;
+  if (!saved || !saved.rows || saved.rows.length === 0) return false;
 
-  document.querySelectorAll('#sl-rows tr').forEach(tr => {
-    const inputs = tr.querySelectorAll('input');
-    const player = inputs[0].value.trim();
-    if (notesByPlayer[player] && inputs[3]) inputs[3].value = notesByPlayer[player];
-  });
+  const tbody = document.getElementById(tbodyId);
+  tbody.innerHTML = '';
+  if (mode === 'seasonlong') RANK_MODE.seasonlong.rowCount = 0;
+  if (saved.topN) document.getElementById(topNId).value = saved.topN;
+  saved.rows.forEach(r => addRankRow('seasonlong', r.player, r.team, r.prob, r.notes || ''));
+  updateRankProbSum('seasonlong');
+  return true;
 }
 
 // --- Live probability sum for Position rankings -----------------------------
@@ -5400,19 +5424,32 @@ function readRowsFromTable(rowsId, hasNotes) {
 
 function autosaveAdminDraft() {
   try {
-    const draft = {
-      weekly: {
-        position: (document.getElementById('admin-position') || {}).value,
-        week: (document.getElementById('admin-week') || {}).value,
+    const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
+    const draft = raw ? JSON.parse(raw) : {};
+    draft.weekly = draft.weekly || { byKey: {} };
+    draft.seasonlong = draft.seasonlong || { byPosition: {} };
+
+    // Each position (and, for Weekly, each position+week) gets its OWN
+    // saved slot — switching to a different position and typing there no
+    // longer overwrites and destroys whatever was saved for the position
+    // you just came from.
+    const wPos = (document.getElementById('admin-position') || {}).value;
+    const wWeek = (document.getElementById('admin-week') || {}).value;
+    if (wPos && wWeek) {
+      draft.weekly.byKey[wPos + '-' + wWeek] = {
         topN: (document.getElementById('admin-topn') || {}).value,
         rows: readRowsFromTable('admin-rows', true),
-      },
-      seasonlong: {
-        position: (document.getElementById('sl-position') || {}).value,
+      };
+    }
+
+    const slPos = (document.getElementById('sl-position') || {}).value;
+    if (slPos) {
+      draft.seasonlong.byPosition[slPos] = {
         topN: (document.getElementById('sl-topn') || {}).value,
         rows: readRowsFromTable('sl-rows', true),
-      },
-    };
+      };
+    }
+
     localStorage.setItem(ADMIN_DRAFT_KEY, JSON.stringify(draft));
   } catch (e) {
     console.warn('Could not autosave admin draft:', e);
@@ -5431,20 +5468,24 @@ function restoreAdminDraft(mode) {
     draft = JSON.parse(raw);
   } catch (e) { return; }
 
-  if (mode === 'weekly' && draft.weekly && draft.weekly.rows && draft.weekly.rows.length > 0) {
-    if (document.getElementById('admin-rows').children.length > 0) return; // don't clobber something already loaded/typed
-    if (draft.weekly.position) document.getElementById('admin-position').value = draft.weekly.position;
-    if (draft.weekly.week) document.getElementById('admin-week').value = draft.weekly.week;
-    if (draft.weekly.topN) document.getElementById('admin-topn').value = draft.weekly.topN;
-    draft.weekly.rows.forEach(r => addAdminRow(r.player, r.team, r.prob, r.notes || ''));
+  if (mode === 'weekly') {
+    if (document.getElementById('admin-rows').children.length > 0) return;
+    const pos = document.getElementById('admin-position').value;
+    const week = document.getElementById('admin-week').value;
+    const saved = draft.weekly && draft.weekly.byKey && draft.weekly.byKey[pos + '-' + week];
+    if (!saved || !saved.rows || saved.rows.length === 0) return;
+    if (saved.topN) document.getElementById('admin-topn').value = saved.topN;
+    saved.rows.forEach(r => addAdminRow(r.player, r.team, r.prob, r.notes || ''));
     updateAdminProbSum();
   }
 
-  if (mode === 'seasonlong' && draft.seasonlong && draft.seasonlong.rows && draft.seasonlong.rows.length > 0) {
+  if (mode === 'seasonlong') {
     if (document.getElementById('sl-rows').children.length > 0) return;
-    if (draft.seasonlong.position) document.getElementById('sl-position').value = draft.seasonlong.position;
-    if (draft.seasonlong.topN) document.getElementById('sl-topn').value = draft.seasonlong.topN;
-    draft.seasonlong.rows.forEach(r => addRankRow('seasonlong', r.player, r.team, r.prob, r.notes || ''));
+    const pos = document.getElementById('sl-position').value;
+    const saved = draft.seasonlong && draft.seasonlong.byPosition && draft.seasonlong.byPosition[pos];
+    if (!saved || !saved.rows || saved.rows.length === 0) return;
+    if (saved.topN) document.getElementById('sl-topn').value = saved.topN;
+    saved.rows.forEach(r => addRankRow('seasonlong', r.player, r.team, r.prob, r.notes || ''));
     updateRankProbSum('seasonlong');
   }
 }
