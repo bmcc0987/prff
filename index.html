@@ -2978,6 +2978,11 @@ function toggleNumbersMode() {
     : 'Turn this on to type in player values like QB6, RB5, WR1 instead of names.';
   // Update every player-name input already on the page too, not just ones
   // added after toggling.
+  // Clicking the toggle clears every box — a name typed in Off mode isn't
+  // valid shorthand in On mode, and vice versa, so starting fresh avoids
+  // leaving stale, misinterpreted values sitting in the boxes.
+  document.querySelectorAll('#trade-builder .trade-input').forEach(input => { input.value = ''; });
+
   document.querySelectorAll('#trade-builder .trade-input').forEach(input => {
     input.placeholder = numbersMode ? 'e.g. QB6' : 'Type a player name';
     // Removing the native "list" attribute while Numbers Mode is on stops
@@ -3325,7 +3330,7 @@ function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups) {
 
   document.getElementById('trade-history-note').textContent =
     'Ranks pulled from: ' + Array.from(sourcesUsed).join(', ') + ' projections. ' +
-    'Compares each team\'s full starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings, and full-season totals otherwise — ' +
+    'Compares each team\'s full starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings — ' +
     'across all 11 seasons on file (2015-2025).';
   document.getElementById('trade-history-section').style.display = 'block';
 
@@ -3472,7 +3477,7 @@ function analyzeTrade() {
 
     document.getElementById('trade-history-note').textContent =
       'Ranks pulled from: ' + Array.from(historyResult.sourcesUsed).join(', ') + ' projections. ' +
-      'Compares each team\'s full post-trade starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings, and full-season totals otherwise — ' +
+      'Compares each team\'s full post-trade starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings — ' +
       'across all 11 seasons on file (2015-2025).';
     historySection.style.display = 'block';
     document.getElementById('trade-verdict-sub').style.display = 'none';
