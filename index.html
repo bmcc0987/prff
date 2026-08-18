@@ -3305,9 +3305,9 @@ function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups) {
   }
 
   const sourcesUsed = new Set(resolvedA.concat(resolvedB).map(r => r.resolved.source));
-  const pairsA = resolvedA.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank }));
-  const pairsB = resolvedB.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank }));
-  const compare = compareMultiPositionCombosFull(pairsA, pairsB);
+  const pairsA = resolvedA.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank, source: r.resolved.source }));
+  const pairsB = resolvedB.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank, source: r.resolved.source }));
+  const compare = compareMultiPositionCombosFull(pairsA, pairsB, week);
 
   if (!compare) {
     document.getElementById('trade-history-section').style.display = 'none';
@@ -3325,7 +3325,7 @@ function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups) {
 
   document.getElementById('trade-history-note').textContent =
     'Ranks pulled from: ' + Array.from(sourcesUsed).join(', ') + ' projections. ' +
-    'Compares each team\'s full starting lineup full-season totals (Week 1 through end of season), ' +
+    'Compares each team\'s full starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings, and full-season totals otherwise — ' +
     'across all 11 seasons on file (2015-2025).';
   document.getElementById('trade-history-section').style.display = 'block';
 
@@ -3447,10 +3447,10 @@ function analyzeTrade() {
   let historyResult = null;
   if (allStartersResolved) {
     const sourcesUsed = new Set(resolvedStartersA.concat(resolvedStartersB).map(r => r.resolved.source));
-    const pairsA = resolvedStartersA.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank }));
-    const pairsB = resolvedStartersB.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank }));
+    const pairsA = resolvedStartersA.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank, source: r.resolved.source }));
+    const pairsB = resolvedStartersB.map(r => ({ name: r.player.name, pos: r.player.pos, rank: r.resolved.rank, source: r.resolved.source }));
 
-    const compare = compareMultiPositionCombosFull(pairsA, pairsB);
+    const compare = compareMultiPositionCombosFull(pairsA, pairsB, week);
     if (compare) {
       historyResult = { week, sourcesUsed, compare, pairsA, pairsB };
     }
@@ -3472,7 +3472,7 @@ function analyzeTrade() {
 
     document.getElementById('trade-history-note').textContent =
       'Ranks pulled from: ' + Array.from(historyResult.sourcesUsed).join(', ') + ' projections. ' +
-      'Compares each team\'s full post-trade starting lineup full-season totals (Week 1 through end of season), ' +
+      'Compares each team\'s full post-trade starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings, and full-season totals otherwise — ' +
       'across all 11 seasons on file (2015-2025).';
     historySection.style.display = 'block';
     document.getElementById('trade-verdict-sub').style.display = 'none';
@@ -4587,25 +4587,33 @@ function compareMultiPositionCombos(week, pairsA, pairsB) {
   return { seasons, totalsA, totalsB, winsA, totalSeasons: seasons.length, bySeason };
 }
 
-// --- FULL-SEASON (TOTALS-ONLY) COMPARISON -----------------------------------
-// Per your call: trade/team comparisons should always use full-season totals
-// (Week 1 through end of season), regardless of what week it currently is.
-// This uses SEASON_BY_RANK (built from each season's actual final TTL column)
-// rather than summing individual weekly columns, since those two didn't
-// always agree — TTL is the authoritative source, especially for players who
-// changed teams mid-season.
-function getRankSeasonTotalsFull(position, rank) {
+// --- FULL-SEASON / ROS-AWARE COMPARISON -------------------------------------
+// Each player's contribution to this comparison automatically uses
+// Rest of Season data (that position/week's actual scoring from THAT week
+// onward, across all 11 years) the moment you've published ROS rankings for
+// their position and the current week — exactly like resolvePlayerRank
+// already prioritizes ROS over Season Long. Until you publish ROS for a
+// given position/week, that player still falls back to full-season totals
+// (Week 1 through end of season), same as before. So the comparison
+// upgrades itself automatically, position by position, as you keep ROS
+// rankings current — no separate toggle needed.
+function getRankSeasonTotalsFull(position, rank, week, source) {
+  if (source === 'Rest of Season' && week) {
+    const posData = ROS_BY_RANK.data[position];
+    const weekData = posData && posData[String(week)];
+    const vals = weekData && weekData[String(rank)];
+    if (vals) return vals;
+  }
   const posData = SEASON_BY_RANK.data[position];
-  if (!posData) return null;
-  return posData[String(rank)] || null;
+  return (posData && posData[String(rank)]) || null;
 }
 
-function getMultiPositionSeasonTotalsFull(pairs) {
+function getMultiPositionSeasonTotalsFull(pairs, week) {
   const seasons = SEASON_BY_RANK.seasons;
   const totals = seasons.map(() => 0);
   let anyData = false;
   pairs.forEach(pair => {
-    const vals = getRankSeasonTotalsFull(pair.pos, pair.rank);
+    const vals = getRankSeasonTotalsFull(pair.pos, pair.rank, week, pair.source);
     if (!vals) return;
     anyData = true;
     vals.forEach((v, i) => { if (v !== null) totals[i] += v; });
@@ -4613,12 +4621,11 @@ function getMultiPositionSeasonTotalsFull(pairs) {
   return anyData ? totals : null;
 }
 
-// Full-season, multi-position version of compareMultiPositionCombos. No week
-// argument — always compares full-season (Week 1 on) historical totals.
-function compareMultiPositionCombosFull(pairsA, pairsB) {
+// Full-season/ROS-aware, multi-position version of compareMultiPositionCombos.
+function compareMultiPositionCombosFull(pairsA, pairsB, week) {
   const seasons = SEASON_BY_RANK.seasons;
-  const totalsA = getMultiPositionSeasonTotalsFull(pairsA);
-  const totalsB = getMultiPositionSeasonTotalsFull(pairsB);
+  const totalsA = getMultiPositionSeasonTotalsFull(pairsA, week);
+  const totalsB = getMultiPositionSeasonTotalsFull(pairsB, week);
   if (!totalsA || !totalsB) return null;
   let winsA = 0;
   const bySeason = seasons.map((s, i) => {
