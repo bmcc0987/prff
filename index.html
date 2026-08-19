@@ -377,6 +377,7 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
   padding: 60px 24px; text-align: center;
 }
 .proj-locked-title { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: #111; margin-bottom: 8px; }
+.proj-question-heading { font-family: 'Lato', sans-serif; font-size: 18px; font-weight: 900; color: #111; margin: 0 0 10px; }
 .proj-locked-sub { font-family: 'Lato', sans-serif; font-size: 14px; color: #777; margin-bottom: 24px; }
 #proj-published-content > * { margin-bottom: 32px; }
 .proj-section-label { font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #999; margin-bottom: 10px; }
@@ -2374,7 +2375,8 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.seasonLong[key]) +
+    section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
+      lastUpdatedBlurbHTML(publishedTimestamps.seasonLong[key]) +
       buildPublishedTableHTML(activeWeeklyPosition, 'Season Long', data.topN, data.rows, 'exportSeasonLongPositionCSV', true);
     container.appendChild(section);
     return;
@@ -2389,11 +2391,12 @@ function renderProjectionsPage() {
       return;
     }
     emptyState.style.display = 'none';
-    rosKeys.forEach(key => {
+    rosKeys.forEach((key, i) => {
       const [position, week] = key.split('-');
       const data = publishedROS[key];
       const section = document.createElement('div');
-      section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
+      section.innerHTML = (i === 0 ? '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' : '') +
+        lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
         buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows);
       container.appendChild(section);
     });
@@ -2459,7 +2462,8 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.weekly[key]) +
+    section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
+      lastUpdatedBlurbHTML(publishedTimestamps.weekly[key]) +
       buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows);
     container.appendChild(section);
   }
