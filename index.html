@@ -1311,7 +1311,7 @@ footer {
     <datalist id="rostered-players-B"></datalist>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
       <button type="button" id="numbers-mode-toggle" class="trade-add-btn" style="width:auto; white-space:nowrap;" onclick="toggleNumbersMode()">Numbers Mode: Off</button>
-      <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Turn this on to type in player values like QB6, RB5, WR1 instead of names.</span>
+      <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Type shorthand like QB6, RB5, WR1, TE7 — whoever is currently ranked that spot in our current Season Long Player Projections will show up as the corresponding player.</span>
     </div>
     <div class="trade-cols">
       <div class="trade-col">
@@ -2976,14 +2976,10 @@ document.addEventListener('mouseout', function (e) {
 function toggleNumbersMode() {
   numbersMode = !numbersMode;
   const btn = document.getElementById('numbers-mode-toggle');
-  const hint = document.getElementById('numbers-mode-hint');
   btn.textContent = 'Numbers Mode: ' + (numbersMode ? 'On' : 'Off');
   btn.style.background = numbersMode ? '#3DB87A' : '';
   btn.style.borderColor = numbersMode ? '#3DB87A' : '';
   btn.style.color = numbersMode ? 'white' : '';
-  hint.textContent = numbersMode
-    ? 'Type shorthand like QB6, RB5, WR1, TE7 — whoever is currently ranked that spot in our current Season Long Player Projections will show up as the corresponding player.'
-    : 'Turn this on to type in player values like QB6, RB5, WR1 instead of names.';
   // Update every player-name input already on the page too, not just ones
   // added after toggling.
   // Clicking the toggle clears every box — a name typed in Off mode isn't
