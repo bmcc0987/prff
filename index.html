@@ -3341,7 +3341,7 @@ function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups) {
 
   document.getElementById('trade-verdict').textContent =
     'In ' + winsForWinner + '/' + compare.totalSeasons + ' (' + Math.round((winsForWinner / compare.totalSeasons) * 100) + '%) seasons since 2015, ' +
-    winnerName + ' is projected to outscore ' + loserName + '.';
+    winnerName + ' outscored ' + loserName + '.';
   document.getElementById('trade-verdict-sub').style.display = 'none';
 
   renderRosterCards('trade-newroster-listA', rosterAGroups, winnerName === nameA);
