@@ -1427,11 +1427,11 @@ footer {
         <div style="display:flex; gap:40px; margin:10px 0 16px;">
           <div>
             <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="single-week-labelA"></div>
-            <div style="font-size:32px; font-weight:900; color:#3DB87A;" id="single-week-pctA"></div>
+            <div style="font-size:32px; font-weight:900;" id="single-week-pctA"></div>
           </div>
           <div>
             <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="single-week-labelB"></div>
-            <div style="font-size:32px; font-weight:900; color:#888;" id="single-week-pctB"></div>
+            <div style="font-size:32px; font-weight:900;" id="single-week-pctB"></div>
           </div>
         </div>
         <p style="font-family:'Lato',sans-serif; font-size:14px; color:#444; line-height:1.6; margin:4px 0;" id="single-week-summary"></p>
@@ -1584,11 +1584,11 @@ footer {
         <div style="display:flex; gap:40px; margin:10px 0 16px;">
           <div>
             <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="test-single-week-labelA"></div>
-            <div style="font-size:32px; font-weight:900; color:#3DB87A;" id="test-single-week-pctA"></div>
+            <div style="font-size:32px; font-weight:900;" id="test-single-week-pctA"></div>
           </div>
           <div>
             <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="test-single-week-labelB"></div>
-            <div style="font-size:32px; font-weight:900; color:#888;" id="test-single-week-pctB"></div>
+            <div style="font-size:32px; font-weight:900;" id="test-single-week-pctB"></div>
           </div>
         </div>
         <p style="font-family:'Lato',sans-serif; font-size:14px; color:#444; line-height:1.6; margin:4px 0;" id="test-single-week-summary"></p>
@@ -3611,8 +3611,10 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
     ' seasons, but in any given week, how often would we expect ' + underdog + ' to win?';
   document.getElementById('single-week-labelA').textContent = nameA;
   document.getElementById('single-week-pctA').textContent = pctA.toFixed(1) + '%';
+  document.getElementById('single-week-pctA').style.color = pctA >= pctB ? '#3DB87A' : '#888';
   document.getElementById('single-week-labelB').textContent = nameB;
   document.getElementById('single-week-pctB').textContent = pctB.toFixed(1) + '%';
+  document.getElementById('single-week-pctB').style.color = pctB > pctA ? '#3DB87A' : '#888';
   document.getElementById('single-week-summary').textContent =
     underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
   document.getElementById('single-week-method').textContent =
@@ -3909,8 +3911,10 @@ async function testRunSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerNa
     ' seasons, but in any given week, how often would we expect ' + underdog + ' to win?';
   document.getElementById('test-single-week-labelA').textContent = nameA;
   document.getElementById('test-single-week-pctA').textContent = pctA.toFixed(1) + '%';
+  document.getElementById('test-single-week-pctA').style.color = pctA >= pctB ? '#3DB87A' : '#888';
   document.getElementById('test-single-week-labelB').textContent = nameB;
   document.getElementById('test-single-week-pctB').textContent = pctB.toFixed(1) + '%';
+  document.getElementById('test-single-week-pctB').style.color = pctB > pctA ? '#3DB87A' : '#888';
   document.getElementById('test-single-week-summary').textContent =
     underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
   document.getElementById('test-single-week-method').textContent =
