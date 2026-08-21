@@ -3456,7 +3456,7 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
   document.getElementById('single-week-summary').textContent =
     underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
   document.getElementById('single-week-method').textContent =
-    'Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played since 2015 is pooled into one sample, and ' + trials.toLocaleString() + ' simulated matchups are drawn directly from those real performances. Bye weeks and missed games are excluded directly from the source data, not inferred.';
+    'Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played since 2015 is pooled into one sample, and ' + trials.toLocaleString() + ' matchups are simulated by drawing ' + trials.toLocaleString() + ' actual weekly scores at random from each player. Bye weeks and missed games are excluded directly from the source data, not inferred.';
   section.style.display = 'block';
 }
 
