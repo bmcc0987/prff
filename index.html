@@ -1397,21 +1397,6 @@ footer {
         <div class="trade-history-stat" id="trade-history-statB"></div>
         <div class="trade-history-note" id="trade-history-note"></div>
       </div>
-      <div id="single-week-section" style="display:none; background:white; border:1px solid #dddbd6; border-radius:12px; padding:20px 24px; margin:16px 0;">
-        <p style="font-family:'Lato',sans-serif; font-size:15px; color:#555; line-height:1.6; margin:0 0 16px;" id="single-week-question"></p>
-        <div style="display:flex; gap:40px; margin:10px 0 16px;">
-          <div>
-            <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="single-week-labelA"></div>
-            <div style="font-size:32px; font-weight:900; color:#3DB87A;" id="single-week-pctA"></div>
-          </div>
-          <div>
-            <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="single-week-labelB"></div>
-            <div style="font-size:32px; font-weight:900; color:#888;" id="single-week-pctB"></div>
-          </div>
-        </div>
-        <p style="font-family:'Lato',sans-serif; font-size:14px; color:#444; line-height:1.6; margin:4px 0;" id="single-week-summary"></p>
-        <div style="font-size:11px; color:#aaa; margin-top:16px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;" id="single-week-method"></div>
-      </div>
       <div class="trade-result-players" id="trade-receives-section">
         <div>
           <div class="trade-result-col-label" id="trade-colA-label"></div>
@@ -1436,6 +1421,21 @@ footer {
             <div id="trade-newroster-listB"></div>
           </div>
         </div>
+      </div>
+      <div id="single-week-section" style="display:none; background:white; border:1px solid #dddbd6; border-radius:12px; padding:20px 24px; margin:16px 0;">
+        <p style="font-family:'Lato',sans-serif; font-size:15px; color:#555; line-height:1.6; margin:0 0 16px;" id="single-week-question"></p>
+        <div style="display:flex; gap:40px; margin:10px 0 16px;">
+          <div>
+            <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="single-week-labelA"></div>
+            <div style="font-size:32px; font-weight:900; color:#3DB87A;" id="single-week-pctA"></div>
+          </div>
+          <div>
+            <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="single-week-labelB"></div>
+            <div style="font-size:32px; font-weight:900; color:#888;" id="single-week-pctB"></div>
+          </div>
+        </div>
+        <p style="font-family:'Lato',sans-serif; font-size:14px; color:#444; line-height:1.6; margin:4px 0;" id="single-week-summary"></p>
+        <div style="font-size:11px; color:#aaa; margin-top:16px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;" id="single-week-method"></div>
       </div>
     </div>
   </div>
@@ -3364,7 +3364,7 @@ async function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroup
   renderRosterCards('trade-newroster-listA', rosterAGroups, winnerName === nameA);
   renderRosterCards('trade-newroster-listB', rosterBGroups, winnerName === nameB);
 
-  await runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB);
+  await runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, loserName, winsForWinner, compare.totalSeasons);
 }
 
 // The "Bill James" single-week question: over a full season the numbers
@@ -3418,7 +3418,7 @@ function poolForRank(pos, rank) {
   return (pool && pool.length > 0) ? pool : null;
 }
 
-async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB) {
+async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, loserName, winsForWinner, totalSeasons) {
   const section = document.getElementById('single-week-section');
 
   const poolsA = pairsA.map(p => poolForRank(p.pos, p.rank));
@@ -3442,18 +3442,19 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB) {
   const seasonLength = 18;
   const weeksA = (pctA / 100 * seasonLength).toFixed(1);
   const weeksB = (pctB / 100 * seasonLength).toFixed(1);
-  const weaker = pctA < pctB ? nameA : nameB;
-  const weakerPct = Math.min(pctA, pctB);
-  const weakerWeeks = pctA < pctB ? weeksA : weeksB;
+  const underdog = pctA < pctB ? nameA : nameB;
+  const underdogPct = Math.min(pctA, pctB);
+  const underdogWeeks = pctA < pctB ? weeksA : weeksB;
 
   document.getElementById('single-week-question').textContent =
-    'Over a full season, that\'s the clearer picture. But in any single week, how often would the underdog actually win anyway?';
+    winnerName + ' beats ' + loserName + ' in ' + winsForWinner + '/' + totalSeasons +
+    ' seasons, but in any given week, how often would we expect ' + underdog + ' to win?';
   document.getElementById('single-week-labelA').textContent = nameA;
   document.getElementById('single-week-pctA').textContent = pctA.toFixed(1) + '%';
   document.getElementById('single-week-labelB').textContent = nameB;
   document.getElementById('single-week-pctB').textContent = pctB.toFixed(1) + '%';
   document.getElementById('single-week-summary').textContent =
-    weaker + ' would still be expected to win about ' + weakerWeeks + ' weeks over an 18-week season (' + weakerPct.toFixed(1) + '%), despite the full-season result above.';
+    underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
   document.getElementById('single-week-method').textContent =
     'Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played since 2015 is pooled into one sample, and ' + trials.toLocaleString() + ' simulated matchups are drawn directly from those real performances. Bye weeks and missed games are excluded directly from the source data, not inferred.';
   section.style.display = 'block';
@@ -3603,7 +3604,8 @@ async function analyzeTrade() {
       'In ' + winsForWinner + '/' + historyResult.compare.totalSeasons + ' (' + winnerPct + '%) seasons since 2015, ' +
       winnerName + ' is projected to win the trade.';
 
-    await runSingleWeekBootstrap(nameA, nameB, historyResult.pairsA, historyResult.pairsB);
+    const loserNameForTrade = winnerName === nameA ? nameB : nameA;
+    await runSingleWeekBootstrap(nameA, nameB, historyResult.pairsA, historyResult.pairsB, winnerName, loserNameForTrade, winsForWinner, historyResult.compare.totalSeasons);
   } else {
     historySection.style.display = 'none';
     // --- Fallback: old lineup-value / simple-value method ---------------
