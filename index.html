@@ -3669,11 +3669,11 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
   document.getElementById('single-week-statsA').innerHTML =
     '<b>' + nameA + '</b> — Mean: ' + statsA.mean.toFixed(1) + ' · Median: ' + statsA.median.toFixed(1) +
     ' · StdDev: ' + statsA.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsA.p10.toFixed(1) + '–' + statsA.p90.toFixed(1) +
-    (greatWeekMarginA !== null ? ' · Great-week margin: +' + greatWeekMarginA.toFixed(1) : '');
+    (greatWeekMarginA !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginA.toFixed(1) : '');
   document.getElementById('single-week-statsB').innerHTML =
     '<b>' + nameB + '</b> — Mean: ' + statsB.mean.toFixed(1) + ' · Median: ' + statsB.median.toFixed(1) +
     ' · StdDev: ' + statsB.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsB.p10.toFixed(1) + '–' + statsB.p90.toFixed(1) +
-    (greatWeekMarginB !== null ? ' · Great-week margin: +' + greatWeekMarginB.toFixed(1) : '');
+    (greatWeekMarginB !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginB.toFixed(1) : '');
 
   document.getElementById('single-week-method').textContent =
     'Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played since 2015 is pooled into one sample, and ' + trials.toLocaleString() + ' matchups are simulated by drawing ' + trials.toLocaleString() + ' actual weekly scores at random from each player. Bye weeks and missed games are excluded directly from the source data, not inferred.';
@@ -3989,11 +3989,11 @@ async function testRunSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerNa
   document.getElementById('test-single-week-statsA').innerHTML =
     '<b>' + nameA + '</b> — Mean: ' + statsA.mean.toFixed(1) + ' · Median: ' + statsA.median.toFixed(1) +
     ' · StdDev: ' + statsA.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsA.p10.toFixed(1) + '–' + statsA.p90.toFixed(1) +
-    (greatWeekMarginA !== null ? ' · Great-week margin: +' + greatWeekMarginA.toFixed(1) : '');
+    (greatWeekMarginA !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginA.toFixed(1) : '');
   document.getElementById('test-single-week-statsB').innerHTML =
     '<b>' + nameB + '</b> — Mean: ' + statsB.mean.toFixed(1) + ' · Median: ' + statsB.median.toFixed(1) +
     ' · StdDev: ' + statsB.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsB.p10.toFixed(1) + '–' + statsB.p90.toFixed(1) +
-    (greatWeekMarginB !== null ? ' · Great-week margin: +' + greatWeekMarginB.toFixed(1) : '');
+    (greatWeekMarginB !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginB.toFixed(1) : '');
 
   document.getElementById('test-single-week-method').textContent =
     'TEST MODE — 2015-2024 only (2025 excluded). Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played from 2015-2024 is pooled into one sample, and ' + trials.toLocaleString() + ' matchups are simulated by drawing ' + trials.toLocaleString() + ' actual weekly scores at random from each player.';
