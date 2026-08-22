@@ -3617,6 +3617,19 @@ function computeGreatWeekMargin(simsSelf, simsOpp, p90Self) {
   return count > 0 ? sumMargin / count : null;
 }
 
+// Average margin of victory across ALL wins for this team, not just great
+// weeks — a different, broader stat than computeGreatWeekMargin above.
+function computeAverageWinMargin(simsSelf, simsOpp) {
+  let sumMargin = 0, count = 0;
+  for (let i = 0; i < simsSelf.length; i++) {
+    if (simsSelf[i] > simsOpp[i]) {
+      sumMargin += simsSelf[i] - simsOpp[i];
+      count++;
+    }
+  }
+  return count > 0 ? sumMargin / count : null;
+}
+
 async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, loserName, winsForWinner, totalSeasons) {
   const section = document.getElementById('single-week-section');
 
@@ -3663,17 +3676,19 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
   document.getElementById('single-week-summary').textContent =
     underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
 
-  const greatWeekMarginA = computeGreatWeekMargin(simsA, simsB, statsA.p90);
-  const greatWeekMarginB = computeGreatWeekMargin(simsB, simsA, statsB.p90);
+  const cvA = statsA.stdev / statsA.mean * 100;
+  const cvB = statsB.stdev / statsB.mean * 100;
+  const avgWinMarginA = computeAverageWinMargin(simsA, simsB);
+  const avgWinMarginB = computeAverageWinMargin(simsB, simsA);
 
   document.getElementById('single-week-statsA').innerHTML =
     '<b>' + nameA + '</b> — Mean: ' + statsA.mean.toFixed(1) + ' · Median: ' + statsA.median.toFixed(1) +
-    ' · StdDev: ' + statsA.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsA.p10.toFixed(1) + '–' + statsA.p90.toFixed(1) +
-    (greatWeekMarginA !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginA.toFixed(1) : '');
+    ' · CV%: ' + cvA.toFixed(1) + '%' +
+    (avgWinMarginA !== null ? ' · Avg win margin: +' + avgWinMarginA.toFixed(1) : '');
   document.getElementById('single-week-statsB').innerHTML =
     '<b>' + nameB + '</b> — Mean: ' + statsB.mean.toFixed(1) + ' · Median: ' + statsB.median.toFixed(1) +
-    ' · StdDev: ' + statsB.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsB.p10.toFixed(1) + '–' + statsB.p90.toFixed(1) +
-    (greatWeekMarginB !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginB.toFixed(1) : '');
+    ' · CV%: ' + cvB.toFixed(1) + '%' +
+    (avgWinMarginB !== null ? ' · Avg win margin: +' + avgWinMarginB.toFixed(1) : '');
 
   document.getElementById('single-week-method').textContent =
     'Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played since 2015 is pooled into one sample, and ' + trials.toLocaleString() + ' matchups are simulated by drawing ' + trials.toLocaleString() + ' actual weekly scores at random from each player. Bye weeks and missed games are excluded directly from the source data, not inferred.';
@@ -3983,17 +3998,19 @@ async function testRunSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerNa
   document.getElementById('test-single-week-summary').textContent =
     underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
 
-  const greatWeekMarginA = computeGreatWeekMargin(simsA, simsB, statsA.p90);
-  const greatWeekMarginB = computeGreatWeekMargin(simsB, simsA, statsB.p90);
+  const cvA = statsA.stdev / statsA.mean * 100;
+  const cvB = statsB.stdev / statsB.mean * 100;
+  const avgWinMarginA = computeAverageWinMargin(simsA, simsB);
+  const avgWinMarginB = computeAverageWinMargin(simsB, simsA);
 
   document.getElementById('test-single-week-statsA').innerHTML =
     '<b>' + nameA + '</b> — Mean: ' + statsA.mean.toFixed(1) + ' · Median: ' + statsA.median.toFixed(1) +
-    ' · StdDev: ' + statsA.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsA.p10.toFixed(1) + '–' + statsA.p90.toFixed(1) +
-    (greatWeekMarginA !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginA.toFixed(1) : '');
+    ' · CV%: ' + cvA.toFixed(1) + '%' +
+    (avgWinMarginA !== null ? ' · Avg win margin: +' + avgWinMarginA.toFixed(1) : '');
   document.getElementById('test-single-week-statsB').innerHTML =
     '<b>' + nameB + '</b> — Mean: ' + statsB.mean.toFixed(1) + ' · Median: ' + statsB.median.toFixed(1) +
-    ' · StdDev: ' + statsB.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsB.p10.toFixed(1) + '–' + statsB.p90.toFixed(1) +
-    (greatWeekMarginB !== null ? ' · Scoring in 90th percentile+ win margin: +' + greatWeekMarginB.toFixed(1) : '');
+    ' · CV%: ' + cvB.toFixed(1) + '%' +
+    (avgWinMarginB !== null ? ' · Avg win margin: +' + avgWinMarginB.toFixed(1) : '');
 
   document.getElementById('test-single-week-method').textContent =
     'TEST MODE — 2015-2024 only (2025 excluded). Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played from 2015-2024 is pooled into one sample, and ' + trials.toLocaleString() + ' matchups are simulated by drawing ' + trials.toLocaleString() + ' actual weekly scores at random from each player.';
