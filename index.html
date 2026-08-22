@@ -1435,6 +1435,10 @@ footer {
           </div>
         </div>
         <p style="font-family:'Lato',sans-serif; font-size:14px; color:#444; line-height:1.6; margin:4px 0;" id="single-week-summary"></p>
+        <div style="font-size:12px; color:#666; margin-top:10px; line-height:1.6;">
+          <div id="single-week-statsA"></div>
+          <div id="single-week-statsB"></div>
+        </div>
         <div style="font-size:11px; color:#aaa; margin-top:16px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;" id="single-week-method"></div>
       </div>
     </div>
@@ -1592,6 +1596,10 @@ footer {
           </div>
         </div>
         <p style="font-family:'Lato',sans-serif; font-size:14px; color:#444; line-height:1.6; margin:4px 0;" id="test-single-week-summary"></p>
+        <div style="font-size:12px; color:#666; margin-top:10px; line-height:1.6;">
+          <div id="test-single-week-statsA"></div>
+          <div id="test-single-week-statsB"></div>
+        </div>
         <div style="font-size:11px; color:#aaa; margin-top:16px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;" id="test-single-week-method"></div>
       </div>
     </div>
@@ -3578,6 +3586,37 @@ function poolForRank(pos, rank) {
   return (pool && pool.length > 0) ? pool : null;
 }
 
+// Computes mean, median, standard deviation, and 10th/90th percentiles
+// from an array of simulated team totals — shared by both the live and
+// test-page bootstrap functions.
+function computeDistributionStats(values) {
+  const n = values.length;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const median = n % 2 === 0 ? (sorted[n/2 - 1] + sorted[n/2]) / 2 : sorted[(n-1)/2];
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1);
+  const stdev = Math.sqrt(variance);
+  const p10 = sorted[Math.floor(n * 0.10)];
+  const p90 = sorted[Math.floor(n * 0.90)];
+  return { mean, median, stdev, p10, p90 };
+}
+
+// Average margin of victory specifically in trials where this team hit its
+// OWN 90th percentile or better AND still won that trial — i.e. "when this
+// team has a genuinely great week, how much do they usually win by,"
+// distinct from the average margin across ALL wins (which includes plenty
+// of narrow ones too).
+function computeGreatWeekMargin(simsSelf, simsOpp, p90Self) {
+  let sumMargin = 0, count = 0;
+  for (let i = 0; i < simsSelf.length; i++) {
+    if (simsSelf[i] >= p90Self && simsSelf[i] > simsOpp[i]) {
+      sumMargin += simsSelf[i] - simsOpp[i];
+      count++;
+    }
+  }
+  return count > 0 ? sumMargin / count : null;
+}
+
 async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, loserName, winsForWinner, totalSeasons) {
   const section = document.getElementById('single-week-section');
 
@@ -3590,12 +3629,18 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
 
   const trials = 200000;
   let winsA = 0, winsB = 0;
+  const simsA = new Array(trials);
+  const simsB = new Array(trials);
   for (let t = 0; t < trials; t++) {
     let totalA = 0, totalB = 0;
     for (const pool of poolsA) totalA += pool[Math.floor(Math.random() * pool.length)];
     for (const pool of poolsB) totalB += pool[Math.floor(Math.random() * pool.length)];
+    simsA[t] = totalA;
+    simsB[t] = totalB;
     if (totalA > totalB) winsA++; else if (totalB > totalA) winsB++;
   }
+  const statsA = computeDistributionStats(simsA);
+  const statsB = computeDistributionStats(simsB);
 
   const pctA = winsA / trials * 100;
   const pctB = winsB / trials * 100;
@@ -3608,7 +3653,7 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
 
   document.getElementById('single-week-question').textContent =
     winnerName + ' beats ' + loserName + ' in ' + winsForWinner + '/' + totalSeasons +
-    ' seasons, but in any given week, how often would we expect ' + underdog + ' to win?';
+    ' seasons, but in any given week, how often would we expect ' + loserName + ' to win?';
   document.getElementById('single-week-labelA').textContent = nameA;
   document.getElementById('single-week-pctA').textContent = pctA.toFixed(1) + '%';
   document.getElementById('single-week-pctA').style.color = pctA >= pctB ? '#3DB87A' : '#888';
@@ -3617,6 +3662,19 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
   document.getElementById('single-week-pctB').style.color = pctB > pctA ? '#3DB87A' : '#888';
   document.getElementById('single-week-summary').textContent =
     underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
+
+  const greatWeekMarginA = computeGreatWeekMargin(simsA, simsB, statsA.p90);
+  const greatWeekMarginB = computeGreatWeekMargin(simsB, simsA, statsB.p90);
+
+  document.getElementById('single-week-statsA').innerHTML =
+    '<b>' + nameA + '</b> — Mean: ' + statsA.mean.toFixed(1) + ' · Median: ' + statsA.median.toFixed(1) +
+    ' · StdDev: ' + statsA.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsA.p10.toFixed(1) + '–' + statsA.p90.toFixed(1) +
+    (greatWeekMarginA !== null ? ' · Great-week margin: +' + greatWeekMarginA.toFixed(1) : '');
+  document.getElementById('single-week-statsB').innerHTML =
+    '<b>' + nameB + '</b> — Mean: ' + statsB.mean.toFixed(1) + ' · Median: ' + statsB.median.toFixed(1) +
+    ' · StdDev: ' + statsB.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsB.p10.toFixed(1) + '–' + statsB.p90.toFixed(1) +
+    (greatWeekMarginB !== null ? ' · Great-week margin: +' + greatWeekMarginB.toFixed(1) : '');
+
   document.getElementById('single-week-method').textContent =
     'Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played since 2015 is pooled into one sample, and ' + trials.toLocaleString() + ' matchups are simulated by drawing ' + trials.toLocaleString() + ' actual weekly scores at random from each player. Bye weeks and missed games are excluded directly from the source data, not inferred.';
   section.style.display = 'block';
@@ -3891,12 +3949,19 @@ async function testRunSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerNa
   }
   const trials = 200000;
   let winsA = 0, winsB = 0;
+  const simsA = new Array(trials);
+  const simsB = new Array(trials);
   for (let t = 0; t < trials; t++) {
     let totalA = 0, totalB = 0;
     for (const pool of poolsA) totalA += pool[Math.floor(Math.random() * pool.length)];
     for (const pool of poolsB) totalB += pool[Math.floor(Math.random() * pool.length)];
+    simsA[t] = totalA;
+    simsB[t] = totalB;
     if (totalA > totalB) winsA++; else if (totalB > totalA) winsB++;
   }
+  const statsA = computeDistributionStats(simsA);
+  const statsB = computeDistributionStats(simsB);
+
   const pctA = winsA / trials * 100;
   const pctB = winsB / trials * 100;
   const seasonLength = 18;
@@ -3908,7 +3973,7 @@ async function testRunSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerNa
 
   document.getElementById('test-single-week-question').textContent =
     winnerName + ' beats ' + loserName + ' in ' + winsForWinner + '/' + totalSeasons +
-    ' seasons, but in any given week, how often would we expect ' + underdog + ' to win?';
+    ' seasons, but in any given week, how often would we expect ' + loserName + ' to win?';
   document.getElementById('test-single-week-labelA').textContent = nameA;
   document.getElementById('test-single-week-pctA').textContent = pctA.toFixed(1) + '%';
   document.getElementById('test-single-week-pctA').style.color = pctA >= pctB ? '#3DB87A' : '#888';
@@ -3917,6 +3982,19 @@ async function testRunSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerNa
   document.getElementById('test-single-week-pctB').style.color = pctB > pctA ? '#3DB87A' : '#888';
   document.getElementById('test-single-week-summary').textContent =
     underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
+
+  const greatWeekMarginA = computeGreatWeekMargin(simsA, simsB, statsA.p90);
+  const greatWeekMarginB = computeGreatWeekMargin(simsB, simsA, statsB.p90);
+
+  document.getElementById('test-single-week-statsA').innerHTML =
+    '<b>' + nameA + '</b> — Mean: ' + statsA.mean.toFixed(1) + ' · Median: ' + statsA.median.toFixed(1) +
+    ' · StdDev: ' + statsA.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsA.p10.toFixed(1) + '–' + statsA.p90.toFixed(1) +
+    (greatWeekMarginA !== null ? ' · Great-week margin: +' + greatWeekMarginA.toFixed(1) : '');
+  document.getElementById('test-single-week-statsB').innerHTML =
+    '<b>' + nameB + '</b> — Mean: ' + statsB.mean.toFixed(1) + ' · Median: ' + statsB.median.toFixed(1) +
+    ' · StdDev: ' + statsB.stdev.toFixed(1) + ' · 10th–90th pct: ' + statsB.p10.toFixed(1) + '–' + statsB.p90.toFixed(1) +
+    (greatWeekMarginB !== null ? ' · Great-week margin: +' + greatWeekMarginB.toFixed(1) : '');
+
   document.getElementById('test-single-week-method').textContent =
     'TEST MODE — 2015-2024 only (2025 excluded). Calculated using bootstrap resampling (Efron, 1979): every real historical week each starter has played from 2015-2024 is pooled into one sample, and ' + trials.toLocaleString() + ' matchups are simulated by drawing ' + trials.toLocaleString() + ' actual weekly scores at random from each player.';
   section.style.display = 'block';
