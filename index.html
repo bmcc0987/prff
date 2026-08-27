@@ -1390,6 +1390,7 @@ footer {
     <div id="trade-result" class="trade-result">
       <div class="trade-result-verdict" id="trade-verdict"></div>
       <div class="trade-result-sub" id="trade-verdict-sub"></div>
+      <div id="trade-duplicate-warning" style="display:none; font-family:'Lato',sans-serif; font-size:13px; color:#c0392b; background:#fdf0ee; border:1px solid #f3c9c1; border-radius:8px; padding:10px 14px; margin-top:10px;"></div>
       <div id="trade-history-section" style="display:none;">
         <div class="trade-history-context" id="trade-history-contextA" style="display:none;"></div>
         <div class="trade-history-stat" id="trade-history-statA"></div>
@@ -3169,13 +3170,18 @@ function pickFlexWinners(candidates) {
 function buildLineupSlotGroups(playersByGroup) {
   const groups = { QB: [], WR: [], RB: [], TE: [], FLEX: [], BENCH: [] };
   const seen = new Set();
+  const droppedDuplicates = [];
   ['QB', 'WR', 'RB', 'TE', 'FLEX', 'BENCH'].forEach(groupKey => {
     (playersByGroup[groupKey] || []).forEach(p => {
-      if (seen.has(p.name)) return; // guard against the same player entered twice
+      if (seen.has(p.name)) {
+        droppedDuplicates.push(p.numbersLabel || p.name);
+        return; // guard against the same real player entered twice
+      }
       seen.add(p.name);
       groups[groupKey].push(p);
     });
   });
+  groups.droppedDuplicates = droppedDuplicates;
   return groups;
 }
 
@@ -3310,6 +3316,19 @@ async function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroup
   const startersB = buildLineupSlotGroups(rosterBGroups);
   const starterListA = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersA[slot]);
   const starterListB = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersB[slot]);
+
+  const duplicateWarnings = [];
+  if (startersA.droppedDuplicates.length) duplicateWarnings.push(nameA + ': ' + startersA.droppedDuplicates.join(', '));
+  if (startersB.droppedDuplicates.length) duplicateWarnings.push(nameB + ': ' + startersB.droppedDuplicates.join(', '));
+  const dupWarningEl = document.getElementById('trade-duplicate-warning');
+  if (dupWarningEl) {
+    if (duplicateWarnings.length) {
+      dupWarningEl.textContent = 'The same player was entered more than once and only counted once — ' + duplicateWarnings.join(' · ');
+      dupWarningEl.style.display = 'block';
+    } else {
+      dupWarningEl.style.display = 'none';
+    }
+  }
 
   const resolvedA = starterListA.map(p => ({ player: p, resolved: resolvePlayerRank(p.name, p.pos, week) }));
   const resolvedB = starterListB.map(p => ({ player: p, resolved: resolvePlayerRank(p.name, p.pos, week) }));
@@ -3496,9 +3515,8 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
   const seasonLength = 18;
   const weeksA = (pctA / 100 * seasonLength).toFixed(1);
   const weeksB = (pctB / 100 * seasonLength).toFixed(1);
-  const underdog = pctA < pctB ? nameA : nameB;
-  const underdogPct = Math.min(pctA, pctB);
-  const underdogWeeks = pctA < pctB ? weeksA : weeksB;
+  const loserPct = loserName === nameA ? pctA : pctB;
+  const loserWeeks = loserName === nameA ? weeksA : weeksB;
 
   document.getElementById('single-week-question').textContent =
     winnerName + ' beats ' + loserName + ' in ' + winsForWinner + '/' + totalSeasons +
@@ -3510,7 +3528,7 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
   document.getElementById('single-week-pctB').textContent = pctB.toFixed(1) + '%';
   document.getElementById('single-week-pctB').style.color = pctB > pctA ? '#3DB87A' : '#888';
   document.getElementById('single-week-summary').textContent =
-    underdog + ' would still be expected to win about ' + underdogWeeks + ' weeks over an 18-week season (' + underdogPct.toFixed(1) + '%), despite the full-season result above.';
+    loserName + ' would still be expected to win about ' + loserWeeks + ' weeks over an 18-week season (' + loserPct.toFixed(1) + '%), despite the full-season result above.';
 
   const avgWinMarginA = computeAverageWinMargin(simsA, simsB);
   const avgWinMarginB = computeAverageWinMargin(simsB, simsA);
@@ -3636,6 +3654,19 @@ async function analyzeTrade() {
   const startersB = buildLineupSlotGroups(newRosterBGroups);
   const starterListA = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersA[slot]);
   const starterListB = ['QB', 'WR', 'RB', 'TE', 'FLEX'].flatMap(slot => startersB[slot]);
+
+  const tradeDuplicateWarnings = [];
+  if (startersA.droppedDuplicates.length) tradeDuplicateWarnings.push(nameA + ': ' + startersA.droppedDuplicates.join(', '));
+  if (startersB.droppedDuplicates.length) tradeDuplicateWarnings.push(nameB + ': ' + startersB.droppedDuplicates.join(', '));
+  const tradeDupWarningEl = document.getElementById('trade-duplicate-warning');
+  if (tradeDupWarningEl) {
+    if (tradeDuplicateWarnings.length) {
+      tradeDupWarningEl.textContent = 'The same player was entered more than once and only counted once — ' + tradeDuplicateWarnings.join(' · ');
+      tradeDupWarningEl.style.display = 'block';
+    } else {
+      tradeDupWarningEl.style.display = 'none';
+    }
+  }
 
   const resolvedStartersA = starterListA.map(p => ({ player: p, resolved: resolvePlayerRank(p.name, p.pos, week) }));
   const resolvedStartersB = starterListB.map(p => ({ player: p, resolved: resolvePlayerRank(p.name, p.pos, week) }));
