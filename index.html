@@ -3634,18 +3634,63 @@ async function analyzeTrade() {
   function tagAsGroup(players) {
     return players.map(p => ({ ...p, group: p.pos }));
   }
+  // Real historical average season total for whatever rank this player is
+  // currently resolved to — a position-aware measure of value (an RB16 is
+  // genuinely worth more than a WR24 in real scoring terms), unlike the
+  // generic draft-value field, which isn't adjusted for position scarcity.
+  function realValueFor(p) {
+    const resolved = resolvePlayerRank(p.name, p.pos, week);
+    if (!resolved) return 0;
+    const vals = getRankSeasonTotalsFull(p.pos, resolved.rank, week, resolved.source);
+    if (!vals) return 0;
+    const nums = vals.filter(v => v !== null);
+    return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+  }
+  // After a trade, a position group can end up with more players than its
+  // real number of starting slots (e.g. 3 RBs where there are only 2 RB
+  // slots). A real roster would bump the weakest of those extra players
+  // into FLEX instead of pretending there are 3 starting RB spots — this
+  // reproduces that: overflow gets sorted by real historical value, the
+  // strongest stay in their natural slot, the rest compete for FLEX, and
+  // whatever loses out there goes to BENCH.
+  function rebalanceOverflow(result) {
+    const flexEligible = ['RB', 'WR', 'TE'];
+    const flexCapacity = result.FLEX.length;
+    let overflowPool = [];
+
+    ['QB', 'WR', 'RB', 'TE'].forEach(key => {
+      const maxCount = (ROSTER_GROUPS[key] || {}).count || 0;
+      if (result[key].length > maxCount) {
+        result[key].sort((a, b) => realValueFor(b) - realValueFor(a));
+        const overflow = result[key].splice(maxCount);
+        if (flexEligible.includes(key)) {
+          overflowPool.push(...overflow);
+        } else {
+          result.BENCH.push(...overflow); // QB has no FLEX path in a standard league
+        }
+      }
+    });
+
+    if (overflowPool.length > 0) {
+      const combined = result.FLEX.concat(overflowPool);
+      combined.sort((a, b) => realValueFor(b) - realValueFor(a));
+      result.FLEX = combined.slice(0, flexCapacity);
+      result.BENCH = result.BENCH.concat(combined.slice(flexCapacity));
+    }
+    return result;
+  }
   function combineRosterWithTrade(rosterGroups, namesGivenAway, receivedPlayers) {
     const result = {};
     ['QB', 'WR', 'RB', 'TE', 'BENCH'].forEach(key => {
       result[key] = removeByName(rosterGroups[key] || [], namesGivenAway);
     });
     result.FLEX = removeByName(rosterGroups.FLEX || [], namesGivenAway);
-    // Received players slot in at their real position, unconditionally —
-    // same treatment as if they'd been typed into that position's group.
+    // Received players slot in at their real position first — rebalanceOverflow
+    // then fixes up any group that ends up with more players than real slots.
     tagAsGroup(receivedPlayers).forEach(p => {
       if (result[p.group]) result[p.group].push(p);
     });
-    return result;
+    return rebalanceOverflow(result);
   }
 
   const newRosterAGroups = combineRosterWithTrade(rosterAGroups, offeredANames, offeredBObj);
