@@ -6428,7 +6428,7 @@ async function publishArticle() {
   const displayOrder = displayOrderRaw === '' ? null : parseInt(displayOrderRaw, 10);
   const featured = document.getElementById('article-featured').checked;
 
-  const id = existingId || (slugify(title) + '-' + (++articleIdCounter));
+  const id = (existingId && editingType === 'published') ? existingId : (slugify(title) + '-' + (++articleIdCounter));
   const dateLabel = (existingId && publishedArticles[existingId])
     ? publishedArticles[existingId].dateLabel
     : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
