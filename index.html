@@ -3067,13 +3067,14 @@ function computeOptimalLineup(players) {
 function renderFinishList(containerId, names, isWinner) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
-  names.forEach(name => {
-    const finish = getPositionalFinish(name);
+  names.forEach(rawName => {
+    const resolvedName = numbersMode ? (resolveNumbersModeShorthand(rawName) || rawName) : rawName;
+    const finish = getPositionalFinish(resolvedName);
     const card = document.createElement('div');
     card.className = 'trade-finish-card';
     card.innerHTML =
       (isWinner ? '<div class="trade-finish-fill"></div>' : '') +
-      '<div class="trade-finish-name">' + name + '</div>' +
+      '<div class="trade-finish-name">' + rawName + '</div>' +
       '<div class="trade-finish-proj">Projected rest of season finish: ' + (finish || 'Unranked') + '</div>';
     container.appendChild(card);
   });
@@ -3677,6 +3678,50 @@ async function analyzeTrade() {
       result.FLEX = combined.slice(0, flexCapacity);
       result.BENCH = result.BENCH.concat(combined.slice(flexCapacity));
     }
+
+    // The other direction: a trade can just as easily leave a position
+    // group SHORT of its real slot count (e.g. trading away both starting
+    // WRs for one player elsewhere leaves an empty 2nd WR slot). Leaving
+    // that slot empty would silently undercount the team by an entire
+    // roster spot — instead, promote the best real-value candidate for
+    // that position, checking FLEX first, then BENCH.
+    ['QB', 'WR', 'RB', 'TE'].forEach(key => {
+      const maxCount = (ROSTER_GROUPS[key] || {}).count || 0;
+      while (result[key].length < maxCount) {
+        let bestIdx = -1, bestSource = null, bestValue = -Infinity;
+        if (flexEligible.includes(key)) {
+          result.FLEX.forEach((p, i) => {
+            if (p.pos !== key) return;
+            const v = realValueFor(p);
+            if (v > bestValue) { bestValue = v; bestIdx = i; bestSource = 'FLEX'; }
+          });
+        }
+        result.BENCH.forEach((p, i) => {
+          if (p.pos !== key) return;
+          const v = realValueFor(p);
+          if (v > bestValue) { bestValue = v; bestIdx = i; bestSource = 'BENCH'; }
+        });
+        if (bestIdx === -1) break; // nobody available at this position anywhere on the roster
+        const promoted = result[bestSource].splice(bestIdx, 1)[0];
+        result[key].push(promoted);
+      }
+    });
+
+    // Promoting a FLEX player into a now-open starting slot can leave FLEX
+    // itself short of the slots the person actually configured — top it
+    // back up from BENCH the same way.
+    while (result.FLEX.length < flexCapacity) {
+      let bestIdx = -1, bestValue = -Infinity;
+      result.BENCH.forEach((p, i) => {
+        if (!flexEligible.includes(p.pos)) return;
+        const v = realValueFor(p);
+        if (v > bestValue) { bestValue = v; bestIdx = i; }
+      });
+      if (bestIdx === -1) break;
+      const promoted = result.BENCH.splice(bestIdx, 1)[0];
+      result.FLEX.push(promoted);
+    }
+
     return result;
   }
   function combineRosterWithTrade(rosterGroups, namesGivenAway, receivedPlayers) {
