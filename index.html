@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Process/Results — Superforecasting Fantasy Football</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2052%2052%22%3E%3Ccircle%20cx%3D%2226%22%20cy%3D%2226%22%20r%3D%2225%22%20fill%3D%22black%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22/%3E%3Ctext%20x%3D%2226%22%20y%3D%2234%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-weight%3D%22900%22%20font-size%3D%2220%22%20fill%3D%22white%22%20text-anchor%3D%22middle%22%3EP/R%3C/text%3E%3C/svg%3E">
-<link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&family=Bebas+Neue&family=Playfair+Display:ital,wght@1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&family=Bebas+Neue&family=Playfair+Display:ital,wght@1,400&family=Oswald:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
@@ -718,6 +718,74 @@ footer {
   /* Auth cards */
   .auth-page { padding: 30px 16px; }
   .auth-card { padding: 28px 22px; }
+}
+/* ==================== CHEAT SHEET (design handoff, high-fidelity) ==================== */
+:root {
+  --cs-ink: #111;
+  --cs-bg: #F2F1EE;
+  --cs-muted: #6C6C66;
+  --cs-green: #1F8F5B;
+  --cs-red: #C4463A;
+  --cs-hairline: rgba(17,17,17,0.11);
+  --cs-row-h: 17.4px;
+}
+.cs-page-wrap { background: #E6E4DF; min-height: 60vh; padding: 30px 0; }
+.cs-toolbar { max-width: 11in; margin: 0 auto 16px; display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+.cs-toolbar-title { font-family: 'Lato', sans-serif; font-size: 15px; color: #444; }
+.cs-download-btn { font-family: 'Lato', sans-serif; font-size: 14px; font-weight: 700; background: #111; color: #fff; border: none; border-radius: 8px; padding: 11px 20px; cursor: pointer; }
+.cs-download-btn:hover { background: #2E9E63; }
+.cs-loading { max-width: 11in; margin: 40px auto; text-align: center; font-family: 'Lato', sans-serif; color: #888; }
+
+.sheet { width: 11in; height: 8.5in; margin: 0 auto; padding: 0.26in 0.28in 0.2in; background: var(--cs-bg); display: flex; flex-direction: column; gap: 9px; box-shadow: 0 2px 18px rgba(0,0,0,0.18); font-family: 'Barlow Semi Condensed', sans-serif; color: var(--cs-ink); box-sizing: border-box; }
+.cs-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; border-bottom: 2.5px solid var(--cs-ink); padding-bottom: 6px; }
+.cs-brand { display: flex; align-items: center; gap: 10px; }
+.cs-mark { width: 34px; height: 34px; border-radius: 50%; background: var(--cs-ink); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; line-height: 1; overflow: hidden; }
+.cs-mark b { font-family: Oswald, sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.3px; }
+.cs-mark small { font-size: 3.8px; font-weight: 700; letter-spacing: 0.35px; line-height: 1.25; text-align: center; width: 26px; margin-top: 1.5px; }
+.cs-eyebrow { font-family: Oswald, sans-serif; font-weight: 600; font-size: 9px; letter-spacing: 1.6px; color: #2E9E63; text-transform: uppercase; }
+.cs-title { margin: 0; font-family: Oswald, sans-serif; font-weight: 700; font-size: 25px; letter-spacing: -0.2px; line-height: 1; text-transform: uppercase; }
+.cs-meta { display: flex; align-items: flex-end; gap: 16px; padding-bottom: 1px; }
+.cs-blurb { font-size: 10.5px; line-height: 1.35; max-width: 236px; color: #3B3B38; }
+.cs-key { display: flex; flex-direction: column; gap: 2.5px; flex: none; font-size: 8.5px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; }
+.cs-key div { display: flex; align-items: center; gap: 4px; color: #3B3B38; }
+.cs-key i { width: 6px; height: 6px; }
+.cs-scale { display: flex; align-items: center; gap: 5px; flex: none; }
+.cs-scale span { font-size: 8.5px; font-weight: 600; letter-spacing: 0.7px; text-transform: uppercase; color: var(--cs-muted); }
+.cs-ramp { width: 96px; height: 9px; box-shadow: 0 0 0 1px rgba(0,0,0,0.22);
+  background: linear-gradient(90deg,#F68451 0%,#F9A968 19%,#FBC375 30%,#FDD283 40%,#F9E089 48%,#EDDF85 56%,#E2DE81 63%,#CCDC78 79%,#ADDB6D 100%); }
+.cs-site { text-align: right; flex: none; }
+.cs-site b { display: block; font-family: Oswald, sans-serif; font-weight: 600; font-size: 14px; line-height: 1; }
+.cs-site small { font-size: 9px; color: var(--cs-muted); letter-spacing: 0.3px; }
+
+.cs-grid { display: flex; gap: 7px; flex: 1; min-height: 0; }
+.cs-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.cs-block { display: flex; flex-direction: column; }
+
+.cs-blockhead, .cs-row { display: grid; grid-template-columns: 13px 1fr 17px 21px; align-items: center; padding: 0 3px; }
+.cs-blockhead { background: var(--cs-ink); color: var(--cs-bg); min-height: 15px; font-family: Oswald, sans-serif; letter-spacing: 0.4px; }
+.cs-blockhead .h-num { font-size: 8px; font-weight: 500; opacity: 0.55; }
+.cs-blockhead .h-pos { font-size: 10.5px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+.cs-blockhead .h-tm  { font-size: 7.5px; font-weight: 500; opacity: 0.55; text-align: center; white-space: nowrap; }
+.cs-blockhead .h-pr  { font-size: 7.5px; font-weight: 500; opacity: 0.55; text-align: right; white-space: nowrap; }
+
+.cs-row { height: var(--cs-row-h); border-bottom: 0.5px solid var(--cs-hairline); }
+.cs-row.alt { background: rgba(17,17,17,0.035); }
+.cs-rank { font-size: 8.5px; font-weight: 500; color: #8A8A82; font-variant-numeric: tabular-nums; }
+.cs-name { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-team { font-size: 8px; font-weight: 700; letter-spacing: 0.2px; text-align: center; }
+.cs-prob { font-size: 9.5px; font-weight: 700; text-align: right; padding-right: 2px; font-variant-numeric: tabular-nums; color: var(--cs-ink); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.06); }
+
+.cs-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1.5px solid var(--cs-ink); padding-top: 4px; font-size: 8.5px; letter-spacing: 0.4px; color: var(--cs-muted); text-transform: uppercase; font-weight: 600; }
+.cs-footer .tag { color: #2E9E63; }
+
+@media print {
+  @page { size: letter landscape; margin: 0; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; }
+  .cs-page-wrap { padding: 0; background: #fff; }
+  .sheet { margin: 0; box-shadow: none; }
+  .no-print { display: none; }
+  nav.nav, footer { display: none !important; }
 }
 </style>
 <script>
@@ -1446,6 +1514,18 @@ footer {
   </div>
 </div>
 
+<!-- CHEAT SHEET PAGE -->
+<div id="page-cheat-sheet" style="display:none;">
+  <div class="cs-page-wrap">
+    <div class="cs-toolbar no-print">
+      <div class="cs-toolbar-title">2026 PPR Draft Cheat Sheet &mdash; every position, one printable page.</div>
+      <button class="cs-download-btn" onclick="window.print()">Download All Position Cheat Sheet</button>
+    </div>
+    <div id="cs-loading" class="cs-loading">Loading current projections&hellip;</div>
+    <div id="cs-mount"></div>
+  </div>
+</div>
+
 <!-- ADMIN PAGE -->
 <div id="page-admin" class="admin-page" style="display:none;">
   <div id="admin-locked" class="trade-locked" style="display:none;">
@@ -1820,7 +1900,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
   var STATIC_PATH_TO_PAGE = {
     '/': 'home', '/terms': 'terms', '/privacy': 'privacy', '/contact': 'contact',
     '/account': 'account', '/signup': 'signup', '/signin': 'signin', '/upgrade': 'upgrade',
-    '/projections': 'projections', '/trade': 'trade', '/admin': 'admin', '/articles': 'articles',
+    '/projections': 'projections', '/trade': 'trade', '/cheat-sheet': 'cheat-sheet', '/admin': 'admin', '/articles': 'articles',
   };
   var path = window.location.pathname;
   var pageName = STATIC_PATH_TO_PAGE[path];
@@ -1885,7 +1965,7 @@ let currentUser = null;
 const PAGE_PATHS = {
   home: '/', terms: '/terms', privacy: '/privacy', contact: '/contact',
   account: '/account', signup: '/signup', signin: '/signin', upgrade: '/upgrade',
-  projections: '/projections', trade: '/trade', admin: '/admin', articles: '/articles',
+  projections: '/projections', trade: '/trade', 'cheat-sheet': '/cheat-sheet', admin: '/admin', articles: '/articles',
 };
 
 // Sub-tabs within the Projections page get their own real path too —
@@ -1903,12 +1983,13 @@ const PROJ_TAB_PATHS = {
 function showPage(evt, pageName, opts) {
   opts = opts || {};
   if (evt) evt.preventDefault();
-  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact, #page-upgrade')
+  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-cheat-sheet, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact, #page-upgrade')
     .forEach(el => el.style.display = 'none');
   document.getElementById('page-' + pageName).style.display = 'block';
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (pageName === 'projections') refreshProjectionsGate();
   if (pageName === 'trade') refreshTradeGate();
+  if (pageName === 'cheat-sheet') refreshCheatSheetPage();
   if (pageName === 'admin') refreshAdminGate();
   if (pageName === 'account') renderAccountPage();
 
@@ -7066,6 +7147,208 @@ function routeFromLocation() {
 window.addEventListener('popstate', function () {
   routeFromLocation();
 });
+
+// ==================== CHEAT SHEET (design handoff) ====================
+// heat-scale.js, copied verbatim per the design handoff instructions —
+// "copy this file verbatim; do not re-derive the colors."
+const HEAT_STOPS = [
+  [30, [246, 132, 81]],
+  [38, [249, 169, 104]],
+  [43, [251, 193, 120]],
+  [44, [252, 196, 123]],
+  [45, [252, 201, 125]],
+  [46, [252, 206, 128]],
+  [47, [253, 210, 131]],
+  [51, [250, 224, 138]],
+  [54, [241, 223, 135]],
+  [55, [237, 223, 133]],
+  [56, [233, 222, 132]],
+  [57, [229, 222, 131]],
+  [59, [222, 221, 128]],
+  [71, [180, 218, 111]],
+  [73, [173, 219, 109]]
+];
+const HEAT_MIN = 1;
+const HEAT_MAX = 73;
+function heatColor(pct) {
+  const p = Math.max(HEAT_MIN, Math.min(HEAT_MAX, pct));
+  const v = 30 + (p - HEAT_MIN) * (HEAT_MAX - 30) / (HEAT_MAX - HEAT_MIN);
+  let i = 0;
+  while (i < HEAT_STOPS.length - 2 && v > HEAT_STOPS[i + 1][0]) i++;
+  const a = HEAT_STOPS[i], b = HEAT_STOPS[i + 1];
+  const f = (v - a[0]) / (b[0] - a[0]);
+  const c = a[1].map((x, k) => Math.round(x + (b[1][k] - x) * f));
+  return "rgb(" + c.join(",") + ")";
+}
+function teamColor(abbr, top12, bottom12) {
+  if (top12.indexOf(abbr) >= 0) return "#1F8F5B";
+  if (bottom12.indexOf(abbr) >= 0) return "#C4463A";
+  return "#6C6C66";
+}
+
+// Reference renderer, copied near-verbatim from cheat-sheet-reference.html.
+function csShortName(full) {
+  const parts = String(full).trim().split(/\s+/);
+  if (parts.length < 2) return full;
+  return parts[0][0] + ". " + parts.slice(1).join(" ");
+}
+
+function csLayoutColumns(positions, nCols) {
+  const totalRows = positions.reduce((n, p) => n + p.players.length, 0);
+  for (let per = Math.ceil((totalRows + positions.length) / nCols); per < totalRows; per++) {
+    const cols = [];
+    let col = { blocks: [], used: 0 };
+    let ok = true;
+    for (const pos of positions) {
+      let i = 0, cont = false;
+      while (i < pos.players.length) {
+        if (col.used + 2 > per) {
+          cols.push(col); col = { blocks: [], used: 0 };
+          if (cols.length >= nCols) { ok = false; break; }
+        }
+        const room = per - col.used - 1;
+        const take = Math.min(room, pos.players.length - i);
+        col.blocks.push({
+          title: pos.label + (cont ? " cont." : ""),
+          rows: pos.players.slice(i, i + take)
+        });
+        col.used += take + 1;
+        i += take;
+        cont = true;
+      }
+      if (!ok) break;
+    }
+    if (!ok) continue;
+    if (col.blocks.length) cols.push(col);
+    if (cols.length <= nCols) {
+      while (cols.length < nCols) cols.push({ blocks: [] });
+      return cols;
+    }
+  }
+  return null;
+}
+
+function renderCheatSheet(mount, data, opts) {
+  opts = opts || {};
+  const nCols = opts.columns || 8;
+  const cols = csLayoutColumns(data.positions, nCols);
+  const total = data.positions.reduce((n, p) => n + p.players.length, 0);
+  const counts = data.positions.map(p => p.label + " " + p.players.length).join(" · ");
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const colHTML = cols.map(col => {
+    const blocks = col.blocks.map(blk => {
+      const rows = blk.rows.map((pl) => {
+        const rank = data.positions
+          .find(p => blk.title.indexOf(p.label) === 0).players.indexOf(pl) + 1;
+        return '<div class="cs-row' + (rank % 2 === 0 ? ' alt' : '') + '">' +
+          '<span class="cs-rank">' + rank + '</span>' +
+          '<span class="cs-name">' + esc(csShortName(pl.name)) + '</span>' +
+          '<span class="cs-team" style="color:' + teamColor(pl.team, data.top12, data.bottom12) + '">' + esc(pl.team) + '</span>' +
+          '<span class="cs-prob" style="background:' + heatColor(pl.prob) + '">' + pl.prob + '%</span>' +
+        '</div>';
+      }).join("");
+      return '<div class="cs-block">' +
+        '<div class="cs-blockhead"><span class="h-num">#</span>' +
+        '<span class="h-pos">' + esc(blk.title) + '</span>' +
+        '<span class="h-tm">TM</span><span class="h-pr">PROB</span></div>' + rows + '</div>';
+    }).join("");
+    return '<div class="cs-col">' + blocks + '</div>';
+  }).join("");
+
+  mount.innerHTML =
+    '<div class="sheet">' +
+      '<header class="cs-header">' +
+        '<div class="cs-brand">' +
+          '<div class="cs-mark"><b>P/R</b><small>FANTASY<br>FOOTBALL</small></div>' +
+          '<div>' +
+            '<div class="cs-eyebrow">Process / Results &nbsp;·&nbsp; Season Long</div>' +
+            '<h1 class="cs-title">' + esc(opts.title || "2026 PPR Draft Cheat Sheet") + '</h1>' +
+          '</div>' +
+        '</div>' +
+        '<div class="cs-meta">' +
+          '<div class="cs-blurb">Every number is the probability that the player finishes the season inside the top 12 at his position, from our implied-total superforecasting model.</div>' +
+          '<div class="cs-key">' +
+            '<div><i style="background:#1F8F5B"></i><span>Top 12 implied total</span></div>' +
+            '<div><i style="background:#C4463A"></i><span>Bottom 12 (21&ndash;32)</span></div>' +
+          '</div>' +
+          '<div class="cs-scale"><span>Low</span><div class="cs-ramp"></div><span>High</span></div>' +
+          '<div class="cs-site"><b>prffball.com</b><small>Updated ' + esc(data.updated) + '</small></div>' +
+        '</div>' +
+      '</header>' +
+      '<div class="cs-grid">' + colHTML + '</div>' +
+      '<footer class="cs-footer">' +
+        '<span>' + total + ' players · ' + esc(counts) + '</span>' +
+        '<span>Add probabilities across any group of players to project how many of them finish in the top 12</span>' +
+        '<span class="tag">Win with process over results</span>' +
+      '</footer>' +
+    '</div>';
+
+  const sheet = mount.querySelector(".sheet");
+  const grid = mount.querySelector(".cs-grid");
+  const tallest = Math.max.apply(null, cols.map(c =>
+    c.blocks.reduce((n, b) => n + b.rows.length, 0) + c.blocks.length * 0.9));
+  const avail = grid.clientHeight - (cols[0].blocks.length - 1) * 7;
+  sheet.style.setProperty("--cs-row-h", Math.min(17.4, avail / tallest) + "px");
+}
+
+// Adapter: shapes the site's real, live Season Long data into the data
+// contract above. Nothing here is hardcoded except the column count and
+// the display title — names, teams, and probabilities are 100% live.
+function buildCheatSheetDataFromLive() {
+  const POSITIONS = [
+    { key: 'QB', label: 'QB' },
+    { key: 'RB', label: 'RB' },
+    { key: 'WR', label: 'WR' },
+    { key: 'TE', label: 'TE' },
+  ];
+
+  const positions = POSITIONS.map(p => {
+    const src = publishedSeasonLong[p.key];
+    const rows = (src && src.rows) || [];
+    const players = rows
+      .slice()
+      .sort((a, b) => b.prob - a.prob)
+      .map(r => ({ name: r.player, team: r.team, prob: Math.round(r.prob) }));
+    return { key: p.key, label: p.label, players };
+  });
+
+  if (positions.some(p => p.players.length === 0)) return null; // not all four have published yet
+
+  let top12 = [], bottom12 = [];
+  if (publishedSeasonLongTotals && publishedSeasonLongTotals.rows && publishedSeasonLongTotals.rows.length > 0) {
+    const sorted = publishedSeasonLongTotals.rows.slice().sort((a, b) => b.value - a.value);
+    const abbrs = sorted.map(r => NFL_TEAM_ABBR[r.team] || r.team);
+    top12 = abbrs.slice(0, 12);
+    bottom12 = abbrs.slice(20, 32);
+  }
+
+  let updated = 'recently';
+  if (typeof publishedTimestamps !== 'undefined' && publishedTimestamps.seasonLong) {
+    const stamps = POSITIONS.map(p => publishedTimestamps.seasonLong[p.key]).filter(Boolean);
+    if (stamps.length) {
+      const latest = stamps.map(s => new Date(s)).sort((a, b) => b - a)[0];
+      updated = latest.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+  }
+
+  return { updated, top12, bottom12, positions };
+}
+
+function refreshCheatSheetPage() {
+  const loading = document.getElementById('cs-loading');
+  const mount = document.getElementById('cs-mount');
+  const data = buildCheatSheetDataFromLive();
+  if (!data) {
+    loading.textContent = 'Season Long projections for all four positions need to be published before the cheat sheet can render.';
+    loading.style.display = 'block';
+    mount.innerHTML = '';
+    return;
+  }
+  loading.style.display = 'none';
+  renderCheatSheet(mount, data, { columns: 8, title: '2026 PPR Draft Cheat Sheet' });
+}
 
 (async function initApp() {
   await loadAppState();
