@@ -1313,6 +1313,7 @@ footer {
   <div class="proj-tabs">
     <button class="proj-tab active" id="proj-tab-totals-sl" onclick="switchProjTab('totals-sl')">Season Long Team Implied Totals</button>
     <button class="proj-tab" id="proj-tab-season" onclick="switchProjTab('season')">Season Long Player Projections</button>
+    <button class="proj-tab" id="proj-tab-cheatsheet" onclick="switchProjTab('cheatsheet')">Draft Day Cheat Sheet</button>
     <button class="proj-tab" id="proj-tab-totals" onclick="switchProjTab('totals')">Weekly Team Implied Totals</button>
     <button class="proj-tab" id="proj-tab-weekly" onclick="switchProjTab('weekly')">Weekly Player Projections</button>
     <button class="proj-tab" id="proj-tab-ros" onclick="switchProjTab('ros')">Rest of Season Player Projections</button>
@@ -1347,6 +1348,17 @@ footer {
       <div class="proj-locked-sub">Once rankings or team totals are published in Admin, they'll show up here.</div>
     </div>
     <div id="proj-published-content"></div>
+  </div>
+
+  <div id="proj-cheatsheet-wrap" style="display:none;">
+    <div class="cs-page-wrap">
+      <div class="cs-toolbar no-print">
+        <div class="cs-toolbar-title">2026 PPR Draft Day Cheat Sheet &mdash; every position, one printable page.</div>
+        <button class="cs-download-btn" onclick="window.print()">Download All Position Cheat Sheet</button>
+      </div>
+      <div id="cs-loading" class="cs-loading">Loading current projections&hellip;</div>
+      <div id="cs-mount"></div>
+    </div>
   </div>
 </div>
 
@@ -1511,18 +1523,6 @@ footer {
         <div style="font-size:11px; color:#aaa; margin-top:16px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;" id="single-week-method"></div>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- CHEAT SHEET PAGE -->
-<div id="page-cheat-sheet" style="display:none;">
-  <div class="cs-page-wrap">
-    <div class="cs-toolbar no-print">
-      <div class="cs-toolbar-title">2026 PPR Draft Cheat Sheet &mdash; every position, one printable page.</div>
-      <button class="cs-download-btn" onclick="window.print()">Download All Position Cheat Sheet</button>
-    </div>
-    <div id="cs-loading" class="cs-loading">Loading current projections&hellip;</div>
-    <div id="cs-mount"></div>
   </div>
 </div>
 
@@ -1900,7 +1900,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
   var STATIC_PATH_TO_PAGE = {
     '/': 'home', '/terms': 'terms', '/privacy': 'privacy', '/contact': 'contact',
     '/account': 'account', '/signup': 'signup', '/signin': 'signin', '/upgrade': 'upgrade',
-    '/projections': 'projections', '/trade': 'trade', '/cheat-sheet': 'cheat-sheet', '/admin': 'admin', '/articles': 'articles',
+    '/projections': 'projections', '/trade': 'trade', '/admin': 'admin', '/articles': 'articles',
   };
   var path = window.location.pathname;
   var pageName = STATIC_PATH_TO_PAGE[path];
@@ -1965,7 +1965,7 @@ let currentUser = null;
 const PAGE_PATHS = {
   home: '/', terms: '/terms', privacy: '/privacy', contact: '/contact',
   account: '/account', signup: '/signup', signin: '/signin', upgrade: '/upgrade',
-  projections: '/projections', trade: '/trade', 'cheat-sheet': '/cheat-sheet', admin: '/admin', articles: '/articles',
+  projections: '/projections', trade: '/trade', admin: '/admin', articles: '/articles',
 };
 
 // Sub-tabs within the Projections page get their own real path too —
@@ -1975,6 +1975,7 @@ const PAGE_PATHS = {
 const PROJ_TAB_PATHS = {
   'totals-sl': '/projections',
   'season': '/projections/season-long-players',
+  'cheatsheet': '/projections/cheat-sheet',
   'totals': '/projections/weekly-totals',
   'weekly': '/projections/weekly-players',
   'ros': '/projections/ros-players',
@@ -1983,13 +1984,12 @@ const PROJ_TAB_PATHS = {
 function showPage(evt, pageName, opts) {
   opts = opts || {};
   if (evt) evt.preventDefault();
-  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-cheat-sheet, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact, #page-upgrade')
+  document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact, #page-upgrade')
     .forEach(el => el.style.display = 'none');
   document.getElementById('page-' + pageName).style.display = 'block';
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (pageName === 'projections') refreshProjectionsGate();
   if (pageName === 'trade') refreshTradeGate();
-  if (pageName === 'cheat-sheet') refreshCheatSheetPage();
   if (pageName === 'admin') refreshAdminGate();
   if (pageName === 'account') renderAccountPage();
 
@@ -2359,9 +2359,17 @@ let activeProjTab = 'totals-sl';
 function refreshProjectionsGate() {
   const locked = document.getElementById('proj-locked');
   const contentWrap = document.getElementById('proj-content-wrap');
+  const cheatsheetWrap = document.getElementById('proj-cheatsheet-wrap');
   if (contentUnlocked()) {
     locked.style.display = 'none';
+    if (activeProjTab === 'cheatsheet') {
+      contentWrap.style.display = 'none';
+      cheatsheetWrap.style.display = 'block';
+      refreshCheatSheetPage();
+      return;
+    }
     contentWrap.style.display = 'block';
+    cheatsheetWrap.style.display = 'none';
     if (activeProjTab === 'totals') {
       document.getElementById('proj-totals-week-row').style.display = 'flex';
       populateTotalsWeekSelect();
@@ -2370,6 +2378,7 @@ function refreshProjectionsGate() {
   } else {
     locked.style.display = 'block';
     contentWrap.style.display = 'none';
+    cheatsheetWrap.style.display = 'none';
   }
 }
 
@@ -2378,7 +2387,7 @@ let activeWeeklyPosition = 'QB';
 function switchProjTab(tab, opts) {
   opts = opts || {};
   activeProjTab = tab;
-  ['totals', 'totals-sl', 'weekly', 'season', 'ros'].forEach(t => {
+  ['totals', 'totals-sl', 'weekly', 'season', 'ros', 'cheatsheet'].forEach(t => {
     document.getElementById('proj-tab-' + t).classList.toggle('active', t === tab);
   });
   document.getElementById('proj-weekly-subtabs').style.display = (tab === 'weekly' || tab === 'season' || tab === 'ros') ? 'flex' : 'none';
@@ -2386,7 +2395,14 @@ function switchProjTab(tab, opts) {
   document.getElementById('proj-weekly-week-row').style.display = (tab === 'weekly') ? 'flex' : 'none';
   if (tab === 'totals') populateTotalsWeekSelect();
   if (tab === 'weekly') populateWeeklyProjWeekSelect();
-  renderProjectionsPage();
+
+  document.getElementById('proj-content-wrap').style.display = (tab === 'cheatsheet') ? 'none' : 'block';
+  document.getElementById('proj-cheatsheet-wrap').style.display = (tab === 'cheatsheet') ? 'block' : 'none';
+  if (tab === 'cheatsheet') {
+    refreshCheatSheetPage();
+  } else {
+    renderProjectionsPage();
+  }
 
   if (!opts.skipPush) {
     const path = PROJ_TAB_PATHS[tab] || '/projections';
@@ -7264,7 +7280,7 @@ function renderCheatSheet(mount, data, opts) {
           '<div class="cs-mark"><b>P/R</b><small>FANTASY<br>FOOTBALL</small></div>' +
           '<div>' +
             '<div class="cs-eyebrow">Process / Results &nbsp;·&nbsp; Season Long</div>' +
-            '<h1 class="cs-title">' + esc(opts.title || "2026 PPR Draft Cheat Sheet") + '</h1>' +
+            '<h1 class="cs-title">' + esc(opts.title || "2026 PPR Draft Day Cheat Sheet") + '</h1>' +
           '</div>' +
         '</div>' +
         '<div class="cs-meta">' +
@@ -7347,7 +7363,7 @@ function refreshCheatSheetPage() {
     return;
   }
   loading.style.display = 'none';
-  renderCheatSheet(mount, data, { columns: 8, title: '2026 PPR Draft Cheat Sheet' });
+  renderCheatSheet(mount, data, { columns: 8, title: '2026 PPR Draft Day Cheat Sheet' });
 }
 
 (async function initApp() {
