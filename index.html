@@ -736,7 +736,7 @@ footer {
 .cs-download-btn:hover { background: #2E9E63; }
 .cs-loading { max-width: 11in; margin: 40px auto; text-align: center; font-family: 'Lato', sans-serif; color: #888; }
 
-.sheet { width: 11in; height: 8.5in; margin: 0 auto; padding: 0.26in 0.28in 0.2in; background: var(--cs-bg); display: flex; flex-direction: column; gap: 9px; box-shadow: 0 2px 18px rgba(0,0,0,0.18); font-family: 'Barlow Semi Condensed', sans-serif; color: var(--cs-ink); box-sizing: border-box; }
+.sheet { width: 11in; height: 8.5in; margin: 0 auto; padding: 0.26in 0.28in 0.2in; background: var(--cs-bg); display: flex; flex-direction: column; gap: 9px; box-shadow: 0 2px 18px rgba(0,0,0,0.18); font-family: 'Barlow Semi Condensed', sans-serif; color: var(--cs-ink); box-sizing: border-box; overflow: hidden; }
 .cs-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; border-bottom: 2.5px solid var(--cs-ink); padding-bottom: 6px; }
 .cs-brand { display: flex; align-items: center; gap: 10px; }
 .cs-mark { width: 34px; height: 34px; border-radius: 50%; background: var(--cs-ink); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; line-height: 1; overflow: hidden; }
@@ -782,10 +782,11 @@ footer {
   @page { size: letter landscape; margin: 0; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { background: #fff; }
+  .proj-page { padding: 0 !important; }
   .cs-page-wrap { padding: 0; background: #fff; }
   .sheet { margin: 0; box-shadow: none; }
   .no-print { display: none; }
-  nav.nav, footer { display: none !important; }
+  nav.nav, footer, .proj-header, .proj-tabs { display: none !important; }
 }
 </style>
 <script>
@@ -811,6 +812,7 @@ footer {
       <div class="nav-dropdown">
         <a href="#" onclick="goToProjectionsTab(event,'totals-sl')">Season Long Team Implied Totals</a>
         <a href="#" onclick="goToProjectionsTab(event,'season')">Season Long Player Projections</a>
+        <a href="#" onclick="goToProjectionsTab(event,'cheatsheet')">Draft Cheat Sheet</a>
         <a href="#" onclick="goToProjectionsTab(event,'totals')">Weekly Team Implied Totals</a>
         <a href="#" onclick="goToProjectionsTab(event,'weekly')">Weekly Player Projections</a>
         <a href="#" onclick="goToProjectionsTab(event,'ros')">Rest of Season Projections</a>
@@ -1313,7 +1315,7 @@ footer {
   <div class="proj-tabs">
     <button class="proj-tab active" id="proj-tab-totals-sl" onclick="switchProjTab('totals-sl')">Season Long Team Implied Totals</button>
     <button class="proj-tab" id="proj-tab-season" onclick="switchProjTab('season')">Season Long Player Projections</button>
-    <button class="proj-tab" id="proj-tab-cheatsheet" onclick="switchProjTab('cheatsheet')">Draft Day Cheat Sheet</button>
+    <button class="proj-tab" id="proj-tab-cheatsheet" onclick="switchProjTab('cheatsheet')">Draft Cheat Sheet</button>
     <button class="proj-tab" id="proj-tab-totals" onclick="switchProjTab('totals')">Weekly Team Implied Totals</button>
     <button class="proj-tab" id="proj-tab-weekly" onclick="switchProjTab('weekly')">Weekly Player Projections</button>
     <button class="proj-tab" id="proj-tab-ros" onclick="switchProjTab('ros')">Rest of Season Player Projections</button>
@@ -1353,7 +1355,7 @@ footer {
   <div id="proj-cheatsheet-wrap" style="display:none;">
     <div class="cs-page-wrap">
       <div class="cs-toolbar no-print">
-        <div class="cs-toolbar-title">2026 PPR Draft Day Cheat Sheet &mdash; every position, one printable page.</div>
+        <div class="cs-toolbar-title">2026 PPR Draft Cheat Sheet &mdash; every position, one printable page.</div>
         <button class="cs-download-btn" onclick="window.print()">Download All Position Cheat Sheet</button>
       </div>
       <div id="cs-loading" class="cs-loading">Loading current projections&hellip;</div>
@@ -7216,6 +7218,13 @@ function csLayoutColumns(positions, nCols) {
     let col = { blocks: [], used: 0 };
     let ok = true;
     for (const pos of positions) {
+      // Each new position always starts at the top of a fresh column —
+      // only "cont." overflow blocks within the SAME position are ever
+      // allowed to stack under a previous block in that column.
+      if (col.blocks.length > 0) {
+        cols.push(col); col = { blocks: [], used: 0 };
+        if (cols.length >= nCols) { ok = false; break; }
+      }
       let i = 0, cont = false;
       while (i < pos.players.length) {
         if (col.used + 2 > per) {
@@ -7280,7 +7289,7 @@ function renderCheatSheet(mount, data, opts) {
           '<div class="cs-mark"><b>P/R</b><small>FANTASY<br>FOOTBALL</small></div>' +
           '<div>' +
             '<div class="cs-eyebrow">Process / Results &nbsp;·&nbsp; Season Long</div>' +
-            '<h1 class="cs-title">' + esc(opts.title || "2026 PPR Draft Day Cheat Sheet") + '</h1>' +
+            '<h1 class="cs-title">' + esc(opts.title || "2026 PPR Draft Cheat Sheet") + '</h1>' +
           '</div>' +
         '</div>' +
         '<div class="cs-meta">' +
@@ -7305,8 +7314,11 @@ function renderCheatSheet(mount, data, opts) {
   const grid = mount.querySelector(".cs-grid");
   const tallest = Math.max.apply(null, cols.map(c =>
     c.blocks.reduce((n, b) => n + b.rows.length, 0) + c.blocks.length * 0.9));
-  const avail = grid.clientHeight - (cols[0].blocks.length - 1) * 7;
-  sheet.style.setProperty("--cs-row-h", Math.min(17.4, avail / tallest) + "px");
+  const maxBlocksInAnyColumn = Math.max.apply(null, cols.map(c => c.blocks.length));
+  const avail = grid.clientHeight - Math.max(0, maxBlocksInAnyColumn - 1) * 7;
+  // Small safety margin so a near-exact fit never tips over into a second
+  // printed page — better to be a hair smaller than to overflow.
+  sheet.style.setProperty("--cs-row-h", Math.min(17.4, (avail / tallest) * 0.99) + "px");
 }
 
 // Adapter: shapes the site's real, live Season Long data into the data
@@ -7363,7 +7375,7 @@ function refreshCheatSheetPage() {
     return;
   }
   loading.style.display = 'none';
-  renderCheatSheet(mount, data, { columns: 8, title: '2026 PPR Draft Day Cheat Sheet' });
+  renderCheatSheet(mount, data, { columns: 8, title: '2026 PPR Draft Cheat Sheet' });
 }
 
 (async function initApp() {
