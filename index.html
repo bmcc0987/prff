@@ -3088,6 +3088,22 @@ function applyNumbersModeDatalists() {
 // This replaces that native behavior with a simple custom dropdown while
 // Numbers Mode is on, showing the FULL list every time regardless of
 // what's currently in the box.
+// Sorts shorthand codes like "QB6" the way a person expects: grouped by
+// position (QB, then RB, then WR, then TE) and numeric within each
+// position — not string-sorted, which would put "RB10" before "RB2".
+const SHORTHAND_POS_ORDER = ['QB', 'RB', 'WR', 'TE'];
+function compareShorthand(a, b) {
+  const parse = s => {
+    const m = s.match(/^([A-Za-z]+)(\d+)$/);
+    return m ? { pos: m[1], rank: parseInt(m[2], 10) } : { pos: s, rank: 0 };
+  };
+  const pa = parse(a), pb = parse(b);
+  const ia = SHORTHAND_POS_ORDER.indexOf(pa.pos);
+  const ib = SHORTHAND_POS_ORDER.indexOf(pb.pos);
+  if (ia !== ib) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  return pa.rank - pb.rank;
+}
+
 function getNumbersModeListForInput(input) {
   const rosterMatch = input.closest('[id^="trade-team"][id*="-roster-"]');
   if (rosterMatch) {
@@ -3096,7 +3112,19 @@ function getNumbersModeListForInput(input) {
     if (groupKey === 'BENCH') return buildShorthandOptions(['QB', 'RB', 'WR', 'TE']);
     if (NUMBERS_MODE_POSITION_COUNTS[groupKey]) return buildShorthandOptions([groupKey]);
   }
-  // Offer rows (not tied to one position) — offer the full combined list.
+  // Offer rows (not tied to one position) — only offer shorthand codes for
+  // players already entered in that side's Rest of Roster fields above,
+  // same restriction the real-name datalist (rostered-players-<side>)
+  // already applies when Numbers Mode is off.
+  const side = input.dataset.side;
+  if (side) {
+    const codes = new Set();
+    document.querySelectorAll('#trade-team' + side + '-roster-rows .trade-input').forEach(rosterInput => {
+      const val = rosterInput.value.trim().toUpperCase();
+      if (val) codes.add(val);
+    });
+    return Array.from(codes).sort(compareShorthand);
+  }
   return buildShorthandOptions(['QB', 'RB', 'WR', 'TE']);
 }
 
@@ -3113,6 +3141,11 @@ function showNumbersModeDropdown(input) {
   dropdown.style.top = (rect.bottom + window.scrollY + 2) + 'px';
   dropdown.style.width = Math.max(rect.width, 100) + 'px';
   dropdown.style.display = 'block';
+  // This one dropdown element is reused for every input, so without this
+  // it opens still scrolled to wherever the LAST input left it (e.g. RB9
+  // because you'd scrolled down filling in RB6 a moment ago) instead of
+  // fresh at the top of the new list.
+  dropdown.scrollTop = 0;
   numbersModeDropdownTarget = input;
 }
 
@@ -3771,6 +3804,7 @@ async function runSingleWeekBootstrap(nameA, nameB, pairsA, pairsB, winnerName, 
 // Roster fields — the offer boxes aren't used at all here, since this is
 // for comparing two teams generally, not evaluating a specific trade.
 async function analyzeTeams() {
+  document.getElementById('startsit-result').style.display = 'none';
   const rosterAGroups = playersByGroupFromRoster('A');
   const rosterBGroups = playersByGroupFromRoster('B');
   const nameA = document.getElementById('trade-teamA-name').value.trim() || 'Team A';
@@ -3953,6 +3987,7 @@ async function runStartSitDecision() {
 
 
 async function analyzeTrade() {
+  document.getElementById('startsit-result').style.display = 'none';
   const offeredA = namesFromContainer('trade-teamA-rows');   // players Team A gives up
   const offeredB = namesFromContainer('trade-teamB-rows');   // players Team B gives up
   const rosterAGroups = playersByGroupFromRoster('A');
