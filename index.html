@@ -452,9 +452,15 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 #auth-gate-blur, #auth-gate-modal { display: none; }
 body.auth-gate-open #auth-gate-blur { display: block; }
 body.auth-gate-open #auth-gate-modal { display: flex; }
-
+/* The nav bar itself (position:sticky + z-index) forms its own stacking
+   context, so its z-index:100 normally caps EVERYTHING inside it — including
+   the Projections dropdown menu — well below the blur overlay. While the
+   gate is open, lift the nav above the blur (but still under the modal) so
+   an open dropdown renders on top of the blur and stays clickable; the rest
+   of the time nav keeps its normal z-index:100. */
+body.auth-gate-open nav.nav { z-index: 9998; }
 #auth-gate-blur {
-  position: fixed; left: 0; right: 0; top: var(--nav-height); bottom: 0; z-index: 9998;
+  position: fixed; left: 0; right: 0; top: var(--nav-height); bottom: 0; z-index: 9997;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   background: rgba(20,20,20,0.28);
 }
@@ -910,7 +916,7 @@ footer {
 <div id="auth-gate-modal">
   <div class="auth-gate-box">
     <div class="auth-gate-title">🔒 Create a Free Account to Continue</div>
-    <div class="auth-gate-sub">This feature is free with an account — create one or sign in to keep going.</div>
+    <div class="auth-gate-sub">This feature is free with an account until 9/9/26 — create one or sign in to keep going. Upgrade to Pro to access all features of the site all season long!</div>
     <div class="locked-actions">
       <a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,'signup')">Create Free Account</a>
       <a class="locked-signin-link" href="#" onclick="hideAuthGate(); showPage(event,'signin')">Sign In</a>
@@ -2123,7 +2129,7 @@ let pendingGateArticleId = null;
 const AUTH_GATE_CONTENT = {
   signin: {
     title: '🔒 Create a Free Account to Continue',
-    sub: 'This feature is free with an account — create one or sign in to keep going.',
+    sub: 'This feature is free with an account until 9/9/26 — create one or sign in to keep going. Upgrade to Pro to access all features of the site all season long!',
     buttonsHTML: '<a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,\'signup\')">Create Free Account</a>' +
                  '<a class="locked-signin-link" href="#" onclick="hideAuthGate(); showPage(event,\'signin\')">Sign In</a>',
   },
@@ -2953,7 +2959,7 @@ function refreshSignupPageCopy() {
   if (!titleEl || !subEl) return;
   if (pendingGatePage === 'upgrade') {
     titleEl.textContent = 'Create your FREE account first';
-    subEl.textContent = "Then we'll take you straight to the Pro upgrade page — no need to sign up twice.";
+    subEl.textContent = "Then we'll take you straight to the Pro upgrade page.";
   } else {
     titleEl.textContent = 'Create your FREE account';
     subEl.textContent = 'Join Process/Results to unlock articles and projections.';
