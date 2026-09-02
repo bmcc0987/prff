@@ -425,19 +425,23 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .locked-signin-link { font-family: 'Lato', sans-serif; font-size: 13px; color: #555; text-decoration: underline; }
 .locked-signin-link:hover { color: #111; }
 
-/* AUTH GATE: shown when a signed-out visitor tries to use a gated feature
-   (Projections, Trade/Team Analyzer, an article). Two pieces, both direct
-   children of <body> so they sit above everything as fixed overlays:
-     - #auth-gate-blur: covers only the BOTTOM half of the viewport (top:50%
-       to the bottom) with a frosted blur. It's position:fixed, so it always
-       covers the bottom half of whatever is currently on screen, even as
-       the visitor scrolls the real page underneath — the top half of the
-       viewport stays fully visible and untouched.
-     - #auth-gate-modal: the "create an account" card, centered on screen.
-       There is deliberately no close button and no click-outside-to-dismiss
-       — a signed-out visitor can navigate elsewhere via the (unblurred,
-       still-clickable) nav bar, but cannot dismiss the gate and keep using
-       the page while signed out.
+/* AUTH GATE: shown when a signed-out (or, post-paywall, signed-in-but-not-
+   Pro) visitor tries to use a gated feature (Projections, Trade/Team
+   Analyzer, an article). The real page renders normally underneath for
+   everyone — see refreshProjectionsGate()/refreshTradeGate() — and these
+   two pieces, both direct children of <body> so they sit above everything
+   as fixed overlays, are what actually block it:
+     - #auth-gate-blur: covers the bottom 75% of the viewport (from 25% down
+       to the bottom) with a frosted blur, leaving only the top 25% (nav +
+       page header) clear. It's position:fixed, so it always covers that
+       same bottom 75% of whatever is currently on screen, even as the
+       visitor scrolls the real page underneath.
+     - #auth-gate-modal: the gate card, vertically centered ON the 25% line
+       (so it straddles the clear/blurred boundary) and horizontally
+       centered. There is deliberately no close button and no
+       click-outside-to-dismiss — a signed-out visitor can navigate
+       elsewhere via the (unblurred, still-clickable) nav bar, but cannot
+       dismiss the gate and keep using the page itself while blocked.
    Both are toggled purely by the body.auth-gate-open class (see
    showAuthGate()/hideAuthGate() in JS) so there's a single source of truth
    for open/closed state. */
@@ -446,13 +450,14 @@ body.auth-gate-open #auth-gate-blur { display: block; }
 body.auth-gate-open #auth-gate-modal { display: flex; }
 
 #auth-gate-blur {
-  position: fixed; left: 0; right: 0; top: 50%; bottom: 0; z-index: 9998;
+  position: fixed; left: 0; right: 0; top: 25%; bottom: 0; z-index: 9998;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   background: rgba(20,20,20,0.28);
 }
 #auth-gate-modal {
-  position: fixed; inset: 0; z-index: 9999; align-items: center; justify-content: center;
-  padding: 20px; pointer-events: none; /* let clicks reach the unblurred top half / nav */
+  position: fixed; left: 0; right: 0; top: 25%; z-index: 9999;
+  justify-content: center; transform: translateY(-50%);
+  padding: 20px; pointer-events: none; /* let clicks reach the unblurred top quarter / nav */
 }
 .auth-gate-box {
   pointer-events: auto; background: white; border-radius: 16px; padding: 40px 32px 32px;
@@ -939,7 +944,7 @@ footer {
     <div id="hero-subscribe-cta">
       <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
         <a id="hero-create-account-btn" class="btn-subscribe" href="#" onclick="showPage(event,'signup')">Create Free Account</a>
-        <a class="btn-go-pro" href="#" onclick="goToUpgrade(event)">Go Pro</a>
+        <a id="hero-go-pro-btn" class="btn-go-pro" href="#" onclick="goToUpgrade(event)">Go Pro</a>
       </div>
       <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free to use with a free subscription account until September 9, 2026 (day 1 of the NFL season). Go Pro to access all functions of the site all season long!</p>
     </div>
@@ -1415,7 +1420,7 @@ footer {
     <div class="cs-page-wrap">
       <div class="cs-toolbar no-print">
         <div class="cs-toolbar-title">2026 PPR Draft Cheat Sheet &mdash; every position, one printable page.</div>
-        <button class="cs-download-btn" onclick="window.print()">Download All Position Cheat Sheet</button>
+        <button class="cs-download-btn" onclick="downloadCheatSheetAllPositions()">Download All Position Cheat Sheet</button>
       </div>
       <div id="cs-loading" class="cs-loading">Loading current projections&hellip;</div>
       <div id="cs-mount"></div>
@@ -2077,13 +2082,32 @@ function contentUnlocked() {
   return !isPaywallActive() || !!currentUser.isPro;
 }
 
-// Blur-the-bottom-half-and-pop-up-a-modal gate for signed-out visitors who
-// try to use any gated feature (Projections, Trade/Team Analyzer, Start/Sit,
-// reading an article). Signed-in-but-not-Pro visitors after the paywall
-// cutoff are NOT shown this modal — they already have an account, so they
-// see the in-page "Go Pro" panel instead (see refreshProjectionsGate /
-// refreshTradeGate).
-// Remembers the last gated page a signed-out visitor was blocked from, so
+// Downloading real data (a projections/cheat-sheet CSV or PDF export) is
+// held to the same bar as viewing the page it lives on — an account is
+// required now, and specifically a Pro account once the Sept 9 paywall is
+// active — via the exact same contentUnlocked() rule. Admins bypass this:
+// a couple of these export functions are shared with the Admin bulk-export
+// tool, and an admin using their own tool shouldn't need a Pro flag on top
+// of admin access. Call this at the top of any download/export handler;
+// it pops the auth-gate modal and returns false if the visitor isn't
+// allowed, so the caller should bail out without downloading anything.
+function requireDownloadAccess() {
+  if (currentUser && currentUser.isAdmin) return true;
+  if (contentUnlocked()) return true;
+  showAuthGate(currentUser ? 'upgrade' : 'signin');
+  return false;
+}
+
+// Blur-the-bottom-3/4-and-pop-up-a-modal gate for anyone who tries to use a
+// gated feature (Projections, Trade/Team Analyzer, Start/Sit, reading an
+// article) without the access it currently requires. The real page renders
+// normally underneath for every visitor — this overlay is what actually
+// blocks using it, not a swapped-in "locked" placeholder. Two messages,
+// chosen by the `mode` argument to showAuthGate():
+//   - 'signin' (not signed in at all — needs SOME account, free is enough)
+//   - 'upgrade' (signed in with a free account, but the Sept 9 paywall is
+//     active — needs Pro specifically)
+// Remembers the last gated page/article a visitor was blocked from, so
 // handleSignup()/handleSignin() can send them back there instead of just
 // dumping them on the homepage after they create an account or sign in.
 let pendingGatePage = null;
@@ -2091,14 +2115,35 @@ let pendingGatePage = null;
 // back needs the article's id, not just a page name (see refreshArticleGate).
 let pendingGateArticleId = null;
 
-// Both showAuthGate() and hideAuthGate() do nothing but toggle this one
-// class — #auth-gate-blur and #auth-gate-modal show/hide purely off of it
-// (see the AUTH GATE stylesheet comment), so there's one source of truth.
-// There is intentionally no "toggle" or "close" helper: the gate only ever
-// closes because the visitor is now allowed in (contentUnlocked() /
-// currentUser became true) or because they navigated to an ungated page —
-// never because they dismissed it while still signed out.
-function showAuthGate() {
+const AUTH_GATE_CONTENT = {
+  signin: {
+    title: '🔒 Create a Free Account to Continue',
+    sub: 'This feature is free with an account — create one or sign in to keep going.',
+    buttonsHTML: '<a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,\'signup\')">Create Free Account</a>' +
+                 '<a class="locked-signin-link" href="#" onclick="hideAuthGate(); showPage(event,\'signin\')">Sign In</a>',
+  },
+  upgrade: {
+    title: '🔒 Go Pro to Keep Going',
+    sub: 'Your free access to this feature ended September 9 — go Pro to keep using it all season long.',
+    buttonsHTML: '<a class="btn-pro" href="#" onclick="hideAuthGate(); goToUpgrade(event)">Go Pro →</a>',
+  },
+};
+
+// showAuthGate()/hideAuthGate() toggle one class — #auth-gate-blur and
+// #auth-gate-modal show/hide purely off of it (see the AUTH GATE stylesheet
+// comment) — plus, for showAuthGate(), fill in the right title/sub/buttons
+// for the given mode. There is intentionally no "toggle" or "close" helper:
+// the gate only ever closes because the visitor is now allowed in
+// (contentUnlocked() became true) or because they navigated to an ungated
+// page — never because they dismissed it while still blocked.
+function showAuthGate(mode) {
+  const content = AUTH_GATE_CONTENT[mode] || AUTH_GATE_CONTENT.signin;
+  const titleEl = document.querySelector('#auth-gate-modal .auth-gate-title');
+  const subEl = document.querySelector('#auth-gate-modal .auth-gate-sub');
+  const actionsEl = document.querySelector('#auth-gate-modal .locked-actions');
+  if (titleEl) titleEl.textContent = content.title;
+  if (subEl) subEl.textContent = content.sub;
+  if (actionsEl) actionsEl.innerHTML = content.buttonsHTML;
   document.body.classList.add('auth-gate-open');
 }
 function hideAuthGate() {
@@ -2196,7 +2241,16 @@ function goToAccount(evt) {
 
 function goToUpgrade(evt) {
   if (evt) evt.preventDefault();
-  if (!currentUser) { showPage(null, 'signup'); return; }
+  if (!currentUser) {
+    // "Go Pro" while signed out first needs an account — but instead of
+    // dropping them on the homepage like a normal sign-up would, send them
+    // straight on to the upgrade/payment page once that account exists, so
+    // creating an account and going Pro reads as one continuous flow.
+    pendingGatePage = 'upgrade';
+    pendingGateArticleId = null;
+    showPage(null, 'signup');
+    return;
+  }
   showPage(null, 'upgrade');
   renderSubscriptionSection('-upgrade');
 }
@@ -2517,18 +2571,19 @@ function goToAdmin(evt) {
 let activeProjTab = 'totals-sl';
 
 function refreshProjectionsGate() {
+  // The old in-page "locked" placeholder card is retired — the real page
+  // always renders now (see below), so it stays permanently hidden and the
+  // auth-gate blur+modal overlay is the only thing that actually gates it.
   const locked = document.getElementById('proj-locked');
+  if (locked) locked.style.display = 'none';
+
   const contentWrap = document.getElementById('proj-content-wrap');
   const cheatsheetWrap = document.getElementById('proj-cheatsheet-wrap');
-  if (contentUnlocked()) {
-    hideAuthGate();
-    locked.style.display = 'none';
-    if (activeProjTab === 'cheatsheet') {
-      contentWrap.style.display = 'none';
-      cheatsheetWrap.style.display = 'block';
-      refreshCheatSheetPage();
-      return;
-    }
+  if (activeProjTab === 'cheatsheet') {
+    contentWrap.style.display = 'none';
+    cheatsheetWrap.style.display = 'block';
+    refreshCheatSheetPage();
+  } else {
     contentWrap.style.display = 'block';
     cheatsheetWrap.style.display = 'none';
     if (activeProjTab === 'totals') {
@@ -2536,31 +2591,18 @@ function refreshProjectionsGate() {
       populateTotalsWeekSelect();
     }
     renderProjectionsPage();
+  }
+
+  if (contentUnlocked()) {
+    hideAuthGate();
+  } else if (currentUser) {
+    // Signed in with a free account, but the paywall has kicked in.
+    showAuthGate('upgrade');
   } else {
-    locked.style.display = 'block';
-    contentWrap.style.display = 'none';
-    cheatsheetWrap.style.display = 'none';
-    const titleEl = locked.querySelector('.proj-locked-title');
-    const subEl = locked.querySelector('.proj-locked-sub');
-    const signupLinkEl = locked.querySelector('.btn-pro');
-    const signinLinkEl = locked.querySelector('.locked-signin-link');
-    if (currentUser && !currentUser.isPro) {
-      // Signed in with a free account, but the paywall has kicked in.
-      hideAuthGate();
-      titleEl.textContent = '🔒 Go Pro to view projections';
-      subEl.textContent = 'Upgrade to Pro to see this week\'s full player projections all season long.';
-      if (signupLinkEl) { signupLinkEl.textContent = 'Go Pro →'; signupLinkEl.setAttribute('onclick', 'goToUpgrade(event)'); }
-      if (signinLinkEl) signinLinkEl.style.display = 'none';
-    } else {
-      // Not signed in at all — pop the blur+modal gate on top of the panel.
-      titleEl.textContent = '🔒 Sign in to view projections';
-      subEl.textContent = 'Create a free account to see this week\'s full player projections.';
-      if (signupLinkEl) { signupLinkEl.textContent = 'Sign up free →'; signupLinkEl.setAttribute('onclick', "showPage(event,'signup')"); }
-      if (signinLinkEl) signinLinkEl.style.display = '';
-      pendingGatePage = 'projections';
-      pendingGateArticleId = null;
-      showAuthGate();
-    }
+    // Not signed in at all.
+    pendingGatePage = 'projections';
+    pendingGateArticleId = null;
+    showAuthGate('signin');
   }
 }
 
@@ -2869,6 +2911,11 @@ function redirectAfterAuth() {
   const dest = pendingGatePage; pendingGatePage = null;
   if (articleId) {
     goToArticle(articleId);
+  } else if (dest === 'upgrade') {
+    // currentUser is set by now (logIn() already ran), so this takes
+    // goToUpgrade()'s normal signed-in branch: real /upgrade page plus
+    // renderSubscriptionSection(), not just a bare showPage().
+    goToUpgrade(null);
   } else {
     showPage(null, dest || 'home');
   }
@@ -2933,21 +2980,25 @@ async function logIn(authUser) {
   updateUpgradeNavVisibility();
 }
 
-// Both the hero "Go Pro" pitch and the ticker nudge now hide only once
-// someone is an actual active Pro subscriber (via Stripe or a promo code)
-// — a signed-in Free account still sees both, since neither is true for
-// them yet.
+// The hero CTA block (#hero-subscribe-cta) itself is never hidden anymore —
+// its descriptive paragraph ("Access to all functions of the site are free
+// to use with a free subscription account until September 9, 2026...")
+// stays on the homepage for every visitor, signed in or not, free or Pro.
+// Only the two buttons above it toggle individually:
+//   - "Create Free Account": only makes sense for a visitor with no account
+//     at all, so it hides as soon as ANY account (free or Pro) is signed in.
+//   - "Go Pro": stays visible for anyone who isn't an actual Pro subscriber
+//     yet (anonymous or signed-in free) — there's nothing left to upgrade to
+//     once they already are Pro, so it hides only then.
+// The ticker nudge follows the same "hide only once actually Pro" rule.
 function updateHomepageProState() {
   const isPro = !!(currentUser && currentUser.isPro);
-  const cta = document.getElementById('hero-subscribe-cta');
   const nudge = document.getElementById('ticker-login-nudge');
   const createAcctBtn = document.getElementById('hero-create-account-btn');
-  if (cta) cta.style.display = isPro ? 'none' : 'block';
+  const goProBtn = document.getElementById('hero-go-pro-btn');
   if (nudge) nudge.style.display = isPro ? 'none' : 'block';
-  // "Create Free Account" only makes sense for a visitor with no account at
-  // all — once any account is signed in (free or Pro), hide just that button
-  // and leave "Go Pro" + the descriptive paragraph visible for free users.
   if (createAcctBtn) createAcctBtn.style.display = currentUser ? 'none' : 'inline-block';
+  if (goProBtn) goProBtn.style.display = isPro ? 'none' : 'inline-block';
 }
 
 async function logOut(evt) {
@@ -3105,46 +3156,35 @@ function seedRosterGroups(side) {
 }
 
 function refreshTradeGate() {
+  // The old in-page "locked" placeholder card is retired — the real page
+  // always renders now (see below), so it stays permanently hidden and the
+  // auth-gate blur+modal overlay is the only thing that actually gates it.
   const locked = document.getElementById('trade-locked');
+  if (locked) locked.style.display = 'none';
+
   const builder = document.getElementById('trade-builder');
+  builder.style.display = 'block';
+  populatePlayerDatalist();
+  // seed each side with two empty offer rows the first time it's opened
+  if (!document.getElementById('trade-teamA-rows').children.length) {
+    addPlayerRow('A', 'offer'); addPlayerRow('A', 'offer');
+    addPlayerRow('B', 'offer'); addPlayerRow('B', 'offer');
+    seedRosterGroups('A');
+    seedRosterGroups('B');
+    refreshRosteredPlayers('A');
+    refreshRosteredPlayers('B');
+  }
+
   if (contentUnlocked()) {
     hideAuthGate();
-    locked.style.display = 'none';
-    builder.style.display = 'block';
-    populatePlayerDatalist();
-    // seed each side with two empty offer rows the first time it's opened
-    if (!document.getElementById('trade-teamA-rows').children.length) {
-      addPlayerRow('A', 'offer'); addPlayerRow('A', 'offer');
-      addPlayerRow('B', 'offer'); addPlayerRow('B', 'offer');
-      seedRosterGroups('A');
-      seedRosterGroups('B');
-      refreshRosteredPlayers('A');
-      refreshRosteredPlayers('B');
-    }
+  } else if (currentUser) {
+    // Signed in with a free account, but the paywall has kicked in.
+    showAuthGate('upgrade');
   } else {
-    locked.style.display = 'block';
-    builder.style.display = 'none';
-    const titleEl = locked.querySelector('.trade-locked-title');
-    const subEl = locked.querySelector('.trade-locked-sub');
-    const signupLinkEl = locked.querySelector('.btn-pro');
-    const signinLinkEl = locked.querySelector('.locked-signin-link');
-    if (currentUser && !currentUser.isPro) {
-      // Signed in with a free account, but the paywall has kicked in.
-      hideAuthGate();
-      titleEl.textContent = '🔒 Go Pro to use the Trade/Team Analyzer';
-      subEl.textContent = 'Upgrade to Pro to grade trades, compare teams, and use Start/Sit all season long.';
-      if (signupLinkEl) { signupLinkEl.textContent = 'Go Pro →'; signupLinkEl.setAttribute('onclick', 'goToUpgrade(event)'); }
-      if (signinLinkEl) signinLinkEl.style.display = 'none';
-    } else {
-      // Not signed in at all — pop the blur+modal gate on top of the panel.
-      titleEl.textContent = '🔒 Sign in to use the Trade/Team Analyzer';
-      subEl.textContent = 'Create a free account to grade trades and see which side benefits.';
-      if (signupLinkEl) { signupLinkEl.textContent = 'Sign up free →'; signupLinkEl.setAttribute('onclick', "showPage(event,'signup')"); }
-      if (signinLinkEl) signinLinkEl.style.display = '';
-      pendingGatePage = 'trade';
-      pendingGateArticleId = null;
-      showAuthGate();
-    }
+    // Not signed in at all.
+    pendingGatePage = 'trade';
+    pendingGateArticleId = null;
+    showAuthGate('signin');
   }
 }
 
@@ -5314,6 +5354,7 @@ function showExportStatus(msg) {
 }
 
 function exportSeasonImpliedTotalsCSV() {
+  if (!requireDownloadAccess()) return;
   const rows = (publishedSeasonLongTotals && publishedSeasonLongTotals.rows) || [];
   if (rows.length === 0) {
     showExportStatus('No season implied totals have been published yet — nothing to export.');
@@ -5360,6 +5401,7 @@ function exportSeasonLongProjectionsCSV() {
 // the Season Long Player Projections tab of the Projections page itself —
 // exports whichever position tab (QB/WR/RB/TE) is currently active there.
 function exportSeasonLongPositionCSV() {
+  if (!requireDownloadAccess()) return;
   const pos = activeWeeklyPosition;
   const data_ = publishedSeasonLong[pos];
   if (!data_ || !data_.rows || data_.rows.length === 0) return;
@@ -7375,7 +7417,7 @@ function refreshArticleGate() {
   if (!currentUser) {
     pendingGatePage = null;
     pendingGateArticleId = currentArticleId;
-    showAuthGate();
+    showAuthGate('signin');
   } else {
     hideAuthGate();
   }
@@ -7898,6 +7940,14 @@ function refreshCheatSheetPage() {
   }
   loading.style.display = 'none';
   renderCheatSheet(mount, data, { columns: 8, title: '2026 PPR Draft Cheat Sheet' });
+}
+
+// The cheat sheet's "download" is really a browser print-to-PDF — gate it
+// the same way as the CSV exports (see requireDownloadAccess) before
+// actually opening the print dialog.
+function downloadCheatSheetAllPositions() {
+  if (!requireDownloadAccess()) return;
+  window.print();
 }
 
 // Weekly rank-cutline data (2015-2025): for each position/season/week, the sorted list of scores achieved by whoever held each rank THAT WEEK
