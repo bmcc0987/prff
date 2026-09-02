@@ -882,7 +882,7 @@ footer {
   </div>
   <div class="nav-actions" id="nav-actions-loggedout">
     <a class="nav-sign-in" href="#" onclick="showPage(event,'signin')">Sign in</a>
-    <a class="nav-cta" href="#" onclick="showPage(event,'signup')">Sign Up</a>
+    <a class="nav-cta" href="#" onclick="goToSignup(event)">Sign Up</a>
   </div>
   <div class="nav-actions" id="nav-actions-loggedin" style="display:none;">
     <a href="#" id="nav-link-upgrade" onclick="goToUpgrade(event)" style="display:none; font-family:'Lato',sans-serif; font-size:14px; font-weight:700; color:#3DB87A; text-decoration:underline; margin-right:4px;">Upgrade</a>
@@ -906,7 +906,7 @@ footer {
   <a class="mobile-nav-link" href="#" id="mobile-nav-admin" style="display:none;" onclick="closeMobileNavThen(goToAdmin, event)">Admin</a>
   <div class="mobile-nav-divider"></div>
   <a class="mobile-nav-link" href="#" id="mobile-nav-signin" onclick="closeMobileNavThen(function(e){showPage(e,'signin')}, event)">Sign in</a>
-  <a class="mobile-nav-link" href="#" id="mobile-nav-signup" onclick="closeMobileNavThen(function(e){showPage(e,'signup')}, event)">Sign Up</a>
+  <a class="mobile-nav-link" href="#" id="mobile-nav-signup" onclick="closeMobileNavThen(function(e){goToSignup(e)}, event)">Sign Up</a>
   <a class="mobile-nav-link" href="#" id="mobile-nav-logout" style="display:none;" onclick="closeMobileNavThen(logOut, event)">Log out</a>
 </div>
 
@@ -954,7 +954,7 @@ footer {
     <p>Our unique process uses implied totals to project players using probabilities. Learn more about our PPR Superforecasting method below.</p>
     <div id="hero-subscribe-cta">
       <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
-        <a id="hero-create-account-btn" class="btn-subscribe" href="#" onclick="showPage(event,'signup')">Create Free Account</a>
+        <a id="hero-create-account-btn" class="btn-subscribe" href="#" onclick="goToSignup(event)">Create Free Account</a>
         <a id="hero-go-pro-btn" class="btn-go-pro" href="#" onclick="goToUpgrade(event)">Go Pro</a>
       </div>
       <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free to use with a free subscription account until September 9, 2026 (day 1 of the NFL season). Go Pro to access all functions of the site all season long!</p>
@@ -1334,7 +1334,7 @@ footer {
 <div id="page-signup" class="auth-page" style="display:none;">
   <div class="auth-card">
     <div class="auth-title" id="signup-title">Create your FREE account</div>
-    <div class="auth-sub" id="signup-sub">Join Process/Results to unlock articles and projections.</div>
+    <div class="auth-sub" id="signup-sub">Join Process/Results to unlock articles and projections for free until 9/9/26.</div>
     <div id="signup-error" class="auth-error" style="display:none;"></div>
     <div onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignup();}">
       <label class="auth-label">First Name</label>
@@ -2962,8 +2962,26 @@ function refreshSignupPageCopy() {
     subEl.textContent = "Then we'll take you straight to the Pro upgrade page.";
   } else {
     titleEl.textContent = 'Create your FREE account';
-    subEl.textContent = 'Join Process/Results to unlock articles and projections.';
+    subEl.textContent = 'Join Process/Results to unlock articles and projections for free until 9/9/26.';
   }
+}
+
+// Plain entry points into sign-up — the top-right nav link, its mobile
+// equivalent, and the homepage "Create Free Account" button — should
+// always show the default copy above, never a stale "You chose to GO PRO!"
+// message left over from an earlier, abandoned click on Go Pro (which sets
+// pendingGatePage to 'upgrade' and otherwise never gets cleared until a
+// sign-up actually completes). Clearing it here also prevents a completed
+// sign-up from this plain path wrongly redirecting to the Pro upgrade page
+// afterward. Gated-feature entry points (the auth-gate modal, the locked
+// panels) intentionally do NOT use this — they need pendingGatePage/
+// pendingGateArticleId to survive so the visitor lands back on the page
+// they were blocked from.
+function goToSignup(evt) {
+  if (evt) evt.preventDefault();
+  pendingGatePage = null;
+  pendingGateArticleId = null;
+  showPage(null, 'signup');
 }
 
 async function handleForgotPassword(evt) {
