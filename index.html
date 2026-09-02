@@ -1470,9 +1470,36 @@ footer {
       <button class="trade-analyze-btn" style="margin-left:10px;" onclick="analyzeTeams()">Analyze Teams</button>
       <button class="trade-analyze-btn" style="margin-left:10px;" onclick="runStartSitDecision()">Start/Sit Decision</button>
     </div>
-    <div id="startsit-result" style="display:none; max-width:720px; margin:24px auto 0; font-family:'Lato',sans-serif;">
-      <div style="font-weight:700; font-size:16px; margin-bottom:4px; color:#1a1a1a;" id="startsit-title"></div>
-      <div style="font-size:13px; color:#666; margin-bottom:14px;" id="startsit-sub"></div>
+    <div id="startsit-result" style="display:none; margin-top:28px; background:#111; border-radius:16px; padding:28px 32px; font-family:'Lato',sans-serif;">
+      <div style="font-size:20px; font-weight:900; color:white; margin-bottom:4px;" id="startsit-title"></div>
+      <div style="font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:22px;" id="startsit-sub"></div>
+      <div id="startsit-lineups" style="display:none;">
+        <div style="border-top:1px solid rgba(255,255,255,0.1); margin:0 0 20px;"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:22px;">
+          <div>
+            <div style="font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.4); margin-bottom:12px;" id="startsit-lineup-labelA"></div>
+            <div id="startsit-lineup-cardsA"></div>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.4); margin-bottom:12px;" id="startsit-lineup-labelB"></div>
+            <div id="startsit-lineup-cardsB"></div>
+          </div>
+        </div>
+      </div>
+      <div style="background:white; border-radius:12px; padding:24px 26px;">
+      <div id="startsit-bignums" style="display:none; gap:44px; margin-bottom:22px;">
+        <div>
+          <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="startsit-big-labelA"></div>
+          <div style="font-size:38px; font-weight:900; line-height:1.15;" id="startsit-big-pctA"></div>
+          <div style="font-size:12px; color:#888;" id="startsit-big-subA"></div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="startsit-big-labelB"></div>
+          <div style="font-size:38px; font-weight:900; line-height:1.15;" id="startsit-big-pctB"></div>
+          <div style="font-size:12px; color:#888;" id="startsit-big-subB"></div>
+        </div>
+      </div>
+      <div id="startsit-bar" style="display:none; height:10px; border-radius:999px; overflow:hidden; margin-bottom:24px;"></div>
       <table style="width:100%; border-collapse:collapse; font-size:14px; margin-bottom:14px;">
         <thead>
           <tr style="border-bottom:2px solid #1a1a1a;">
@@ -1491,14 +1518,15 @@ footer {
             <tr style="border-bottom:1px solid #ccc;">
               <th style="text-align:left; padding:4px 8px;">Year</th>
               <th style="text-align:right; padding:4px 8px;">Weeks</th>
-              <th style="text-align:right; padding:4px 8px;">Team A wins</th>
+              <th style="text-align:right; padding:4px 8px;" id="startsit-year-winhdr">Team A wins</th>
               <th style="text-align:right; padding:4px 8px;">%</th>
             </tr>
           </thead>
           <tbody id="startsit-year-body"></tbody>
         </table>
       </details>
-      <div style="font-size:11px; color:#999; margin-top:14px; line-height:1.5;">Uses the literal weekly rank cutline: for each real week since 2015, whoever actually finished at that rank &mdash; a different player every week &mdash; not any one player's own career.</div>
+      <div style="font-size:11px; color:#aaa; margin-top:18px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;">Uses the player that finished at that rank each week since 2015 &mdash; not a player who finished at position by season's end.</div>
+      </div>
     </div>
     <div id="trade-result" class="trade-result">
       <div class="trade-result-verdict" id="trade-verdict"></div>
@@ -3464,6 +3492,10 @@ function formatRankList(ranks, position) {
 // pairs: array of { name, pos, rank } — each pair carries its own position,
 // so this works for both single-position and mixed-position combos.
 function formatNamedRankList(pairs) {
+  // In Numbers Mode the user typed rank shorthand, not a player — showing the
+  // resolved name back to them ("RB18 (David Montgomery)") implies the analysis
+  // followed that player's career, which it does not. Ranks only.
+  if (numbersMode) return pairs.map(p => p.pos + p.rank).join(' + ');
   return pairs.map(p => p.pos + p.rank + ' (' + p.name + ')').join(' + ');
 }
 
@@ -3787,6 +3819,9 @@ async function runStartSitDecision() {
     document.getElementById('startsit-table-body').innerHTML = '';
     document.getElementById('startsit-avgline').textContent = '';
     document.getElementById('startsit-year-body').innerHTML = '';
+    document.getElementById('startsit-lineups').style.display = 'none';
+    document.getElementById('startsit-bignums').style.display = 'none';
+    document.getElementById('startsit-bar').style.display = 'none';
     return;
   }
 
@@ -3803,6 +3838,9 @@ async function runStartSitDecision() {
     document.getElementById('startsit-table-body').innerHTML = '';
     document.getElementById('startsit-avgline').textContent = '';
     document.getElementById('startsit-year-body').innerHTML = '';
+    document.getElementById('startsit-lineups').style.display = 'none';
+    document.getElementById('startsit-bignums').style.display = 'none';
+    document.getElementById('startsit-bar').style.display = 'none';
     return;
   }
 
@@ -3820,23 +3858,84 @@ async function runStartSitDecision() {
     document.getElementById('startsit-table-body').innerHTML = '';
     document.getElementById('startsit-avgline').textContent = '';
     document.getElementById('startsit-year-body').innerHTML = '';
+    document.getElementById('startsit-lineups').style.display = 'none';
+    document.getElementById('startsit-bignums').style.display = 'none';
+    document.getElementById('startsit-bar').style.display = 'none';
     return;
   }
 
-  document.getElementById('startsit-title').textContent = nameA + ' vs ' + nameB + ' — historical weekly results (2015\u20132025)';
-  document.getElementById('startsit-sub').textContent =
-    nameA + ': ' + formatNamedRankList(namedA) + '  \u00b7  ' + nameB + ': ' + formatNamedRankList(namedB);
-
   const pct = n => n.toFixed(1) + '%';
-  document.getElementById('startsit-table-body').innerHTML =
-    '<tr><td style="padding:6px 8px;">' + nameA + ' &gt; ' + nameB + '</td><td style="text-align:right; padding:6px 8px;">' + result.aWins + '</td><td style="text-align:right; padding:6px 8px;">' + pct(result.aPct) + '</td></tr>' +
-    '<tr><td style="padding:6px 8px;">' + nameA + ' = ' + nameB + '</td><td style="text-align:right; padding:6px 8px;">' + result.ties + '</td><td style="text-align:right; padding:6px 8px;">' + pct(result.tiePct) + '</td></tr>' +
-    '<tr><td style="padding:6px 8px;">' + nameA + ' &lt; ' + nameB + '</td><td style="text-align:right; padding:6px 8px;">' + result.bWins + '</td><td style="text-align:right; padding:6px 8px;">' + pct(result.bPct) + '</td></tr>';
+
+  // Which side actually won more weeks — drives the headline, the green
+  // highlight on the lineup card, and the order of the results table.
+  const aLeads = result.aWins >= result.bWins;
+  const winName = aLeads ? nameA : nameB;
+  const winPct = aLeads ? result.aPct : result.bPct;
+
+  document.getElementById('startsit-title').textContent =
+    winName + ' won ' + pct(winPct) + ' of weeks since 2015.';
+  document.getElementById('startsit-sub').textContent =
+    nameA + ': ' + formatNamedRankList(namedA) + '  \u00b7  ' + nameB + ': ' + formatNamedRankList(namedB) +
+    '  \u00b7  historical weekly results (2015\u20132025)';
+
+  // Lineup cards, winner's side in green.
+  const lineupCard = (p, isWinner) =>
+    '<div style="background:' + (isWinner ? 'rgba(46,158,99,0.22)' : 'rgba(255,255,255,0.05)') +
+    '; border:1px solid ' + (isWinner ? 'rgba(61,184,122,0.45)' : 'transparent') +
+    '; border-radius:12px; padding:14px 18px; margin-bottom:10px;">' +
+    '<div style="font-size:10px; font-weight:900; letter-spacing:0.04em; color:' +
+    (isWinner ? '#7FD6A5' : 'rgba(255,255,255,0.4)') + '; margin-bottom:3px;">' + p.pos + '</div>' +
+    '<div style="font-size:17px; font-weight:900; color:white;">' + p.pos + p.rank +
+    (numbersMode ? '' : ' <span style="font-size:13px; font-weight:400; color:rgba(255,255,255,0.55);">' + p.name + '</span>') +
+    '</div></div>';
+
+  document.getElementById('startsit-lineup-labelA').textContent = nameA + "'s lineup";
+  document.getElementById('startsit-lineup-labelB').textContent = nameB + "'s lineup";
+  document.getElementById('startsit-lineup-cardsA').innerHTML = namedA.map(p => lineupCard(p, aLeads)).join('');
+  document.getElementById('startsit-lineup-cardsB').innerHTML = namedB.map(p => lineupCard(p, !aLeads)).join('');
+  document.getElementById('startsit-lineups').style.display = 'block';
+
+  // Headline split.
+  document.getElementById('startsit-big-labelA').textContent = nameA;
+  document.getElementById('startsit-big-labelB').textContent = nameB;
+  const bigA = document.getElementById('startsit-big-pctA');
+  const bigB = document.getElementById('startsit-big-pctB');
+  bigA.textContent = pct(result.aPct);
+  bigB.textContent = pct(result.bPct);
+  bigA.style.color = aLeads ? '#2E9E63' : '#999';
+  bigB.style.color = aLeads ? '#999' : '#2E9E63';
+  document.getElementById('startsit-big-subA').textContent = result.aWins + ' of ' + result.total + ' weeks';
+  document.getElementById('startsit-big-subB').textContent = result.bWins + ' of ' + result.total + ' weeks';
+  document.getElementById('startsit-bignums').style.display = 'flex';
+
+  const bar = document.getElementById('startsit-bar');
+  bar.innerHTML =
+    '<div style="width:' + result.aPct + '%; background:' + (aLeads ? '#2E9E63' : '#B9B7B1') + ';"></div>' +
+    '<div style="width:' + result.tiePct + '%; background:#E3E1DB;"></div>' +
+    '<div style="width:' + result.bPct + '%; background:' + (aLeads ? '#B9B7B1' : '#2E9E63') + ';"></div>';
+  bar.style.display = 'flex';
+
+  // Winner's row first, and the losing comparison written as "B > A"
+  // rather than "A < B" so every row reads in the same direction.
+  const row = (label, weeks, p, win) =>
+    '<tr style="border-bottom:1px solid #eee;"><td style="padding:7px 8px;' +
+    (win ? ' color:#1a7f4f; font-weight:700;' : '') + '">' + label +
+    '</td><td style="text-align:right; padding:7px 8px;">' + weeks +
+    '</td><td style="text-align:right; padding:7px 8px;' + (win ? ' font-weight:700;' : '') + '">' + pct(p) + '</td></tr>';
+
+  document.getElementById('startsit-table-body').innerHTML = aLeads
+    ? row(nameA + ' &gt; ' + nameB, result.aWins, result.aPct, true) +
+      row(nameB + ' &gt; ' + nameA, result.bWins, result.bPct, false) +
+      row(nameA + ' = ' + nameB, result.ties, result.tiePct, false)
+    : row(nameB + ' &gt; ' + nameA, result.bWins, result.bPct, true) +
+      row(nameA + ' &gt; ' + nameB, result.aWins, result.aPct, false) +
+      row(nameA + ' = ' + nameB, result.ties, result.tiePct, false);
 
   document.getElementById('startsit-avgline').textContent =
     'Avg ' + nameA + ' score: ' + result.avgA.toFixed(2) + '  \u00b7  Avg ' + nameB + ' score: ' + result.avgB.toFixed(2) +
     '  \u00b7  Avg gap: ' + (result.avgGap >= 0 ? '+' : '') + result.avgGap.toFixed(2) + ' pts  \u00b7  ' + result.total + ' total weeks';
 
+  document.getElementById('startsit-year-winhdr').textContent = nameA + ' wins';
   document.getElementById('startsit-year-body').innerHTML = Object.entries(result.byYear).map(([yr, d]) =>
     '<tr><td style="padding:4px 8px;">' + yr + '</td><td style="text-align:right; padding:4px 8px;">' + d.weeks +
     '</td><td style="text-align:right; padding:4px 8px;">' + d.aWins + '</td><td style="text-align:right; padding:4px 8px;">' +
