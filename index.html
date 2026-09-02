@@ -425,23 +425,39 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .locked-signin-link { font-family: 'Lato', sans-serif; font-size: 13px; color: #555; text-decoration: underline; }
 .locked-signin-link:hover { color: #111; }
 
-/* AUTH GATE MODAL: shown over a blurred page when a signed-out visitor
-   tries to use a gated feature. Inserted as a direct child of <body> so the
-   blur rule below can target every other direct child (nav, all page-*
-   sections, footer) without needing to touch each one individually. */
-body.auth-gate-open { overflow: hidden; }
-body.auth-gate-open > *:not(#auth-gate-modal) { filter: blur(6px); pointer-events: none; user-select: none; }
-#auth-gate-modal { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; padding: 20px; }
-.auth-gate-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+/* AUTH GATE: shown when a signed-out visitor tries to use a gated feature
+   (Projections, Trade/Team Analyzer, an article). Two pieces, both direct
+   children of <body> so they sit above everything as fixed overlays:
+     - #auth-gate-blur: covers only the BOTTOM half of the viewport (top:50%
+       to the bottom) with a frosted blur. It's position:fixed, so it always
+       covers the bottom half of whatever is currently on screen, even as
+       the visitor scrolls the real page underneath — the top half of the
+       viewport stays fully visible and untouched.
+     - #auth-gate-modal: the "create an account" card, centered on screen.
+       There is deliberately no close button and no click-outside-to-dismiss
+       — a signed-out visitor can navigate elsewhere via the (unblurred,
+       still-clickable) nav bar, but cannot dismiss the gate and keep using
+       the page while signed out.
+   Both are toggled purely by the body.auth-gate-open class (see
+   showAuthGate()/hideAuthGate() in JS) so there's a single source of truth
+   for open/closed state. */
+#auth-gate-blur, #auth-gate-modal { display: none; }
+body.auth-gate-open #auth-gate-blur { display: block; }
+body.auth-gate-open #auth-gate-modal { display: flex; }
+
+#auth-gate-blur {
+  position: fixed; left: 0; right: 0; top: 50%; bottom: 0; z-index: 9998;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: rgba(20,20,20,0.28);
+}
+#auth-gate-modal {
+  position: fixed; inset: 0; z-index: 9999; align-items: center; justify-content: center;
+  padding: 20px; pointer-events: none; /* let clicks reach the unblurred top half / nav */
+}
 .auth-gate-box {
-  position: relative; background: white; border-radius: 16px; padding: 40px 32px 32px;
+  pointer-events: auto; background: white; border-radius: 16px; padding: 40px 32px 32px;
   max-width: 380px; width: 100%; text-align: center; box-shadow: 0 24px 64px rgba(0,0,0,0.45);
 }
-.auth-gate-close {
-  position: absolute; top: 10px; right: 12px; background: none; border: none;
-  color: #999; font-size: 24px; line-height: 1; cursor: pointer; padding: 6px;
-}
-.auth-gate-close:hover { color: #111; }
 .auth-gate-title { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: #111; margin-bottom: 8px; }
 .auth-gate-sub { font-family: 'Lato', sans-serif; font-size: 14px; color: #777; margin-bottom: 26px; line-height: 1.5; }
 .trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
@@ -878,10 +894,11 @@ footer {
   <a class="mobile-nav-link" href="#" id="mobile-nav-logout" style="display:none;" onclick="closeMobileNavThen(logOut, event)">Log out</a>
 </div>
 
+<!-- Covers only the bottom half of the viewport; see the AUTH GATE comment
+     in the stylesheet above for how this and the modal below work together. -->
+<div id="auth-gate-blur"></div>
 <div id="auth-gate-modal">
-  <div class="auth-gate-backdrop" onclick="hideAuthGate()"></div>
   <div class="auth-gate-box">
-    <button class="auth-gate-close" onclick="hideAuthGate()" aria-label="Close">&times;</button>
     <div class="auth-gate-title">🔒 Create a Free Account to Continue</div>
     <div class="auth-gate-sub">This feature is free with an account — create one or sign in to keep going.</div>
     <div class="locked-actions">
@@ -2060,27 +2077,31 @@ function contentUnlocked() {
   return !isPaywallActive() || !!currentUser.isPro;
 }
 
-// Blur-the-page-and-pop-up-a-modal gate for signed-out visitors who try to
-// use any gated feature (Projections, Trade/Team Analyzer, Start/Sit — all
-// live behind contentUnlocked()). Signed-in-but-not-Pro visitors after the
-// paywall cutoff are NOT shown this modal — they already have an account,
-// so they see the in-page "Go Pro" panel instead (see refreshProjectionsGate
-// / refreshTradeGate).
+// Blur-the-bottom-half-and-pop-up-a-modal gate for signed-out visitors who
+// try to use any gated feature (Projections, Trade/Team Analyzer, Start/Sit,
+// reading an article). Signed-in-but-not-Pro visitors after the paywall
+// cutoff are NOT shown this modal — they already have an account, so they
+// see the in-page "Go Pro" panel instead (see refreshProjectionsGate /
+// refreshTradeGate).
 // Remembers the last gated page a signed-out visitor was blocked from, so
 // handleSignup()/handleSignin() can send them back there instead of just
 // dumping them on the homepage after they create an account or sign in.
 let pendingGatePage = null;
+// Companion to pendingGatePage specifically for articles, since redirecting
+// back needs the article's id, not just a page name (see refreshArticleGate).
+let pendingGateArticleId = null;
 
+// Both showAuthGate() and hideAuthGate() do nothing but toggle this one
+// class — #auth-gate-blur and #auth-gate-modal show/hide purely off of it
+// (see the AUTH GATE stylesheet comment), so there's one source of truth.
+// There is intentionally no "toggle" or "close" helper: the gate only ever
+// closes because the visitor is now allowed in (contentUnlocked() /
+// currentUser became true) or because they navigated to an ungated page —
+// never because they dismissed it while still signed out.
 function showAuthGate() {
-  const modal = document.getElementById('auth-gate-modal');
-  if (!modal) return;
-  modal.style.display = 'flex';
   document.body.classList.add('auth-gate-open');
 }
 function hideAuthGate() {
-  const modal = document.getElementById('auth-gate-modal');
-  if (!modal) return;
-  modal.style.display = 'none';
   document.body.classList.remove('auth-gate-open');
 }
 
@@ -2129,6 +2150,7 @@ function showPage(evt, pageName, opts) {
   if (pageName === 'projections') refreshProjectionsGate();
   if (pageName === 'trade') refreshTradeGate();
   if (pageName === 'admin') refreshAdminGate();
+  if (pageName === 'article') refreshArticleGate();
   if (pageName === 'account') renderAccountPage();
 
   // Update the real URL — unless this call came from responding to the
@@ -2536,6 +2558,7 @@ function refreshProjectionsGate() {
       if (signupLinkEl) { signupLinkEl.textContent = 'Sign up free →'; signupLinkEl.setAttribute('onclick', "showPage(event,'signup')"); }
       if (signinLinkEl) signinLinkEl.style.display = '';
       pendingGatePage = 'projections';
+      pendingGateArticleId = null;
       showAuthGate();
     }
   }
@@ -2783,8 +2806,7 @@ async function handleSignup() {
   // automatically from the signup metadata above.
   if (data.session) {
     await logIn(data.user);
-    const dest = pendingGatePage; pendingGatePage = null;
-    showPage(null, dest || 'home');
+    redirectAfterAuth();
   } else {
     // Email confirmation is turned on for this project — there's no active
     // session yet until the user clicks the link in their inbox.
@@ -2835,8 +2857,21 @@ async function handleSignin() {
   }
   errorEl.style.display = 'none';
   await logIn(data.user);
+  redirectAfterAuth();
+}
+
+// Shared by handleSignup()/handleSignin(): sends the visitor back to
+// whichever gated page/article they were blocked from (see pendingGatePage /
+// pendingGateArticleId, set by refreshProjectionsGate/refreshTradeGate/
+// refreshArticleGate) instead of always landing on the homepage.
+function redirectAfterAuth() {
+  const articleId = pendingGateArticleId; pendingGateArticleId = null;
   const dest = pendingGatePage; pendingGatePage = null;
-  showPage(null, dest || 'home');
+  if (articleId) {
+    goToArticle(articleId);
+  } else {
+    showPage(null, dest || 'home');
+  }
 }
 
 async function handleForgotPassword(evt) {
@@ -3107,6 +3142,7 @@ function refreshTradeGate() {
       if (signupLinkEl) { signupLinkEl.textContent = 'Sign up free →'; signupLinkEl.setAttribute('onclick', "showPage(event,'signup')"); }
       if (signinLinkEl) signinLinkEl.style.display = '';
       pendingGatePage = 'trade';
+      pendingGateArticleId = null;
       showAuthGate();
     }
   }
@@ -7313,12 +7349,36 @@ function renderHomepageArticles() {
   });
 }
 
+// Tracks whichever article is currently open, so refreshArticleGate() (and,
+// via pendingGateArticleId, a post-signup/signin redirect) can get back to
+// this exact article rather than just the articles list.
+let currentArticleId = null;
+
 function goToArticle(id, opts) {
   opts = opts || {};
   const article = publishedArticles[id];
   if (!article) return;
+  currentArticleId = id;
   document.getElementById('article-reader-content').innerHTML = buildArticleReaderHTML(article);
   showPage(null, 'article', { skipPush: opts.skipPush, path: '/articles/' + encodeURIComponent(id), articleId: id });
+}
+
+// Reading an article is a gated feature like Projections/Trade — a
+// signed-out visitor gets the same bottom-half blur + non-dismissable
+// "create an account" modal (see showAuthGate) laid over the article, which
+// stays rendered underneath so the opening of it is still visible above the
+// blur line. This only requires SOME account (free is enough) — it doesn't
+// additionally require Pro even for articles tagged Pro-only; that existing
+// per-article Free/Pro distinction (see the lock badge on listing cards) is
+// unrelated and untouched here.
+function refreshArticleGate() {
+  if (!currentUser) {
+    pendingGatePage = null;
+    pendingGateArticleId = currentArticleId;
+    showAuthGate();
+  } else {
+    hideAuthGate();
+  }
 }
 
 // Shortens "Lamar Jackson" -> "L. Jackson" to match the ticker's compact style.
