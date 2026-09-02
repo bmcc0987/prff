@@ -1490,17 +1490,17 @@ footer {
       <div id="startsit-bignums" style="display:none; gap:44px; margin-bottom:22px;">
         <div>
           <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="startsit-big-labelA"></div>
-          <div style="font-size:38px; font-weight:900; line-height:1.15;" id="startsit-big-pctA"></div>
+          <div style="font-size:32px; font-weight:900; line-height:1.15;" id="startsit-big-pctA"></div>
           <div style="font-size:12px; color:#888;" id="startsit-big-subA"></div>
         </div>
         <div>
           <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="startsit-big-labelB"></div>
-          <div style="font-size:38px; font-weight:900; line-height:1.15;" id="startsit-big-pctB"></div>
+          <div style="font-size:32px; font-weight:900; line-height:1.15;" id="startsit-big-pctB"></div>
           <div style="font-size:12px; color:#888;" id="startsit-big-subB"></div>
         </div>
       </div>
       <div id="startsit-bar" style="display:none; height:10px; border-radius:999px; overflow:hidden; margin-bottom:24px;"></div>
-      <table style="width:100%; border-collapse:collapse; font-size:15px; margin-bottom:14px;">
+      <table style="width:100%; border-collapse:collapse; font-size:14px; margin-bottom:14px;">
         <thead>
           <tr style="border-bottom:2px solid #1a1a1a;">
             <th style="text-align:left; padding:6px 8px;">Result</th>
@@ -1510,10 +1510,10 @@ footer {
         </thead>
         <tbody id="startsit-table-body"></tbody>
       </table>
-      <div style="font-size:14px; color:#333; margin-bottom:14px;" id="startsit-avgline"></div>
+      <div style="font-size:12px; color:#333; margin-bottom:14px;" id="startsit-avgline"></div>
       <details>
-        <summary style="cursor:pointer; font-size:14px; color:#2E9E63; font-weight:600;">By year</summary>
-        <table style="width:100%; border-collapse:collapse; font-size:14px; margin-top:8px;">
+        <summary style="cursor:pointer; font-size:12px; color:#2E9E63; font-weight:600;">By year</summary>
+        <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:8px;">
           <thead>
             <tr style="border-bottom:1px solid #ccc;">
               <th style="text-align:left; padding:4px 8px;">Year</th>
@@ -3940,8 +3940,8 @@ async function runStartSitDecision() {
     '; border-radius:12px; padding:14px 18px; margin-bottom:10px;">' +
     '<div style="font-size:10px; font-weight:900; letter-spacing:0.04em; color:' +
     (isWinner ? '#7FD6A5' : 'rgba(255,255,255,0.4)') + '; margin-bottom:3px;">' + p.pos + '</div>' +
-    '<div style="font-size:17px; font-weight:900; color:white;">' + p.pos + p.rank +
-    (numbersMode ? '' : ' <span style="font-size:13px; font-weight:400; color:rgba(255,255,255,0.55);">' + p.name + '</span>') +
+    '<div style="font-size:15px; font-weight:700; color:white;">' + p.pos + p.rank +
+    (numbersMode ? '' : ' <span style="font-size:12px; font-weight:400; color:rgba(255,255,255,0.55);">' + p.name + '</span>') +
     '</div></div>';
 
   document.getElementById('startsit-lineup-labelA').textContent = nameA + "'s lineup";
