@@ -418,6 +418,32 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 }
 .trade-locked-title { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: #111; margin-bottom: 8px; }
 .trade-locked-sub { font-family: 'Lato', sans-serif; font-size: 14px; color: #777; margin-bottom: 24px; }
+
+/* Locked-panel action row (shared by proj-locked / trade-locked): the primary
+   btn-pro CTA plus a lighter secondary link for the other auth path. */
+.locked-actions { display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.locked-signin-link { font-family: 'Lato', sans-serif; font-size: 13px; color: #555; text-decoration: underline; }
+.locked-signin-link:hover { color: #111; }
+
+/* AUTH GATE MODAL: shown over a blurred page when a signed-out visitor
+   tries to use a gated feature. Inserted as a direct child of <body> so the
+   blur rule below can target every other direct child (nav, all page-*
+   sections, footer) without needing to touch each one individually. */
+body.auth-gate-open { overflow: hidden; }
+body.auth-gate-open > *:not(#auth-gate-modal) { filter: blur(6px); pointer-events: none; user-select: none; }
+#auth-gate-modal { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; padding: 20px; }
+.auth-gate-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+.auth-gate-box {
+  position: relative; background: white; border-radius: 16px; padding: 40px 32px 32px;
+  max-width: 380px; width: 100%; text-align: center; box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+}
+.auth-gate-close {
+  position: absolute; top: 10px; right: 12px; background: none; border: none;
+  color: #999; font-size: 24px; line-height: 1; cursor: pointer; padding: 6px;
+}
+.auth-gate-close:hover { color: #111; }
+.auth-gate-title { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: #111; margin-bottom: 8px; }
+.auth-gate-sub { font-family: 'Lato', sans-serif; font-size: 14px; color: #777; margin-bottom: 26px; line-height: 1.5; }
 .trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
 .trade-col { background: white; border: 1px solid #e2e0da; border-radius: 16px; padding: 24px; }
 .trade-col-name {
@@ -852,6 +878,19 @@ footer {
   <a class="mobile-nav-link" href="#" id="mobile-nav-logout" style="display:none;" onclick="closeMobileNavThen(logOut, event)">Log out</a>
 </div>
 
+<div id="auth-gate-modal">
+  <div class="auth-gate-backdrop" onclick="hideAuthGate()"></div>
+  <div class="auth-gate-box">
+    <button class="auth-gate-close" onclick="hideAuthGate()" aria-label="Close">&times;</button>
+    <div class="auth-gate-title">🔒 Create a Free Account to Continue</div>
+    <div class="auth-gate-sub">This feature is free with an account — create one or sign in to keep going.</div>
+    <div class="locked-actions">
+      <a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,'signup')">Create Free Account</a>
+      <a class="locked-signin-link" href="#" onclick="hideAuthGate(); showPage(event,'signin')">Sign In</a>
+    </div>
+  </div>
+</div>
+
 <div id="page-home">
 
 <!-- SINGLE ROW TICKER: Season Long projections, all positions -->
@@ -882,10 +921,10 @@ footer {
     <p>Our unique process uses implied totals to project players using probabilities. Learn more about our PPR Superforecasting method below.</p>
     <div id="hero-subscribe-cta">
       <div style="display:flex; gap:16px; justify-content:center; align-items:center; flex-wrap:wrap;">
-        <a class="btn-subscribe" href="#" onclick="showPage(event,'signup')">Subscribe</a>
+        <a id="hero-create-account-btn" class="btn-subscribe" href="#" onclick="showPage(event,'signup')">Create Free Account</a>
         <a class="btn-go-pro" href="#" onclick="goToUpgrade(event)">Go Pro</a>
       </div>
-      <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free until September 9, 2026 (day 1 of the NFL season). Go Pro to access all functions of the site all season long!</p>
+      <p style="font-family:'Lato',sans-serif; font-size:14px; color:rgba(255,255,255,0.75); max-width:520px; margin:16px auto 0; line-height:1.6;">Access to all functions of the site are free to use with a free subscription account until September 9, 2026 (day 1 of the NFL season). Go Pro to access all functions of the site all season long!</p>
     </div>
 
   </div>
@@ -1341,7 +1380,10 @@ footer {
   <div id="proj-locked" class="proj-locked" style="display:none;">
     <div class="proj-locked-title">🔒 Sign in to view projections</div>
     <div class="proj-locked-sub">Create a free account to see this week's full player projections.</div>
-    <a class="btn-pro" href="#" onclick="showPage(event,'signup')">Sign up free →</a>
+    <div class="locked-actions">
+      <a class="btn-pro" href="#" onclick="showPage(event,'signup')">Sign up free →</a>
+      <a class="locked-signin-link" href="#" onclick="showPage(event,'signin')">Sign In</a>
+    </div>
   </div>
 
   <div id="proj-content-wrap" style="display:none;">
@@ -1377,7 +1419,10 @@ footer {
   <div id="trade-locked" class="trade-locked" style="display:none;">
     <div class="trade-locked-title">🔒 Sign in to use the Trade/Team Analyzer</div>
     <div class="trade-locked-sub">Create a free account to grade trades and see which side benefits.</div>
-    <a class="btn-pro" href="#" onclick="showPage(event,'signup')">Sign up free →</a>
+    <div class="locked-actions">
+      <a class="btn-pro" href="#" onclick="showPage(event,'signup')">Sign up free →</a>
+      <a class="locked-signin-link" href="#" onclick="showPage(event,'signin')">Sign In</a>
+    </div>
   </div>
 
   <div id="trade-builder" style="display:none;">
@@ -1999,7 +2044,7 @@ let supabaseClient = (typeof window !== 'undefined' && window.supabase)
 // Set MANUAL_PAYWALL_OVERRIDE to true or false to force the paywall on/off
 // regardless of the date (e.g. for testing this behavior early). Leave it
 // as null to use the automatic cutoff.
-const PAYWALL_CUTOFF = new Date('2026-09-09T10:01:00Z');
+const PAYWALL_CUTOFF = new Date('2026-09-09T10:00:00Z');
 const MANUAL_PAYWALL_OVERRIDE = null;
 
 function isPaywallActive() {
@@ -2008,10 +2053,35 @@ function isPaywallActive() {
 }
 
 // The single check every gated area of the site should use: content is
-// unlocked if the paywall hasn't kicked in yet, OR the visitor has a real,
-// currently-active Pro subscription.
+// unlocked only for a signed-in visitor, and only if the paywall hasn't
+// kicked in yet OR the visitor has a real, currently-active Pro subscription.
 function contentUnlocked() {
-  return !isPaywallActive() || !!(currentUser && currentUser.isPro);
+  if (!currentUser) return false;
+  return !isPaywallActive() || !!currentUser.isPro;
+}
+
+// Blur-the-page-and-pop-up-a-modal gate for signed-out visitors who try to
+// use any gated feature (Projections, Trade/Team Analyzer, Start/Sit — all
+// live behind contentUnlocked()). Signed-in-but-not-Pro visitors after the
+// paywall cutoff are NOT shown this modal — they already have an account,
+// so they see the in-page "Go Pro" panel instead (see refreshProjectionsGate
+// / refreshTradeGate).
+// Remembers the last gated page a signed-out visitor was blocked from, so
+// handleSignup()/handleSignin() can send them back there instead of just
+// dumping them on the homepage after they create an account or sign in.
+let pendingGatePage = null;
+
+function showAuthGate() {
+  const modal = document.getElementById('auth-gate-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.classList.add('auth-gate-open');
+}
+function hideAuthGate() {
+  const modal = document.getElementById('auth-gate-modal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  document.body.classList.remove('auth-gate-open');
 }
 
 // --- AUTH ------------------------------------------------------------------
@@ -2045,6 +2115,13 @@ const PROJ_TAB_PATHS = {
 function showPage(evt, pageName, opts) {
   opts = opts || {};
   if (evt) evt.preventDefault();
+  // Always start a navigation with the auth-gate modal closed — the
+  // relevant refresh*Gate() call below will re-open it if the destination
+  // page is still gated for a signed-out visitor. Without this, using the
+  // browser's own Back/Forward buttons (which bypass all the in-page CTAs
+  // that call hideAuthGate themselves) could leave a stale modal/blur on a
+  // page that doesn't need it.
+  hideAuthGate();
   document.querySelectorAll('#page-home, #page-signup, #page-signin, #page-projections, #page-trade, #page-admin, #page-article, #page-articles, #page-terms, #page-privacy, #page-account, #page-contact, #page-upgrade')
     .forEach(el => el.style.display = 'none');
   document.getElementById('page-' + pageName).style.display = 'block';
@@ -2422,6 +2499,7 @@ function refreshProjectionsGate() {
   const contentWrap = document.getElementById('proj-content-wrap');
   const cheatsheetWrap = document.getElementById('proj-cheatsheet-wrap');
   if (contentUnlocked()) {
+    hideAuthGate();
     locked.style.display = 'none';
     if (activeProjTab === 'cheatsheet') {
       contentWrap.style.display = 'none';
@@ -2440,6 +2518,26 @@ function refreshProjectionsGate() {
     locked.style.display = 'block';
     contentWrap.style.display = 'none';
     cheatsheetWrap.style.display = 'none';
+    const titleEl = locked.querySelector('.proj-locked-title');
+    const subEl = locked.querySelector('.proj-locked-sub');
+    const signupLinkEl = locked.querySelector('.btn-pro');
+    const signinLinkEl = locked.querySelector('.locked-signin-link');
+    if (currentUser && !currentUser.isPro) {
+      // Signed in with a free account, but the paywall has kicked in.
+      hideAuthGate();
+      titleEl.textContent = '🔒 Go Pro to view projections';
+      subEl.textContent = 'Upgrade to Pro to see this week\'s full player projections all season long.';
+      if (signupLinkEl) { signupLinkEl.textContent = 'Go Pro →'; signupLinkEl.setAttribute('onclick', 'goToUpgrade(event)'); }
+      if (signinLinkEl) signinLinkEl.style.display = 'none';
+    } else {
+      // Not signed in at all — pop the blur+modal gate on top of the panel.
+      titleEl.textContent = '🔒 Sign in to view projections';
+      subEl.textContent = 'Create a free account to see this week\'s full player projections.';
+      if (signupLinkEl) { signupLinkEl.textContent = 'Sign up free →'; signupLinkEl.setAttribute('onclick', "showPage(event,'signup')"); }
+      if (signinLinkEl) signinLinkEl.style.display = '';
+      pendingGatePage = 'projections';
+      showAuthGate();
+    }
   }
 }
 
@@ -2685,7 +2783,8 @@ async function handleSignup() {
   // automatically from the signup metadata above.
   if (data.session) {
     await logIn(data.user);
-    showPage(null, 'home');
+    const dest = pendingGatePage; pendingGatePage = null;
+    showPage(null, dest || 'home');
   } else {
     // Email confirmation is turned on for this project — there's no active
     // session yet until the user clicks the link in their inbox.
@@ -2736,7 +2835,8 @@ async function handleSignin() {
   }
   errorEl.style.display = 'none';
   await logIn(data.user);
-  showPage(null, 'home');
+  const dest = pendingGatePage; pendingGatePage = null;
+  showPage(null, dest || 'home');
 }
 
 async function handleForgotPassword(evt) {
@@ -2806,8 +2906,13 @@ function updateHomepageProState() {
   const isPro = !!(currentUser && currentUser.isPro);
   const cta = document.getElementById('hero-subscribe-cta');
   const nudge = document.getElementById('ticker-login-nudge');
+  const createAcctBtn = document.getElementById('hero-create-account-btn');
   if (cta) cta.style.display = isPro ? 'none' : 'block';
   if (nudge) nudge.style.display = isPro ? 'none' : 'block';
+  // "Create Free Account" only makes sense for a visitor with no account at
+  // all — once any account is signed in (free or Pro), hide just that button
+  // and leave "Go Pro" + the descriptive paragraph visible for free users.
+  if (createAcctBtn) createAcctBtn.style.display = currentUser ? 'none' : 'inline-block';
 }
 
 async function logOut(evt) {
@@ -2968,6 +3073,7 @@ function refreshTradeGate() {
   const locked = document.getElementById('trade-locked');
   const builder = document.getElementById('trade-builder');
   if (contentUnlocked()) {
+    hideAuthGate();
     locked.style.display = 'none';
     builder.style.display = 'block';
     populatePlayerDatalist();
@@ -2983,6 +3089,26 @@ function refreshTradeGate() {
   } else {
     locked.style.display = 'block';
     builder.style.display = 'none';
+    const titleEl = locked.querySelector('.trade-locked-title');
+    const subEl = locked.querySelector('.trade-locked-sub');
+    const signupLinkEl = locked.querySelector('.btn-pro');
+    const signinLinkEl = locked.querySelector('.locked-signin-link');
+    if (currentUser && !currentUser.isPro) {
+      // Signed in with a free account, but the paywall has kicked in.
+      hideAuthGate();
+      titleEl.textContent = '🔒 Go Pro to use the Trade/Team Analyzer';
+      subEl.textContent = 'Upgrade to Pro to grade trades, compare teams, and use Start/Sit all season long.';
+      if (signupLinkEl) { signupLinkEl.textContent = 'Go Pro →'; signupLinkEl.setAttribute('onclick', 'goToUpgrade(event)'); }
+      if (signinLinkEl) signinLinkEl.style.display = 'none';
+    } else {
+      // Not signed in at all — pop the blur+modal gate on top of the panel.
+      titleEl.textContent = '🔒 Sign in to use the Trade/Team Analyzer';
+      subEl.textContent = 'Create a free account to grade trades and see which side benefits.';
+      if (signupLinkEl) { signupLinkEl.textContent = 'Sign up free →'; signupLinkEl.setAttribute('onclick', "showPage(event,'signup')"); }
+      if (signinLinkEl) signinLinkEl.style.display = '';
+      pendingGatePage = 'trade';
+      showAuthGate();
+    }
   }
 }
 
