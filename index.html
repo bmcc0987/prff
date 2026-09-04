@@ -526,6 +526,12 @@ body.auth-gate-open nav.nav { z-index: 9998; }
   cursor: pointer; transition: background 0.15s;
 }
 .trade-analyze-btn:hover { background: #3DB87A; }
+.trade-reset-btn {
+  background: none; color: #888; border: none;
+  font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700;
+  cursor: pointer; padding: 13px 10px; text-decoration: underline;
+}
+.trade-reset-btn:hover { color: #c0392b; }
 .trade-result {
   margin-top: 28px; background: #111; border-radius: 16px; padding: 28px 32px;
   display: none;
@@ -1547,6 +1553,8 @@ footer {
       <button class="trade-analyze-btn" onclick="analyzeTrade()">Analyze trade</button>
       <button class="trade-analyze-btn" style="margin-left:10px;" onclick="analyzeTeams()">Analyze Teams</button>
       <button class="trade-analyze-btn" style="margin-left:10px;" onclick="runStartSitDecision()">Start/Sit Decision</button>
+      <br>
+      <button class="trade-reset-btn" onclick="resetTradeBuilder()">Click here to reset</button>
     </div>
     <div id="startsit-result" style="display:none; margin-top:28px; background:#111; border-radius:16px; padding:28px 32px; font-family:'Lato',sans-serif;">
       <div style="font-size:20px; font-weight:900; color:white; margin-bottom:4px;" id="startsit-title"></div>
@@ -3296,6 +3304,48 @@ function refreshTradeGate() {
     pendingGateArticleId = null;
     showAuthGate('signin');
   }
+}
+
+// "Click here to reset" — wipes the whole Trade/Team Analyzer builder back
+// to a blank slate: both team names, every offer row, every roster slot,
+// and any trade/team/start-sit result currently showing. Re-seeds the same
+// starting rows refreshTradeGate() sets up the first time the page opens
+// (2 empty offer slots + one empty slot per roster position), so the page
+// looks exactly like it did before anything was typed in.
+function resetTradeBuilder() {
+  document.getElementById('trade-teamA-name').value = 'Team A';
+  document.getElementById('trade-teamB-name').value = 'Team B';
+
+  ['A', 'B'].forEach(side => {
+    document.getElementById('trade-team' + side + '-rows').innerHTML = '';
+    Object.keys(ROSTER_GROUPS).forEach(groupKey => {
+      document.getElementById('trade-team' + side + '-roster-' + groupKey).innerHTML = '';
+    });
+  });
+  tradeRowCounts = { A: { offer: 0 }, B: { offer: 0 } };
+  rosterSlotCounts = {
+    A: { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 },
+    B: { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 }
+  };
+
+  addPlayerRow('A', 'offer'); addPlayerRow('A', 'offer');
+  addPlayerRow('B', 'offer'); addPlayerRow('B', 'offer');
+  seedRosterGroups('A');
+  seedRosterGroups('B');
+  refreshRosteredPlayers('A');
+  refreshRosteredPlayers('B');
+
+  // Numbers Mode carries a "type QB6 instead of a name" state that wouldn't
+  // make sense to leave on after everything else has been wiped — turn it
+  // back off so the reset really is a fresh start.
+  if (numbersMode) toggleNumbersMode();
+
+  document.getElementById('trade-result').style.display = 'none';
+  document.getElementById('startsit-result').style.display = 'none';
+  const dupWarning = document.getElementById('trade-duplicate-warning');
+  if (dupWarning) dupWarning.style.display = 'none';
+
+  document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Standard starting lineup requirements for this demo. FLEX can be filled by RB/WR/TE.
