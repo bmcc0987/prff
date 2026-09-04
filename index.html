@@ -2501,6 +2501,14 @@ async function redeemPromoCode(suffix) {
     msg.style.color = '#3DB87A';
     msg.textContent = 'Code applied — you now have Pro access through the end of the season!';
     msg.style.display = 'block';
+
+    // Fire the promo-code welcome email in the background — never let a
+    // failure here interrupt the success flow the user is already seeing.
+    fetch(SUPABASE_URL + '/functions/v1/send-promo-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+      body: JSON.stringify({ email: currentUser.email, firstName: currentUser.firstName }),
+    }).catch(() => {});
     setTimeout(function () { renderAccountPage(); renderSubscriptionSection('-upgrade'); }, 2000); // give the success message a moment to be seen before the layout switches to the Pro view
   } catch (e) {
     msg.style.color = '#c0392b';
@@ -2869,6 +2877,16 @@ async function handleSignup() {
     return;
   }
   errorEl.style.display = 'none';
+
+  // Fire the welcome email in the background — never let a failure here
+  // block sign-up. This is a separate, branded "Welcome to PRFF" email;
+  // Supabase's own "Confirm your email" message (if confirmation is on)
+  // is sent separately and automatically, we don't touch that one.
+  fetch(SUPABASE_URL + '/functions/v1/send-welcome-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_KEY },
+    body: JSON.stringify({ email, firstName }),
+  }).catch(() => {});
 
   // The database trigger (see 01_schema.sql) creates the profiles row
   // automatically from the signup metadata above.
