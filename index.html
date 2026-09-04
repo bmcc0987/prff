@@ -1555,9 +1555,10 @@ footer {
     <div>
       <div class="section-label">Trade/Team Analyzer</div>
       <div class="section-title">Who wins the trade?</div>
-      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">This acts as a trade analyzer or current team analyzer. Enter your current team and/or trade targets vs others in your league and we'll tell you whose team we predict to score more points using our rest of season predictions and how those positions matchup using historical data. For example: If analyzing the RB6 vs RB7, the analyzer shows how many times the RB6 has outscored the RB7 since 2015. The name associated with the RB6 and RB7 reflect our ROS projections and have no bearing on historical analysis.</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">Enter your current team or trade targets vs others in your league or compare players for start/sit decisions. We'll tell you whose team we predict to score more points weekly and season long using our rest of season predictions and/or how those positions matchup using historical data.</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">When analyzing trades, teams, or start/sit combinations, the players entered are projected using our Rest of Season projections (ex. Puka Nacua gets the WR1 tag).</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">In &quot;Numbers Mode&quot;, player names are not taken into account. For example, if analyzing the RB6 vs RB7, the analyzer shows how many times the RB6 has outscored the RB7 since 2015 regardless of who those players were.</p>
     </div>
-    <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">📁 Saved <span id="trade-panel-toggle-count"></span></button>
   </div>
 
   <div id="trade-locked" class="trade-locked" style="display:none;">
@@ -1583,6 +1584,7 @@ footer {
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
       <button type="button" id="numbers-mode-toggle" class="trade-add-btn" style="width:auto; white-space:nowrap;" onclick="toggleNumbersMode()">Numbers Mode: Off</button>
       <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Type shorthand like QB6, RB5, WR1, TE7.</span>
+      <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" style="margin-left:auto;" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">Saved Combinations 📁 <span id="trade-panel-toggle-count"></span></button>
     </div>
     <div class="trade-cols">
       <div class="trade-col">
@@ -1659,7 +1661,7 @@ footer {
       <button class="trade-analyze-btn" style="margin-left:10px;" onclick="analyzeTeams()">Analyze Teams</button>
       <button class="trade-analyze-btn" style="margin-left:10px;" onclick="runStartSitDecision()">Start/Sit Decision</button>
       <br>
-      <button class="trade-reset-btn" onclick="resetTradeBuilder()">Click here to reset</button>
+      <button class="trade-reset-btn" onclick="resetTradeBuilder()">Click here to reset selections</button>
     </div>
     <div id="startsit-result" style="display:none; margin-top:28px; background:#111; border-radius:16px; padding:28px 32px; font-family:'Lato',sans-serif;">
       <div style="font-size:20px; font-weight:900; color:white; margin-bottom:4px;" id="startsit-title"></div>
@@ -3707,7 +3709,7 @@ function renderSavedCombinationsList() {
   const listEl = document.getElementById('saved-combo-panel-list');
   if (!listEl) return;
   if (!savedCombosCache.length) {
-    listEl.innerHTML = '<div class="panel-saved-empty">Nothing saved yet — run an analysis above and click "Save this combination."</div>';
+    listEl.innerHTML = '<div class="panel-saved-empty">Run an analysis and click "Save this combination."</div>';
     return;
   }
   listEl.innerHTML = savedCombosCache.map(row => {
@@ -3767,10 +3769,21 @@ function loadSavedComboIntoAnalyzer(id) {
     refreshRosteredPlayers(side);
   });
 
-  document.getElementById('trade-result').style.display = 'none';
-  document.getElementById('startsit-result').style.display = 'none';
+  // Show the exact frozen result graphic — not a re-run, just the same
+  // output_html that was captured at save time, dropped back into the same
+  // container Analyze/Start-Sit normally fills. Re-adds the "Save this
+  // combination" button too, same as a fresh result would have, since it
+  // was stripped out before saving to avoid capturing itself.
+  const resultContainerId = row.combo_type === 'startsit' ? 'startsit-result' : 'trade-result';
+  const otherContainerId = resultContainerId === 'startsit-result' ? 'trade-result' : 'startsit-result';
+  document.getElementById(otherContainerId).style.display = 'none';
+  const resultContainer = document.getElementById(resultContainerId);
+  resultContainer.innerHTML = row.output_html +
+    '<button type="button" class="save-combo-btn" style="margin-left:0;" onclick="openSaveComboModal()">💾 Save this combination</button>';
+  resultContainer.style.display = 'block';
+
   toggleTradeSidePanel(false);
-  document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Basic HTML-escaping for anything pulled from the database before it's
