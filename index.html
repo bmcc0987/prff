@@ -2535,6 +2535,7 @@ async function cancelSubscription(suffix) {
   btn.disabled = true;
   btn.textContent = 'Cancelling…';
 
+  let result = null;
   if (supabaseClient) {
     try {
       const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -2543,7 +2544,7 @@ async function cancelSubscription(suffix) {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + accessToken },
       });
-      const result = await res.json();
+      result = await res.json();
       if (result.error) throw new Error(result.error);
     } catch (e) {
       btn.disabled = false;
@@ -2553,10 +2554,19 @@ async function cancelSubscription(suffix) {
     }
   }
 
-  currentUser.isPro = false;
   btn.disabled = false;
-  updateHomepageProState();
-  updateUpgradeNavVisibility();
+
+  // A Weekly/Monthly plan keeps working through what's already been paid
+  // for — billing just stops, access ends automatically later. A Season
+  // Pass (or promo-code Pro) has no future billing to stop, so it ends
+  // access right away instead.
+  if (result && result.willCancelAtPeriodEnd) {
+    alert('Billing has stopped. Your Pro access continues through ' + result.periodEndDate + ', then ends automatically.');
+  } else {
+    currentUser.isPro = false;
+    updateHomepageProState();
+    updateUpgradeNavVisibility();
+  }
   renderAccountPage();
   renderSubscriptionSection('-upgrade');
 }
@@ -2897,7 +2907,7 @@ async function handleSignup() {
     // Email confirmation is turned on for this project — there's no active
     // session yet until the user clicks the link in their inbox.
     errorEl.style.color = '#3DB87A';
-    errorEl.textContent = 'Check your email to confirm your account, then sign in.';
+    errorEl.textContent = 'Check your email to confirm your account, then sign in. Don\'t see it? Check your spam or junk folder.';
     errorEl.style.display = 'block';
   }
 }
