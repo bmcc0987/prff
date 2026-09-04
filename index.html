@@ -1555,9 +1555,10 @@ footer {
     <div>
       <div class="section-label">Trade/Team Analyzer</div>
       <div class="section-title">Who wins the trade?</div>
-      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">Enter a trade, compare two full teams, or check a start/sit decision &mdash; we'll tell you who's projected to score more using our projections and 11 seasons of historical matchup data (2015&ndash;2025).</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">Enter a trade, compare two partial/full teams, or check a start/sit decision &mdash; we'll tell you who's projected to score more using our projections and 11 seasons of historical matchup data (2015&ndash;2025).</p>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Trades and team comparisons use our Rest of Season projections (ex. entering AJ Brown gets assigned WR9 to reflect our projections). Start/sit decisions use that week's Weekly rankings instead, since a player's rank can shift week to week &mdash; the WR9 on a random week isn't necessarily the WR9 for the season.</p>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Prefer to skip names? Turn on Numbers Mode and enter ranks directly (like RB6 vs RB7) to see how those ranks have matched up since 2015, regardless of who actually held them.</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">You can also save any of the entered combinations and analysis for the entire season and come back to it any time.</p>
     </div>
   </div>
 
@@ -3805,6 +3806,21 @@ function formatRosterForDisplay(rosterByGroup) {
   return parts.length ? parts.join('') : '<div style="color:#999;">(not filled in)</div>';
 }
 
+// The captured output_html only ever holds what was INSIDE the result
+// container (see outputHtmlWithoutSaveButton) — not the container's own
+// dark background/padding, which is what made the View modal and the
+// downloaded report look "way different" from the real analyzer: white
+// text meant to sit on black was landing on the modal's white background
+// instead, some of it effectively invisible. This wraps it back in the
+// exact same dark card styling the live page uses, so it renders pixel-for
+// -pixel like the real result.
+function wrapComboOutputHtml(row) {
+  if (row.combo_type === 'startsit') {
+    return '<div style="background:#111; border-radius:16px; padding:28px 32px; font-family:\'Lato\',sans-serif;">' + row.output_html + '</div>';
+  }
+  return '<div class="trade-result" style="display:block; margin-top:0;">' + row.output_html + '</div>';
+}
+
 function viewSavedCombo(id) {
   const row = savedCombosCache.find(r => r.id === id);
   if (!row) return;
@@ -3829,7 +3845,7 @@ function viewSavedCombo(id) {
       '<div><strong>' + escapeHtml(row.team_b_name || 'Team B') + ' roster</strong>' + formatRosterForDisplay(inputs.rosterB) + '</div>' +
     '</div>';
 
-  document.getElementById('combo-detail-output').innerHTML = row.output_html || '';
+  document.getElementById('combo-detail-output').innerHTML = row.output_html ? wrapComboOutputHtml(row) : '';
   document.getElementById('combo-detail-modal').classList.add('open');
 }
 
@@ -3864,23 +3880,39 @@ function downloadCurrentComboReport() {
   const styleTag = document.querySelector('style').outerHTML;
   const date = new Date(row.created_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+  // "By year" is collapsed by default on the live site (a <details> the
+  // visitor clicks open) — for a printed report there's no clicking, so it
+  // gets force-expanded here by adding the `open` attribute. Only affects
+  // Start/Sit output, since that's the only result type with a <details>.
+  const outputForPrint = document.getElementById('combo-detail-output').innerHTML.replace(/<details>/g, '<details open>');
+  const inputsForPrint = document.getElementById('combo-detail-inputs').innerHTML;
+
   const reportHtml =
     '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(row.name) + '</title>' + styleTag +
     '<style>' +
-      'body{background:#fff;padding:30px 40px;max-width:800px;margin:0 auto;}' +
-      '.report-heading{font-family:\'Lato\',sans-serif;font-size:11px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;color:#888;}' +
-      '.report-title{font-family:\'Lato\',sans-serif;font-size:24px;font-weight:900;margin:4px 0 2px;}' +
-      '.report-meta{font-family:\'Lato\',sans-serif;font-size:12px;color:#888;margin-bottom:22px;}' +
-      '.report-section-label{font-family:\'Lato\',sans-serif;font-size:11px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#888;margin:22px 0 10px;}' +
-      '.report-footer{font-family:\'Lato\',sans-serif;font-size:10.5px;color:#999;margin-top:30px;padding-top:14px;border-top:1px solid #eee;line-height:1.6;}' +
+      '@page { size: letter portrait; margin: 0.3in; }' +
+      'body{background:#fff;padding:14px 22px;max-width:800px;margin:0 auto;}' +
+      '.report-heading{font-family:\'Lato\',sans-serif;font-size:9.5px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;color:#888;}' +
+      '.report-title{font-family:\'Lato\',sans-serif;font-size:19px;font-weight:900;margin:3px 0 1px;}' +
+      '.report-meta{font-family:\'Lato\',sans-serif;font-size:10.5px;color:#888;margin-bottom:12px;}' +
+      '.report-section-label{font-family:\'Lato\',sans-serif;font-size:9.5px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#888;margin:12px 0 6px;}' +
+      '.report-footer{font-family:\'Lato\',sans-serif;font-size:8.5px;color:#999;margin-top:12px;padding-top:8px;border-top:1px solid #eee;line-height:1.4;}' +
+      // Everything captured from the live analyzer (the dark result card,
+      // the "what you filled in" grid) is scaled down as one block instead
+      // of trying to override each of its many inline font-sizes one by
+      // one — the simplest reliable way to make a result of any length sit
+      // comfortably on one printed portrait page.
+      '.report-scale{transform:scale(0.8); transform-origin:top left; width:125%;}' +
       '@media print { body{padding:0;} }' +
     '</style></head><body>' +
     '<div class="report-heading">PRFFBALL &middot; TRADE/TEAM ANALYZER REPORT</div>' +
     '<div class="report-title">' + escapeHtml(row.name) + '</div>' +
     '<div class="report-meta">Saved ' + date + ' &middot; prffball.com</div>' +
-    document.getElementById('combo-detail-output').innerHTML +
-    '<div class="report-section-label">What was filled in at the time</div>' +
-    document.getElementById('combo-detail-inputs').innerHTML +
+    '<div class="report-scale">' +
+      outputForPrint +
+      '<div class="report-section-label">What was filled in at the time</div>' +
+      inputsForPrint +
+    '</div>' +
     '<div class="report-footer">This report reflects the trade/team combination exactly as it was entered and calculated at the time it was saved. Rankings, projections, probabilities, and trade analyzer results are provided for informational and entertainment purposes only. &mdash; prffball.com</div>' +
     '</body></html>';
 
