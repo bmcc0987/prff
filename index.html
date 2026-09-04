@@ -591,10 +591,13 @@ body.auth-gate-open nav.nav { z-index: 9998; }
   cursor: pointer; padding: 13px 10px; text-decoration: underline;
 }
 .trade-reset-btn:hover { color: #c0392b; }
-/* Pulls the reset link down, closer to the result box beneath it, without
-   touching .trade-reset-btn's other reuses (the save-modal Cancel button,
-   the detail-modal close ✕). */
-.trade-analyze-wrap .trade-reset-btn { padding-top: 18px; padding-bottom: 0; }
+/* Spacing for the reset link specifically (without touching
+   .trade-reset-btn's other reuses — the save-modal Cancel button, the
+   detail-modal close ✕). Uses margin, not padding, for the gap above it —
+   padding is part of a button's actual hoverable box, so a tall padding-top
+   here was making the empty space under the analyze buttons secretly
+   hoverable too, turning the link red before the cursor ever reached it. */
+.trade-analyze-wrap .trade-reset-btn { padding: 6px 10px; margin-top: 14px; }
 
 /* --- Save combination / My Saved Combinations ---------------------- */
 .save-combo-btn {
@@ -646,7 +649,7 @@ body.auth-gate-open nav.nav { z-index: 9998; }
 .combo-detail-section-label:first-of-type { margin-top: 0; }
 .combo-detail-inputs { font-family: 'Lato', sans-serif; font-size: 13px; color: #333; line-height: 1.7; }
 .trade-result {
-  margin-top: 14px; background: #111; border-radius: 16px; padding: 28px 32px;
+  margin-top: 22px; background: #111; border-radius: 16px; padding: 28px 32px;
   display: none;
 }
 .trade-result-verdict { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: white; margin-bottom: 4px; }
@@ -1679,7 +1682,7 @@ footer {
       </div>
       <button class="trade-reset-btn" onclick="resetTradeBuilder()">Click here to reset selections</button>
     </div>
-    <div id="startsit-result" style="display:none; margin-top:14px; background:#111; border-radius:16px; padding:28px 32px; font-family:'Lato',sans-serif;">
+    <div id="startsit-result" style="display:none; margin-top:22px; background:#111; border-radius:16px; padding:28px 32px; font-family:'Lato',sans-serif;">
       <div style="font-size:20px; font-weight:900; color:white; margin-bottom:4px;" id="startsit-title"></div>
       <div style="font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:22px;" id="startsit-sub"></div>
       <div id="startsit-lineups" style="display:none;">
