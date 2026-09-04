@@ -411,26 +411,34 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .conf.low { color: #999; font-weight: 700; }
 
 /* TRADE ANALYZER PAGE */
-.trade-page { min-height: 500px; position: relative; display: flex; align-items: flex-start; }
-.trade-main-col { flex: 1 1 auto; min-width: 0; padding: 48px; }
+.trade-page { min-height: 500px; position: relative; }
+.trade-main-col { padding: 48px; }
 
-/* --- Saved Combinations side panel (Trade/Team Analyzer) --------------- */
+/* --- Saved Combinations side panel (Trade/Team Analyzer) ---------------
+   Always a slide-in drawer from the right edge of the screen, at every
+   width — simpler and more predictable than trying to also lay it out as
+   a permanent side-by-side column on wide screens. The open/close trigger
+   lives in the page header instead, right-aligned above the Team B column
+   (the header uses the same flex row as the rest of the page's headers). */
+.trade-panel-open-btn {
+  background: #111; color: #fff; border: none; border-radius: 100px;
+  padding: 10px 18px; font-family: 'Lato', sans-serif; font-size: 12.5px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.trade-panel-open-btn:hover { background: #2E9E63; }
 .trade-side-panel {
-  flex: 0 0 340px; width: 340px; align-self: stretch;
+  position: fixed; top: 0; right: 0; bottom: 0; height: 100vh;
+  width: 360px; max-width: 88vw;
   background: #fff; border-left: 1px solid #e2e0da; padding: 24px 22px 60px;
-  position: sticky; top: 0; max-height: 100vh; overflow-y: auto;
-  display: none;
+  overflow-y: auto; z-index: 401;
+  transform: translateX(100%); transition: transform 0.25s ease;
+  box-shadow: -10px 0 30px rgba(0,0,0,0.18);
 }
-.trade-side-panel.open { display: block; }
-.trade-panel-toggle-tab {
-  display: block; position: sticky; top: 90px; align-self: flex-start; flex-shrink: 0;
-  background: #111; color: #fff; border: none; border-radius: 8px 0 0 8px;
-  padding: 12px 8px; font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 900;
-  letter-spacing: 0.04em; text-transform: uppercase; writing-mode: vertical-rl; cursor: pointer;
-  margin-left: -1px;
+.trade-side-panel.open { transform: translateX(0); }
+.trade-side-panel-backdrop {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 400;
 }
-.trade-panel-toggle-tab.hidden { display: none; }
-.trade-side-panel-backdrop { display: none; }
+.trade-side-panel-backdrop.open { display: block; }
 .trade-side-panel .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .trade-side-panel .panel-title { font-family: 'Lato', sans-serif; font-size: 14.5px; font-weight: 900; }
 .trade-side-panel .panel-close-btn { background: none; border: none; font-size: 16px; color: #999; cursor: pointer; padding: 2px 4px; }
@@ -453,20 +461,6 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .btn-mini.load:hover { background: #111; color: #fff; }
 .btn-mini.delete { color: #c0392b; border-color: #f3c9c1; }
 .btn-mini.delete:hover { background: #fdf0ee; }
-
-/* Below ~1000px there isn't room for a 340px panel next to a two-team
-   builder — the panel becomes a slide-in overlay with a dimmed backdrop
-   instead of a permanent side-by-side column. */
-@media (max-width: 1000px) {
-  .trade-side-panel {
-    position: fixed; top: 0; right: 0; bottom: 0; height: 100vh;
-    width: 86vw; max-width: 380px; z-index: 401; box-shadow: -10px 0 30px rgba(0,0,0,0.18);
-  }
-  .trade-side-panel-backdrop.open {
-    display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 400;
-  }
-  .trade-panel-toggle-tab { position: fixed; right: 0; top: auto; bottom: 90px; }
-}
 .trade-locked {
   background: white; border: 1px solid #e2e0da; border-radius: 16px;
   padding: 60px 24px; text-align: center;
@@ -1563,6 +1557,7 @@ footer {
       <div class="section-title">Who wins the trade?</div>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">This acts as a trade analyzer or current team analyzer. Enter your current team and/or trade targets vs others in your league and we'll tell you whose team we predict to score more points using our rest of season predictions and how those positions matchup using historical data. For example: If analyzing the RB6 vs RB7, the analyzer shows how many times the RB6 has outscored the RB7 since 2015. The name associated with the RB6 and RB7 reflect our ROS projections and have no bearing on historical analysis.</p>
     </div>
+    <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">📁 Saved <span id="trade-panel-toggle-count"></span></button>
   </div>
 
   <div id="trade-locked" class="trade-locked" style="display:none;">
@@ -1786,12 +1781,11 @@ footer {
  </div>
  <!-- /trade-main-col -->
 
- <!-- Saved Combinations side panel — sits alongside the analyzer on wide
-      screens, becomes a slide-in overlay on narrow ones (see the
-      trade-side-panel media query). Closed by default so a first-time
-      visitor's screen isn't immediately split in two; toggleTradeSidePanel()
+ <!-- Saved Combinations panel — a slide-in drawer from the right edge,
+      opened via the "📁 Saved" button up in the page header (next to the
+      title, above Team B). Closed by default so a first-time visitor's
+      screen isn't immediately covered by it; toggleTradeSidePanel()
       remembers the open/closed choice per-browser between visits. -->
- <button type="button" class="trade-panel-toggle-tab" id="trade-panel-toggle-tab" onclick="toggleTradeSidePanel(true)">Saved <span id="trade-panel-toggle-count"></span></button>
  <div class="trade-side-panel-backdrop" id="trade-side-panel-backdrop" onclick="toggleTradeSidePanel(false)"></div>
  <div class="trade-side-panel" id="trade-side-panel">
   <div class="panel-header">
@@ -3666,17 +3660,15 @@ const TRADE_PANEL_PREF_KEY = 'prff_trade_panel_open';
 // not account data, so it's fine if it's empty on a different device.
 function toggleTradeSidePanel(open) {
   const panel = document.getElementById('trade-side-panel');
-  const tab = document.getElementById('trade-panel-toggle-tab');
   const backdrop = document.getElementById('trade-side-panel-backdrop');
-  if (!panel || !tab || !backdrop) return;
+  if (!panel || !backdrop) return;
   panel.classList.toggle('open', open);
-  tab.classList.toggle('hidden', open);
   backdrop.classList.toggle('open', open);
   try { localStorage.setItem(TRADE_PANEL_PREF_KEY, open ? '1' : '0'); } catch (e) {}
 }
 
 // Applies the remembered open/closed state — closed by default the very
-// first time, so a new visitor's screen isn't immediately split in two.
+// first time, so a new visitor's screen isn't immediately covered by it.
 function initTradeSidePanel() {
   let open = false;
   try { open = localStorage.getItem(TRADE_PANEL_PREF_KEY) === '1'; } catch (e) {}
