@@ -411,7 +411,62 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .conf.low { color: #999; font-weight: 700; }
 
 /* TRADE ANALYZER PAGE */
-.trade-page { padding: 48px; min-height: 500px; }
+.trade-page { min-height: 500px; position: relative; display: flex; align-items: flex-start; }
+.trade-main-col { flex: 1 1 auto; min-width: 0; padding: 48px; }
+
+/* --- Saved Combinations side panel (Trade/Team Analyzer) --------------- */
+.trade-side-panel {
+  flex: 0 0 340px; width: 340px; align-self: stretch;
+  background: #fff; border-left: 1px solid #e2e0da; padding: 24px 22px 60px;
+  position: sticky; top: 0; max-height: 100vh; overflow-y: auto;
+  display: none;
+}
+.trade-side-panel.open { display: block; }
+.trade-panel-toggle-tab {
+  display: block; position: sticky; top: 90px; align-self: flex-start; flex-shrink: 0;
+  background: #111; color: #fff; border: none; border-radius: 8px 0 0 8px;
+  padding: 12px 8px; font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 900;
+  letter-spacing: 0.04em; text-transform: uppercase; writing-mode: vertical-rl; cursor: pointer;
+  margin-left: -1px;
+}
+.trade-panel-toggle-tab.hidden { display: none; }
+.trade-side-panel-backdrop { display: none; }
+.trade-side-panel .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.trade-side-panel .panel-title { font-family: 'Lato', sans-serif; font-size: 14.5px; font-weight: 900; }
+.trade-side-panel .panel-close-btn { background: none; border: none; font-size: 16px; color: #999; cursor: pointer; padding: 2px 4px; }
+.trade-side-panel .panel-sub { font-family: 'Lato', sans-serif; font-size: 11.5px; color: #999; margin-bottom: 16px; line-height: 1.5; }
+.panel-saved-empty { font-family: 'Lato', sans-serif; font-size: 12px; color: #999; line-height: 1.6; }
+.panel-saved-item { background: #faf9f7; border: 1px solid #e6e4de; border-radius: 10px; padding: 12px 13px; margin-bottom: 10px; }
+.panel-saved-name { font-family: 'Lato', sans-serif; font-size: 12.5px; font-weight: 900; margin-bottom: 2px; line-height: 1.35; color: #111; }
+.panel-saved-tag {
+  display: inline-block; font-size: 9px; font-weight: 900; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px; margin-left: 5px; background: #eafaf1; color: #1a7f4f; vertical-align: 1px;
+}
+.panel-saved-meta { font-family: 'Lato', sans-serif; font-size: 10.5px; color: #999; margin: 3px 0 6px; }
+.panel-saved-verdict { font-family: 'Lato', sans-serif; font-size: 10.5px; color: #444; background: #f2f1ee; display: inline-block; padding: 3px 7px; border-radius: 5px; margin-bottom: 8px; }
+.panel-saved-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-mini {
+  border-radius: 100px; padding: 5px 10px; font-family: 'Lato', sans-serif; font-size: 10.5px; font-weight: 700;
+  cursor: pointer; border: 1px solid #d6d4cf; background: #fff; color: #333;
+}
+.btn-mini.load { border-color: #111; }
+.btn-mini.load:hover { background: #111; color: #fff; }
+.btn-mini.delete { color: #c0392b; border-color: #f3c9c1; }
+.btn-mini.delete:hover { background: #fdf0ee; }
+
+/* Below ~1000px there isn't room for a 340px panel next to a two-team
+   builder — the panel becomes a slide-in overlay with a dimmed backdrop
+   instead of a permanent side-by-side column. */
+@media (max-width: 1000px) {
+  .trade-side-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; height: 100vh;
+    width: 86vw; max-width: 380px; z-index: 401; box-shadow: -10px 0 30px rgba(0,0,0,0.18);
+  }
+  .trade-side-panel-backdrop.open {
+    display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 400;
+  }
+  .trade-panel-toggle-tab { position: fixed; right: 0; top: auto; bottom: 90px; }
+}
 .trade-locked {
   background: white; border: 1px solid #e2e0da; border-radius: 16px;
   padding: 60px 24px; text-align: center;
@@ -532,6 +587,56 @@ body.auth-gate-open nav.nav { z-index: 9998; }
   cursor: pointer; padding: 13px 10px; text-decoration: underline;
 }
 .trade-reset-btn:hover { color: #c0392b; }
+
+/* --- Save combination / My Saved Combinations ---------------------- */
+.save-combo-btn {
+  background: none; border: 1px solid #3DB87A; color: #2E9E63; border-radius: 100px;
+  padding: 10px 20px; font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700;
+  cursor: pointer; margin-top: 18px;
+}
+.save-combo-btn:hover { background: #2E9E63; color: #fff; }
+.combo-modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45); z-index: 500; align-items: center; justify-content: center; padding: 20px;
+}
+.combo-modal-overlay.open { display: flex; }
+.combo-modal-inner {
+  background: #fff; border-radius: 14px; padding: 26px 28px; max-width: 420px; width: 100%;
+  max-height: 86vh; overflow-y: auto;
+}
+.combo-detail-inner { max-width: 760px; }
+.combo-save-toast {
+  display: none; align-items: center; gap: 8px; background: #eafaf1; border: 1px solid #b7e4c9;
+  color: #1a7f4f; font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700; padding: 9px 16px;
+  border-radius: 100px; margin-top: 14px;
+}
+.saved-combo-empty { font-family: 'Lato', sans-serif; font-size: 13px; color: #888; }
+.saved-combo-item {
+  background: #fff; border: 1px solid #d6d4cf; border-radius: 12px; padding: 16px 18px;
+  display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.saved-combo-name { font-family: 'Lato', sans-serif; font-size: 14px; font-weight: 900; margin-bottom: 3px; color: #111; }
+.saved-combo-meta { font-family: 'Lato', sans-serif; font-size: 11.5px; color: #999; margin-bottom: 6px; }
+.saved-combo-verdict { font-family: 'Lato', sans-serif; font-size: 12px; color: #444; background: #f2f1ee; display: inline-block; padding: 4px 9px; border-radius: 6px; }
+.saved-combo-tag {
+  display: inline-block; font-size: 9.5px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: 5px; margin-left: 7px; vertical-align: 1px; background: #eafaf1; color: #1a7f4f;
+}
+.saved-combo-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.btn-tiny {
+  border-radius: 100px; padding: 7px 14px; font-family: 'Lato', sans-serif; font-size: 11.5px; font-weight: 700;
+  cursor: pointer; border: 1px solid #d6d4cf; background: #fff; color: #333;
+}
+.btn-tiny.view { border-color: #111; }
+.btn-tiny.view:hover { background: #111; color: #fff; }
+.btn-tiny.delete { color: #c0392b; border-color: #f3c9c1; }
+.btn-tiny.delete:hover { background: #fdf0ee; }
+.combo-detail-section-label {
+  font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase;
+  color: #888; margin: 20px 0 10px;
+}
+.combo-detail-section-label:first-of-type { margin-top: 0; }
+.combo-detail-inputs { font-family: 'Lato', sans-serif; font-size: 13px; color: #333; line-height: 1.7; }
 .trade-result {
   margin-top: 28px; background: #111; border-radius: 16px; padding: 28px 32px;
   display: none;
@@ -1301,6 +1406,10 @@ footer {
       <a href="#" class="article-back-link" style="display:block; text-align:center; margin-top:20px;" onclick="goToHome(event)">← Back to home</a>
     </div>
   </div>
+
+  <div style="font-family:'Lato',sans-serif; font-size:12.5px; color:#999; text-align:center; margin-top:24px;">
+    Looking for your saved trades and team comparisons? Find them in the <strong>Saved</strong> panel on the <a href="#" onclick="goToTrade(event)" style="color:#2E9E63;">Trade/Team Analyzer</a> page.
+  </div>
 </div>
 
 <!-- UPGRADE PAGE (standalone — just the subscription section, reachable
@@ -1447,6 +1556,7 @@ footer {
 
 <!-- TRADE ANALYZER PAGE -->
 <div id="page-trade" class="trade-page" style="display:none;">
+ <div class="trade-main-col">
   <div class="proj-header">
     <div>
       <div class="section-label">Trade/Team Analyzer</div>
@@ -1612,6 +1722,7 @@ footer {
         </table>
       </details>
       <div style="font-size:11px; color:#aaa; margin-top:18px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;">Uses the player that finished at that rank each week since 2015 &mdash; not a player who finished at position by season's end.</div>
+      <button type="button" class="save-combo-btn" onclick="openSaveComboModal()">💾 Save this combination</button>
       </div>
     </div>
     <div id="trade-result" class="trade-result">
@@ -1668,6 +1779,61 @@ footer {
           <div id="single-week-statsB"></div>
         </div>
         <div style="font-size:11px; color:#aaa; margin-top:16px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;" id="single-week-method"></div>
+      </div>
+      <button type="button" class="save-combo-btn" style="margin-left:0;" onclick="openSaveComboModal()">💾 Save this combination</button>
+    </div>
+  </div>
+ </div>
+ <!-- /trade-main-col -->
+
+ <!-- Saved Combinations side panel — sits alongside the analyzer on wide
+      screens, becomes a slide-in overlay on narrow ones (see the
+      trade-side-panel media query). Closed by default so a first-time
+      visitor's screen isn't immediately split in two; toggleTradeSidePanel()
+      remembers the open/closed choice per-browser between visits. -->
+ <button type="button" class="trade-panel-toggle-tab" id="trade-panel-toggle-tab" onclick="toggleTradeSidePanel(true)">Saved <span id="trade-panel-toggle-count"></span></button>
+ <div class="trade-side-panel-backdrop" id="trade-side-panel-backdrop" onclick="toggleTradeSidePanel(false)"></div>
+ <div class="trade-side-panel" id="trade-side-panel">
+  <div class="panel-header">
+    <div class="panel-title">My Saved Combinations</div>
+    <button type="button" class="panel-close-btn" onclick="toggleTradeSidePanel(false)">✕</button>
+  </div>
+  <div class="panel-sub">Frozen snapshots of what you filled in and what the analyzer said, at the time you saved it.</div>
+  <div id="saved-combo-panel-list"></div>
+ </div>
+
+  <!-- Shared "Save this combination" name modal -->
+  <div id="combo-save-modal" class="combo-modal-overlay">
+    <div class="combo-modal-inner">
+      <label class="auth-label" style="margin-top:0;">Name this combination</label>
+      <input class="auth-input" type="text" id="combo-save-name" style="margin-top:0;">
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button type="button" class="trade-analyze-btn" onclick="confirmSaveCombo()">Save</button>
+        <button type="button" class="trade-reset-btn" onclick="closeSaveComboModal()">Cancel</button>
+      </div>
+      <div id="combo-save-error" style="display:none; font-family:'Lato',sans-serif; font-size:13px; color:#c0392b; margin-top:10px;"></div>
+      <div id="combo-save-toast" class="combo-save-toast">✓ Saved &mdash; find it anytime in the Saved panel.</div>
+    </div>
+  </div>
+
+  <!-- Shared saved-combination detail viewer -->
+  <div id="combo-detail-modal" class="combo-modal-overlay">
+    <div class="combo-modal-inner combo-detail-inner">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="font-family:'Lato',sans-serif; font-size:18px; font-weight:900;" id="combo-detail-name"></div>
+        <button type="button" class="trade-reset-btn" style="padding:2px 6px;" onclick="closeComboDetailModal()">✕</button>
+      </div>
+      <div style="font-family:'Lato',sans-serif; font-size:12px; color:#999; margin-top:2px;" id="combo-detail-meta"></div>
+
+      <div class="combo-detail-section-label">What you filled in at the time</div>
+      <div class="combo-detail-inputs" id="combo-detail-inputs"></div>
+
+      <div class="combo-detail-section-label">Result at the time</div>
+      <div id="combo-detail-output"></div>
+
+      <div style="display:flex; gap:10px; margin-top:22px; flex-wrap:wrap;">
+        <button type="button" class="trade-analyze-btn" id="combo-detail-download-btn" onclick="downloadCurrentComboReport()">Download report</button>
+        <button type="button" class="btn-tiny delete" onclick="deleteCurrentComboFromDetail()">Delete this saved combination</button>
       </div>
     </div>
   </div>
@@ -3304,6 +3470,9 @@ function refreshTradeGate() {
     pendingGateArticleId = null;
     showAuthGate('signin');
   }
+
+  initTradeSidePanel();
+  loadSavedCombinations();
 }
 
 // "Click here to reset" — wipes the whole Trade/Team Analyzer builder back
@@ -3346,6 +3515,376 @@ function resetTradeBuilder() {
   if (dupWarning) dupWarning.style.display = 'none';
 
   document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ===========================================================================
+// SAVE COMBINATIONS — lets a signed-in user save a trade, team comparison,
+// or start/sit result to their account. Each save is a frozen snapshot: it
+// stores exactly what was typed in AND the exact result the analyzer showed
+// at that moment, so it never changes later even if projections or the
+// current week do. There is no "re-run with current data" — a saved
+// combination is a permanent record of what it said at the time, on
+// purpose.
+// ===========================================================================
+
+let pendingComboSnapshot = null; // set right before the save-name modal opens
+let savedCombosCache = [];       // last-loaded list, for the Account page
+let currentDetailCombo = null;   // the saved combo currently open in the detail viewer
+
+// Reads the raw text typed into one side's roster position groups, exactly
+// as entered — not filtered against known player names — since this is only
+// ever used for "here's what you filled in," never for calculation.
+function rawRosterByGroup(side) {
+  const groups = {};
+  Object.keys(ROSTER_GROUPS).forEach(groupKey => {
+    groups[groupKey] = namesFromContainer('trade-team' + side + '-roster-' + groupKey);
+  });
+  return groups;
+}
+
+// Snapshots a result container's HTML for saving — with its own "Save this
+// combination" button stripped out first, since that button lives inside
+// the very container being captured. Without this, a saved combination's
+// frozen result would carry a live, working Save button that (confusingly)
+// captures whatever's currently in the analyzer, not the saved snapshot.
+function outputHtmlWithoutSaveButton(containerId) {
+  const el = document.getElementById(containerId);
+  const clone = el.cloneNode(true);
+  const btn = clone.querySelector('.save-combo-btn');
+  if (btn) btn.remove();
+  return clone.innerHTML;
+}
+
+// Looks at whichever result is currently on screen (Start/Sit, Trade, or
+// Team comparison) and captures everything needed to save it: the inputs
+// exactly as typed, and the exact result HTML being shown right now. Returns
+// null if there's nothing real to save yet (no result run, or the analyzer
+// is just showing its "add a player" prompt).
+function captureComboSnapshot() {
+  const nameA = document.getElementById('trade-teamA-name').value.trim() || 'Team A';
+  const nameB = document.getElementById('trade-teamB-name').value.trim() || 'Team B';
+  const inputs = {
+    offersA: namesFromContainer('trade-teamA-rows'),
+    offersB: namesFromContainer('trade-teamB-rows'),
+    rosterA: rawRosterByGroup('A'),
+    rosterB: rawRosterByGroup('B'),
+    numbersMode,
+  };
+
+  const startsitVisible = document.getElementById('startsit-result').style.display !== 'none';
+  if (startsitVisible) {
+    return {
+      comboType: 'startsit',
+      teamAName: nameA,
+      teamBName: nameB,
+      inputs,
+      outputHtml: outputHtmlWithoutSaveButton('startsit-result'),
+      verdictSummary: (document.getElementById('startsit-title').textContent || '').trim(),
+      defaultName: nameA + ' vs ' + nameB + ' — Start/Sit',
+    };
+  }
+
+  const tradeVisible = document.getElementById('trade-result').style.display !== 'none';
+  const hasRealResult = document.getElementById('trade-newroster-section').style.display !== 'none';
+  if (tradeVisible && hasRealResult) {
+    const isTeamsOnly = document.getElementById('trade-receives-section').style.display === 'none';
+    let defaultName;
+    if (isTeamsOnly) {
+      defaultName = nameA + ' vs ' + nameB;
+    } else {
+      defaultName = (inputs.offersA.join(' + ') || nameA) + ' for ' + (inputs.offersB.join(' + ') || nameB);
+    }
+    return {
+      comboType: isTeamsOnly ? 'teams' : 'trade',
+      teamAName: nameA,
+      teamBName: nameB,
+      inputs,
+      outputHtml: outputHtmlWithoutSaveButton('trade-result'),
+      verdictSummary: (document.getElementById('trade-verdict').textContent || '').trim(),
+      defaultName,
+    };
+  }
+
+  return null;
+}
+
+function openSaveComboModal() {
+  if (!currentUser) { showPage(null, 'signin'); return; }
+  const snap = captureComboSnapshot();
+  if (!snap) {
+    alert('Run Analyze Trade, Analyze Teams, or Start/Sit Decision first — there\'s nothing to save yet.');
+    return;
+  }
+  pendingComboSnapshot = snap;
+  document.getElementById('combo-save-name').value = snap.defaultName;
+  document.getElementById('combo-save-error').style.display = 'none';
+  document.getElementById('combo-save-toast').style.display = 'none';
+  document.getElementById('combo-save-modal').classList.add('open');
+}
+
+function closeSaveComboModal() {
+  document.getElementById('combo-save-modal').classList.remove('open');
+  pendingComboSnapshot = null;
+}
+
+async function confirmSaveCombo() {
+  if (!pendingComboSnapshot || !currentUser || !supabaseClient) return;
+  const errEl = document.getElementById('combo-save-error');
+  errEl.style.display = 'none';
+  const name = document.getElementById('combo-save-name').value.trim() || pendingComboSnapshot.defaultName;
+
+  const { error } = await supabaseClient.from('saved_combinations').insert({
+    user_id: currentUser.id,
+    combo_type: pendingComboSnapshot.comboType,
+    name: name,
+    team_a_name: pendingComboSnapshot.teamAName,
+    team_b_name: pendingComboSnapshot.teamBName,
+    inputs: pendingComboSnapshot.inputs,
+    output_html: pendingComboSnapshot.outputHtml,
+    verdict_summary: pendingComboSnapshot.verdictSummary,
+  });
+
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  document.getElementById('combo-save-toast').textContent = '✓ Saved — find it anytime in the Saved panel.';
+  document.getElementById('combo-save-toast').style.display = 'inline-flex';
+  pendingComboSnapshot = null;
+  loadSavedCombinations(); // keep the side panel list fresh for next visit
+  setTimeout(() => { document.getElementById('combo-save-modal').classList.remove('open'); }, 1400);
+}
+
+const COMBO_TYPE_LABELS = { trade: 'Trade', teams: 'Teams', startsit: 'Start/Sit' };
+const TRADE_PANEL_PREF_KEY = 'prff_trade_panel_open';
+
+// Opens (or closes) the Saved Combinations side panel and remembers the
+// choice in this browser (localStorage) so it stays how you left it next
+// time you visit the Trade/Team Analyzer — a light per-browser convenience,
+// not account data, so it's fine if it's empty on a different device.
+function toggleTradeSidePanel(open) {
+  const panel = document.getElementById('trade-side-panel');
+  const tab = document.getElementById('trade-panel-toggle-tab');
+  const backdrop = document.getElementById('trade-side-panel-backdrop');
+  if (!panel || !tab || !backdrop) return;
+  panel.classList.toggle('open', open);
+  tab.classList.toggle('hidden', open);
+  backdrop.classList.toggle('open', open);
+  try { localStorage.setItem(TRADE_PANEL_PREF_KEY, open ? '1' : '0'); } catch (e) {}
+}
+
+// Applies the remembered open/closed state — closed by default the very
+// first time, so a new visitor's screen isn't immediately split in two.
+function initTradeSidePanel() {
+  let open = false;
+  try { open = localStorage.getItem(TRADE_PANEL_PREF_KEY) === '1'; } catch (e) {}
+  toggleTradeSidePanel(open);
+}
+
+async function loadSavedCombinations() {
+  const listEl = document.getElementById('saved-combo-panel-list');
+  const countEl = document.getElementById('trade-panel-toggle-count');
+  if (!listEl) return;
+
+  if (!currentUser) {
+    listEl.innerHTML = '<div class="panel-saved-empty">Sign in to save and revisit trades, team comparisons, and start/sit decisions.</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+  if (!supabaseClient) return;
+
+  listEl.innerHTML = '<div class="panel-saved-empty">Loading…</div>';
+  const { data, error } = await supabaseClient
+    .from('saved_combinations')
+    .select('*')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    listEl.innerHTML = '<div class="panel-saved-empty">Couldn\'t load saved combinations right now.</div>';
+    return;
+  }
+  savedCombosCache = data || [];
+  if (countEl) countEl.textContent = '(' + savedCombosCache.length + ')';
+  renderSavedCombinationsList();
+}
+
+function renderSavedCombinationsList() {
+  const listEl = document.getElementById('saved-combo-panel-list');
+  if (!listEl) return;
+  if (!savedCombosCache.length) {
+    listEl.innerHTML = '<div class="panel-saved-empty">Nothing saved yet — run an analysis above and click "Save this combination."</div>';
+    return;
+  }
+  listEl.innerHTML = savedCombosCache.map(row => {
+    const date = new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const meta = (row.team_a_name && row.team_b_name) ? (row.team_a_name + ' vs ' + row.team_b_name + ' · ' + date) : date;
+    return (
+      '<div class="panel-saved-item">' +
+        '<div class="panel-saved-name">' + escapeHtml(row.name) + '<span class="panel-saved-tag">' + (COMBO_TYPE_LABELS[row.combo_type] || row.combo_type) + '</span></div>' +
+        '<div class="panel-saved-meta">' + escapeHtml(meta) + '</div>' +
+        (row.verdict_summary ? '<div class="panel-saved-verdict">' + escapeHtml(row.verdict_summary) + '</div>' : '') +
+        '<div class="panel-saved-actions">' +
+          '<button type="button" class="btn-mini load" onclick="loadSavedComboIntoAnalyzer(\'' + row.id + '\')">Load</button>' +
+          '<button type="button" class="btn-mini" onclick="viewSavedCombo(\'' + row.id + '\')">View</button>' +
+          '<button type="button" class="btn-mini delete" onclick="deleteSavedCombo(\'' + row.id + '\')">Delete</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+// "Load" refills every box in the builder exactly as it was when this
+// combination was saved — team names, offers, and every roster slot — so
+// you can tweak it or just hit Analyze again. It deliberately does NOT
+// re-run the analysis automatically: the saved snapshot itself is a frozen
+// record and stays untouched in the panel; this only affects the live
+// builder below it.
+function loadSavedComboIntoAnalyzer(id) {
+  const row = savedCombosCache.find(r => r.id === id);
+  if (!row) return;
+  const inputs = row.inputs || {};
+
+  // Numbers Mode has to match what was saved, or shorthand like "RB6" won't
+  // parse right (it'd just be typed as a literal, unrecognized name).
+  if (!!inputs.numbersMode !== numbersMode) toggleNumbersMode();
+
+  document.getElementById('trade-teamA-name').value = row.team_a_name || 'Team A';
+  document.getElementById('trade-teamB-name').value = row.team_b_name || 'Team B';
+
+  ['A', 'B'].forEach(side => {
+    const offers = (side === 'A' ? inputs.offersA : inputs.offersB) || [];
+    document.getElementById('trade-team' + side + '-rows').innerHTML = '';
+    tradeRowCounts[side].offer = 0;
+    offers.forEach(() => addPlayerRow(side, 'offer'));
+    const offerInputs = document.querySelectorAll('#trade-team' + side + '-rows .trade-input');
+    offerInputs.forEach((el, i) => { el.value = offers[i] || ''; });
+
+    const rosterData = (side === 'A' ? inputs.rosterA : inputs.rosterB) || {};
+    rosterSlotCounts[side] = { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 };
+    Object.keys(ROSTER_GROUPS).forEach(groupKey => {
+      document.getElementById('trade-team' + side + '-roster-' + groupKey).innerHTML = '';
+      const names = rosterData[groupKey] || [];
+      const rowsNeeded = Math.max(ROSTER_GROUPS[groupKey].count, names.length);
+      for (let i = 0; i < rowsNeeded; i++) addRosterSlot(side, groupKey);
+      const rosterInputs = document.querySelectorAll('#trade-team' + side + '-roster-' + groupKey + ' .trade-input');
+      rosterInputs.forEach((el, i) => { el.value = names[i] || ''; });
+    });
+    refreshRosteredPlayers(side);
+  });
+
+  document.getElementById('trade-result').style.display = 'none';
+  document.getElementById('startsit-result').style.display = 'none';
+  toggleTradeSidePanel(false);
+  document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Basic HTML-escaping for anything pulled from the database before it's
+// dropped into innerHTML as plain text (name, meta line, verdict summary).
+// output_html is NOT escaped — it's trusted, since it's only ever something
+// this same code generated and saved in the first place, never free text.
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+function formatRosterForDisplay(rosterByGroup) {
+  const parts = [];
+  ['QB', 'WR', 'RB', 'TE', 'FLEX', 'BENCH'].forEach(groupKey => {
+    const names = (rosterByGroup && rosterByGroup[groupKey]) || [];
+    names.forEach(n => parts.push('<div>' + groupKey + ' &nbsp; ' + escapeHtml(n) + '</div>'));
+  });
+  return parts.length ? parts.join('') : '<div style="color:#999;">(not filled in)</div>';
+}
+
+function viewSavedCombo(id) {
+  const row = savedCombosCache.find(r => r.id === id);
+  if (!row) return;
+  currentDetailCombo = row;
+
+  document.getElementById('combo-detail-name').textContent = row.name;
+  const date = new Date(row.created_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  document.getElementById('combo-detail-meta').textContent =
+    (COMBO_TYPE_LABELS[row.combo_type] || row.combo_type) + ' · saved ' + date;
+
+  const inputs = row.inputs || {};
+  const offersHtml = (inputs.offersA && inputs.offersA.length) || (inputs.offersB && inputs.offersB.length)
+    ? '<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:14px;">' +
+        '<div><strong>' + escapeHtml(row.team_a_name || 'Team A') + ' offers</strong><br>' + ((inputs.offersA || []).map(escapeHtml).join('<br>') || '<span style="color:#999;">(none)</span>') + '</div>' +
+        '<div><strong>' + escapeHtml(row.team_b_name || 'Team B') + ' offers</strong><br>' + ((inputs.offersB || []).map(escapeHtml).join('<br>') || '<span style="color:#999;">(none)</span>') + '</div>' +
+      '</div>'
+    : '';
+  document.getElementById('combo-detail-inputs').innerHTML =
+    offersHtml +
+    '<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">' +
+      '<div><strong>' + escapeHtml(row.team_a_name || 'Team A') + ' roster</strong>' + formatRosterForDisplay(inputs.rosterA) + '</div>' +
+      '<div><strong>' + escapeHtml(row.team_b_name || 'Team B') + ' roster</strong>' + formatRosterForDisplay(inputs.rosterB) + '</div>' +
+    '</div>';
+
+  document.getElementById('combo-detail-output').innerHTML = row.output_html || '';
+  document.getElementById('combo-detail-modal').classList.add('open');
+}
+
+function closeComboDetailModal() {
+  document.getElementById('combo-detail-modal').classList.remove('open');
+  currentDetailCombo = null;
+}
+
+async function deleteSavedCombo(id) {
+  if (!confirm('Delete this saved combination? This can\'t be undone.')) return;
+  const { error } = await supabaseClient.from('saved_combinations').delete().eq('id', id);
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  savedCombosCache = savedCombosCache.filter(r => r.id !== id);
+  renderSavedCombinationsList();
+  if (currentDetailCombo && currentDetailCombo.id === id) closeComboDetailModal();
+}
+
+function deleteCurrentComboFromDetail() {
+  if (!currentDetailCombo) return;
+  deleteSavedCombo(currentDetailCombo.id);
+}
+
+// Opens a separate print-ready tab built from a saved combination's frozen
+// snapshot, then hands off to the browser's own print dialog — where "Save
+// as PDF" produces the downloadable report. Reuses the site's own live
+// stylesheet (grabbed at the moment this runs) so the result HTML, which
+// depends on those same CSS classes, renders correctly without duplicating
+// any styles by hand.
+function downloadCurrentComboReport() {
+  if (!currentDetailCombo) return;
+  const row = currentDetailCombo;
+  const styleTag = document.querySelector('style').outerHTML;
+  const date = new Date(row.created_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  const reportHtml =
+    '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(row.name) + '</title>' + styleTag +
+    '<style>' +
+      'body{background:#fff;padding:30px 40px;max-width:800px;margin:0 auto;}' +
+      '.report-heading{font-family:\'Lato\',sans-serif;font-size:11px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;color:#888;}' +
+      '.report-title{font-family:\'Lato\',sans-serif;font-size:24px;font-weight:900;margin:4px 0 2px;}' +
+      '.report-meta{font-family:\'Lato\',sans-serif;font-size:12px;color:#888;margin-bottom:22px;}' +
+      '.report-section-label{font-family:\'Lato\',sans-serif;font-size:11px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#888;margin:22px 0 10px;}' +
+      '.report-footer{font-family:\'Lato\',sans-serif;font-size:10.5px;color:#999;margin-top:30px;padding-top:14px;border-top:1px solid #eee;line-height:1.6;}' +
+      '@media print { body{padding:0;} }' +
+    '</style></head><body>' +
+    '<div class="report-heading">PRFFBALL &middot; TRADE/TEAM ANALYZER REPORT</div>' +
+    '<div class="report-title">' + escapeHtml(row.name) + '</div>' +
+    '<div class="report-meta">Saved ' + date + ' &middot; prffball.com</div>' +
+    document.getElementById('combo-detail-output').innerHTML +
+    '<div class="report-section-label">What was filled in at the time</div>' +
+    document.getElementById('combo-detail-inputs').innerHTML +
+    '<div class="report-footer">This report reflects the trade/team combination exactly as it was entered and calculated at the time it was saved. Rankings, projections, probabilities, and trade analyzer results are provided for informational and entertainment purposes only. &mdash; prffball.com</div>' +
+    '</body></html>';
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('Your browser blocked the report tab from opening — allow pop-ups for this site and try again.'); return; }
+  win.document.open();
+  win.document.write(reportHtml);
+  win.document.close();
+  win.onload = () => win.print();
 }
 
 // Standard starting lineup requirements for this demo. FLEX can be filled by RB/WR/TE.
