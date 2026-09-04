@@ -2319,10 +2319,22 @@ function renderSubscriptionSection(suffix) {
   if (currentUser.isPro) {
     statusEl.textContent = 'Pro';
     statusEl.style.color = '#3DB87A';
-    noteEl.textContent = 'You have full access to season long and weekly projections, the trade/team analyzer, and all articles.';
-    cancelBtn.style.display = 'block';
-    cancelBtn.textContent = 'Cancel Subscription';
-    tiersEl.style.display = 'none';
+    if (currentUser.cancelPending) {
+      // Already cancelled — billing stopped, access is just riding out the
+      // period they already paid for. No Cancel button to click again;
+      // let them re-subscribe right here instead if they change their mind.
+      const endDate = currentUser.proExpiresAt
+        ? new Date(currentUser.proExpiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : 'the end of your billing period';
+      noteEl.textContent = 'Billing has stopped. Your Pro access continues through ' + endDate + ', then ends automatically. Want to keep going? Resubscribe below anytime.';
+      cancelBtn.style.display = 'none';
+      tiersEl.style.display = 'block';
+    } else {
+      noteEl.textContent = 'You have full access to season long and weekly projections, the trade/team analyzer, and all articles.';
+      cancelBtn.style.display = 'block';
+      cancelBtn.textContent = 'Cancel Subscription';
+      tiersEl.style.display = 'none';
+    }
   } else {
     statusEl.textContent = 'Free';
     statusEl.style.color = '#111';
@@ -2561,6 +2573,8 @@ async function cancelSubscription(suffix) {
   // Pass (or promo-code Pro) has no future billing to stop, so it ends
   // access right away instead.
   if (result && result.willCancelAtPeriodEnd) {
+    currentUser.cancelPending = true;
+    currentUser.proExpiresAt = result.periodEndIso || currentUser.proExpiresAt;
     alert('Billing has stopped. Your Pro access continues through ' + result.periodEndDate + ', then ends automatically.');
   } else {
     currentUser.isPro = false;
@@ -3038,7 +3052,7 @@ async function handleForgotPassword(evt) {
 // the logged-in nav state. Called after signup/signin, and once on page
 // load if a session already exists (Supabase persists sessions itself).
 async function logIn(authUser) {
-  let profile = { first_name: '', last_name: '', is_pro: false, is_admin: false, pro_expires_at: null };
+  let profile = { first_name: '', last_name: '', is_pro: false, is_admin: false, pro_expires_at: null, pro_cancel_pending: false };
   if (supabaseClient) {
     const { data } = await supabaseClient.from('profiles').select('*').eq('id', authUser.id).single();
     if (data) profile = data;
@@ -3051,6 +3065,11 @@ async function logIn(authUser) {
     lastName: profile.last_name || '',
     isPro: !!profile.is_pro && notExpired,
     isAdmin: !!profile.is_admin,
+    // true only for a Weekly/Monthly plan that's already been cancelled —
+    // billing stopped, but access continues until pro_expires_at (which in
+    // this case holds the already-paid-through date, not the season end).
+    cancelPending: !!profile.pro_cancel_pending,
+    proExpiresAt: profile.pro_expires_at || null,
   };
   document.getElementById('nav-actions-loggedout').style.display = 'none';
   document.getElementById('nav-actions-loggedin').style.display = 'flex';
