@@ -569,12 +569,22 @@ body.auth-gate-open nav.nav { z-index: 9998; }
 }
 .trade-add-btn:hover { border-color: #3DB87A; color: #3DB87A; }
 .trade-analyze-wrap { text-align: center; margin-top: 28px; }
+.trade-analyze-btn-row {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px;
+}
 .trade-analyze-btn {
   background: #111; color: white; border: none; border-radius: 100px;
   padding: 13px 34px; font-family: 'Lato', sans-serif; font-size: 15px; font-weight: 700;
   cursor: pointer; transition: background 0.15s;
 }
 .trade-analyze-btn:hover { background: #3DB87A; }
+/* The three main "Analyze ___" buttons specifically — same look as
+   .trade-analyze-btn, but sized identically to each other (the widest
+   label, Start/Sit Decision, sets the floor) and centered as a group,
+   instead of each button's width following its own text length. */
+.trade-analyze-btn-row .trade-analyze-btn {
+  padding: 13px 20px; min-width: 230px; text-align: center; box-sizing: border-box;
+}
 .trade-reset-btn {
   background: none; color: #888; border: none;
   font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700;
@@ -1558,7 +1568,7 @@ footer {
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">Enter a trade, compare two partial/full teams, or check a start/sit decision &mdash; we'll tell you who's projected to score more using our projections and 11 seasons of historical matchup data (2015&ndash;2025).</p>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Trades and team comparisons use our Rest of Season projections (ex. entering AJ Brown gets assigned WR9 to reflect our projections). Start/sit decisions use that week's Weekly rankings instead, since a player's rank can shift week to week &mdash; the WR9 on a random week isn't necessarily the WR9 for the season.</p>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Prefer to skip names? Turn on Numbers Mode and enter ranks directly (like RB6 vs RB7) to see how those ranks have matched up since 2015, regardless of who actually held them.</p>
-      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">You can also save any of the entered combinations and analysis for the entire season and come back to it any time.</p>
+      <p style="font-family:'Lato',sans-serif; font-style:italic; font-size:13px; line-height:1.6; color:#777; margin:12px 0 0; max-width:640px;">Save any of the entered combinations and analysis for the entire season and come back to it any time.</p>
     </div>
   </div>
 
@@ -1658,10 +1668,11 @@ footer {
       </div>
     </div>
     <div class="trade-analyze-wrap">
-      <button class="trade-analyze-btn" onclick="analyzeTrade()">Analyze trade</button>
-      <button class="trade-analyze-btn" style="margin-left:10px;" onclick="analyzeTeams()">Analyze Teams</button>
-      <button class="trade-analyze-btn" style="margin-left:10px;" onclick="runStartSitDecision()">Start/Sit Decision</button>
-      <br>
+      <div class="trade-analyze-btn-row">
+        <button class="trade-analyze-btn" onclick="analyzeTrade()">Analyze trade</button>
+        <button class="trade-analyze-btn" onclick="analyzeTeams()">Analyze Teams</button>
+        <button class="trade-analyze-btn" onclick="runStartSitDecision()">Start/Sit Decision</button>
+      </div>
       <button class="trade-reset-btn" onclick="resetTradeBuilder()">Click here to reset selections</button>
     </div>
     <div id="startsit-result" style="display:none; margin-top:28px; background:#111; border-radius:16px; padding:28px 32px; font-family:'Lato',sans-serif;">
@@ -3528,6 +3539,20 @@ let pendingComboSnapshot = null; // set right before the save-name modal opens
 let savedCombosCache = [];       // last-loaded list, for the Account page
 let currentDetailCombo = null;   // the saved combo currently open in the detail viewer
 
+// The pos+rank pairs behind whichever result is currently on screen (set by
+// analyzeTrade / runFullRosterComparison / runStartSitDecision whenever they
+// resolve every starter to a rank), used only to build the default name for
+// a saved combination — e.g. "RB7, WR3 vs RB9, WR5". Cleared back to null
+// whenever a result can't be fully resolved to ranks, so a stale name from a
+// previous run never gets reused.
+let lastComboRankPairs = null;
+
+// Turns [{pos:'RB', rank:7}, {pos:'WR', rank:3}] into "RB7, WR3" — used to
+// build the default name offered when saving a combination.
+function formatRankPairsForName(pairs) {
+  return pairs.map(p => p.pos + p.rank).join(', ');
+}
+
 // Reads the raw text typed into one side's roster position groups, exactly
 // as entered — not filtered against known player names — since this is only
 // ever used for "here's what you filled in," never for calculation.
@@ -3570,6 +3595,9 @@ function captureComboSnapshot() {
 
   const startsitVisible = document.getElementById('startsit-result').style.display !== 'none';
   if (startsitVisible) {
+    const base = lastComboRankPairs
+      ? formatRankPairsForName(lastComboRankPairs.A) + ' vs ' + formatRankPairsForName(lastComboRankPairs.B)
+      : nameA + ' vs ' + nameB;
     return {
       comboType: 'startsit',
       teamAName: nameA,
@@ -3577,7 +3605,7 @@ function captureComboSnapshot() {
       inputs,
       outputHtml: outputHtmlWithoutSaveButton('startsit-result'),
       verdictSummary: (document.getElementById('startsit-title').textContent || '').trim(),
-      defaultName: nameA + ' vs ' + nameB + ' — Start/Sit',
+      defaultName: base + ' - Start/Sit',
     };
   }
 
@@ -3585,12 +3613,15 @@ function captureComboSnapshot() {
   const hasRealResult = document.getElementById('trade-newroster-section').style.display !== 'none';
   if (tradeVisible && hasRealResult) {
     const isTeamsOnly = document.getElementById('trade-receives-section').style.display === 'none';
-    let defaultName;
-    if (isTeamsOnly) {
-      defaultName = nameA + ' vs ' + nameB;
+    let base;
+    if (lastComboRankPairs) {
+      base = formatRankPairsForName(lastComboRankPairs.A) + ' vs ' + formatRankPairsForName(lastComboRankPairs.B);
+    } else if (isTeamsOnly) {
+      base = nameA + ' vs ' + nameB;
     } else {
-      defaultName = (inputs.offersA.join(' + ') || nameA) + ' for ' + (inputs.offersB.join(' + ') || nameB);
+      base = (inputs.offersA.join(' + ') || nameA) + ' for ' + (inputs.offersB.join(' + ') || nameB);
     }
+    const defaultName = base + (isTeamsOnly ? ' - Analyze Team' : ' - Analyze Trade');
     return {
       comboType: isTeamsOnly ? 'teams' : 'trade',
       teamAName: nameA,
@@ -4515,6 +4546,7 @@ function getCurrentTradeWeek() {
 // entirely and just answers "who scores more, and how often."
 async function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroups) {
   const week = getCurrentTradeWeek();
+  lastComboRankPairs = null;
 
   document.getElementById('trade-receives-section').style.display = 'none';
   document.getElementById('trade-history-contextA').style.display = 'none';
@@ -4581,6 +4613,8 @@ async function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroup
     renderRosterCards('trade-newroster-listB', rosterBGroups, false);
     return;
   }
+
+  lastComboRankPairs = { A: pairsA, B: pairsB };
 
   const fracA = compare.winsA / compare.totalSeasons;
   const winnerName = fracA >= 0.5 ? nameA : nameB;
@@ -4793,6 +4827,7 @@ async function analyzeTeams() {
 // cutlines, not career-wide resampling. See computeStartSitHistory().
 async function runStartSitDecision() {
   document.getElementById('trade-result').style.display = 'none';
+  lastComboRankPairs = null;
   const out = document.getElementById('startsit-result');
 
   const rosterAGroups = playersByGroupFromRoster('A');
@@ -4856,6 +4891,8 @@ async function runStartSitDecision() {
     document.getElementById('startsit-bar').style.display = 'none';
     return;
   }
+
+  lastComboRankPairs = { A: pairsA, B: pairsB };
 
   const pct = n => n.toFixed(1) + '%';
 
@@ -4947,6 +4984,7 @@ async function runStartSitDecision() {
 
 async function analyzeTrade() {
   document.getElementById('startsit-result').style.display = 'none';
+  lastComboRankPairs = null;
   const offeredA = namesFromContainer('trade-teamA-rows');   // players Team A gives up
   const offeredB = namesFromContainer('trade-teamB-rows');   // players Team B gives up
   const rosterAGroups = playersByGroupFromRoster('A');
@@ -5145,6 +5183,7 @@ async function analyzeTrade() {
   const historySection = document.getElementById('trade-history-section');
 
   if (historyResult) {
+    lastComboRankPairs = { A: historyResult.pairsA, B: historyResult.pairsB };
     const fracA = historyResult.compare.winsA / historyResult.compare.totalSeasons;
     winnerName = fracA >= 0.5 ? nameA : nameB;
     const winsForWinner = fracA >= 0.5 ? historyResult.compare.winsA : (historyResult.compare.totalSeasons - historyResult.compare.winsA);
