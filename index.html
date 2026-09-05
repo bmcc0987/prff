@@ -599,7 +599,7 @@ body.auth-gate-open nav.nav { z-index: 9998; }
    hoverable too, turning the link red before the cursor ever reached it. */
 .trade-analyze-wrap .trade-reset-btn { padding: 6px 10px; margin-top: 24px; }
 
-/* --- Save combination / My Saved Combinations ---------------------- */
+/* --- Save combination / My Saved Lineups ---------------------- */
 .save-combo-btn {
   background: none; border: 1px solid #3DB87A; color: #2E9E63; border-radius: 100px;
   padding: 10px 20px; font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700;
@@ -1575,7 +1575,7 @@ footer {
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">Enter a trade, compare two partial/full teams, or check a start/sit decision &mdash; we'll tell you who's projected to score more using our projections and 11 seasons of historical matchup data (2015&ndash;2025).</p>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Trades and team comparisons use our Rest of Season projections (ex. entering AJ Brown gets assigned WR9 to reflect our projections). Start/sit decisions use that week's Weekly rankings instead, since a player's rank can shift week to week &mdash; the WR9 on a random week isn't necessarily the WR9 for the season.</p>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Prefer to skip names? Turn on Numbers Mode and enter ranks directly (like RB6 vs RB7) to see how those ranks have matched up since 2015, regardless of who actually held them.</p>
-      <p style="font-family:'Lato',sans-serif; font-style:italic; font-size:13px; line-height:1.6; color:#777; margin:12px 0 0; max-width:640px;">Save any of the entered combinations and analysis for the entire season and come back to it any time.</p>
+      <p style="font-family:'Lato',sans-serif; font-style:italic; font-size:13px; line-height:1.6; color:#777; margin:12px 0 0; max-width:640px;">Save any of the entered lineups and analysis for the entire season and come back to it any time.</p>
     </div>
   </div>
 
@@ -1602,7 +1602,7 @@ footer {
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
       <button type="button" id="numbers-mode-toggle" class="trade-add-btn" style="width:auto; white-space:nowrap;" onclick="toggleNumbersMode()">Numbers Mode: Off</button>
       <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Type shorthand like QB6, RB5, WR1, TE7.</span>
-      <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" style="margin-left:auto;" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">Saved Combinations 📁 <span id="trade-panel-toggle-count"></span></button>
+      <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" style="margin-left:auto;" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">Saved Lineups 📁 <span id="trade-panel-toggle-count"></span></button>
     </div>
     <div class="trade-cols">
       <div class="trade-col">
@@ -1738,7 +1738,7 @@ footer {
         </table>
       </details>
       <div style="font-size:11px; color:#aaa; margin-top:18px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;">Uses the player that finished at that rank each week since 2015 &mdash; not a player who finished at position by season's end.</div>
-      <button type="button" class="save-combo-btn" onclick="openSaveComboModal()">💾 Save this combination</button>
+      <button type="button" class="save-combo-btn" onclick="openSaveComboModal()">💾 Save this lineup</button>
       </div>
     </div>
     <div id="trade-result" class="trade-result">
@@ -1796,7 +1796,7 @@ footer {
         </div>
         <div style="font-size:11px; color:#aaa; margin-top:16px; padding-top:14px; border-top:1px solid #eee; line-height:1.5;" id="single-week-method"></div>
       </div>
-      <button type="button" class="save-combo-btn" style="margin-left:0;" onclick="openSaveComboModal()">💾 Save this combination</button>
+      <button type="button" class="save-combo-btn" style="margin-left:0;" onclick="openSaveComboModal()">💾 Save this lineup</button>
     </div>
   </div>
  </div>
@@ -1810,17 +1810,17 @@ footer {
  <div class="trade-side-panel-backdrop" id="trade-side-panel-backdrop" onclick="toggleTradeSidePanel(false)"></div>
  <div class="trade-side-panel" id="trade-side-panel">
   <div class="panel-header">
-    <div class="panel-title">My Saved Combinations</div>
+    <div class="panel-title">My Saved Lineups</div>
     <button type="button" class="panel-close-btn" onclick="toggleTradeSidePanel(false)">✕</button>
   </div>
   <div class="panel-sub">Frozen snapshots of what you filled in and what the analyzer said, at the time you saved it.</div>
   <div id="saved-combo-panel-list"></div>
  </div>
 
-  <!-- Shared "Save this combination" name modal -->
+  <!-- Shared "Save this lineup" name modal -->
   <div id="combo-save-modal" class="combo-modal-overlay">
     <div class="combo-modal-inner">
-      <label class="auth-label" style="margin-top:0;">Name this combination</label>
+      <label class="auth-label" style="margin-top:0;">Name this lineup</label>
       <input class="auth-input" type="text" id="combo-save-name" style="margin-top:0;">
       <div style="display:flex; gap:10px; margin-top:16px;">
         <button type="button" class="trade-analyze-btn" onclick="confirmSaveCombo()">Save</button>
@@ -1848,7 +1848,7 @@ footer {
 
       <div style="display:flex; gap:10px; margin-top:22px; flex-wrap:wrap;">
         <button type="button" class="trade-analyze-btn" id="combo-detail-download-btn" onclick="downloadCurrentComboReport()">Download report</button>
-        <button type="button" class="btn-tiny delete" onclick="deleteCurrentComboFromDetail()">Delete this saved combination</button>
+        <button type="button" class="btn-tiny delete" onclick="deleteCurrentComboFromDetail()">Delete this saved lineup</button>
       </div>
     </div>
   </div>
@@ -3736,7 +3736,7 @@ async function loadSavedCombinations() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    listEl.innerHTML = '<div class="panel-saved-empty">Couldn\'t load saved combinations right now.</div>';
+    listEl.innerHTML = '<div class="panel-saved-empty">Couldn\'t load saved lineups right now.</div>';
     return;
   }
   savedCombosCache = data || [];
@@ -3748,7 +3748,7 @@ function renderSavedCombinationsList() {
   const listEl = document.getElementById('saved-combo-panel-list');
   if (!listEl) return;
   if (!savedCombosCache.length) {
-    listEl.innerHTML = '<div class="panel-saved-empty">Run an analysis and click "Save this combination."</div>';
+    listEl.innerHTML = '<div class="panel-saved-empty">Run an analysis and click "Save this lineup."</div>';
     return;
   }
   listEl.innerHTML = savedCombosCache.map(row => {
@@ -3818,7 +3818,7 @@ function loadSavedComboIntoAnalyzer(id) {
   document.getElementById(otherContainerId).style.display = 'none';
   const resultContainer = document.getElementById(resultContainerId);
   resultContainer.innerHTML = row.output_html +
-    '<button type="button" class="save-combo-btn" style="margin-left:0;" onclick="openSaveComboModal()">💾 Save this combination</button>';
+    '<button type="button" class="save-combo-btn" style="margin-left:0;" onclick="openSaveComboModal()">💾 Save this lineup</button>';
   resultContainer.style.display = 'block';
 
   toggleTradeSidePanel(false);
@@ -3893,7 +3893,7 @@ function closeComboDetailModal() {
 }
 
 async function deleteSavedCombo(id) {
-  if (!confirm('Delete this saved combination? This can\'t be undone.')) return;
+  if (!confirm('Delete this saved lineup? This can\'t be undone.')) return;
   const { error } = await supabaseClient.from('saved_combinations').delete().eq('id', id);
   if (error) { alert('Could not delete: ' + error.message); return; }
   savedCombosCache = savedCombosCache.filter(r => r.id !== id);
@@ -3960,7 +3960,7 @@ async function downloadCurrentComboReport() {
       inputsForImage +
       '<div style="font-family:\'Lato\',sans-serif; font-size:10.5px; font-weight:900; letter-spacing:0.05em; text-transform:uppercase; color:#888; margin:20px 0 6px;">Analysis</div>' +
       outputForImage +
-      '<div style="font-family:\'Lato\',sans-serif; font-size:9.5px; color:#999; margin-top:18px; padding-top:10px; border-top:1px solid #eee; line-height:1.5;">This report reflects the trade/team combination exactly as it was entered and calculated at the time it was saved. Rankings, projections, probabilities, and trade analyzer results are provided for informational and entertainment purposes only. &mdash; prffball.com</div>';
+      '<div style="font-family:\'Lato\',sans-serif; font-size:9.5px; color:#999; margin-top:18px; padding-top:10px; border-top:1px solid #eee; line-height:1.5;">This report reflects the saved lineup exactly as it was entered and calculated at the time it was saved. Rankings, projections, probabilities, and trade analyzer results are provided for informational and entertainment purposes only. &mdash; prffball.com</div>';
     document.body.appendChild(container);
 
     // Give web fonts a beat to finish loading so the image doesn't get
