@@ -571,7 +571,7 @@ footer {
 
 /* PUBLISHED RANKINGS TABLE — matches the reference layout exactly */
 .pub-table-wrap { border: 2px solid #111; border-radius: 4px; overflow: hidden; background: white; width: 85%; min-width: 320px; margin: 0 auto; position: relative; }
-.export-csv-btn { position: absolute; top: 12px; right: 16px; font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #fff; background: #3DB87A; border: none; border-radius: 100px; padding: 6px 16px; cursor: pointer; z-index: 2; transition: background 0.15s; }
+.export-csv-btn { position: absolute; top: 46px; right: 16px; font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #fff; background: #3DB87A; border: none; border-radius: 100px; padding: 6px 16px; cursor: pointer; z-index: 2; transition: background 0.15s; }
 .export-csv-btn:hover { background: #2fa06c; }
 .pub-table-flex { display: flex; align-items: flex-start; }
 .pub-table-flex .pub-table-scroll { flex: 1; min-width: 0; }
@@ -628,6 +628,22 @@ footer {
 
 /* PUBLISHED TEAM TOTALS — Option A: dark ranked list with in-row bar */
 .totals-pub-wrap { background: #0d0d0e; border-radius: 16px; overflow: hidden; font-family: 'Lato', sans-serif; width: 60%; min-width: 460px; margin: 0 auto; position: relative; }
+
+.totals-split-layout { display: flex; gap: 24px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+.totals-split-left { flex: 1 1 460px; max-width: 640px; }
+.totals-split-left .totals-pub-wrap { width: 100%; min-width: 0; margin: 0; }
+.totals-split-right { flex: 1 1 340px; max-width: 400px; }
+.matchups-panel { background: #0d0d0e; border-radius: 16px; padding: 20px 20px 8px; font-family: 'Lato', sans-serif; }
+.matchups-panel-title { color: #fff; font-weight: 700; font-size: 18px; margin-bottom: 14px; }
+.matchups-panel-game { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px 0; }
+.matchups-panel-game:last-child { border-bottom: none; }
+.matchups-panel-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.matchups-panel-team { color: #eee; font-size: 14px; font-weight: 600; }
+.matchups-panel-total { color: #7fd99a; font-size: 14px; font-weight: 700; white-space: nowrap; }
+@media (max-width: 720px) {
+  .totals-split-layout { flex-direction: column; align-items: stretch; }
+  .totals-split-left, .totals-split-right { max-width: 100%; }
+}
 .totals-pub-header-block { padding: 16px 28px 10px; }
 .totals-pub-week { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #3DB87A; }
 .totals-pub-title { font-size: 22px; font-weight: 900; color: #fff; margin-top: 3px; padding: 0; border: none; text-align: left; }
@@ -1590,11 +1606,20 @@ footer {
       <div class="admin-controls">
         <div class="admin-field">
           <label class="auth-label">Week</label>
-          <input class="admin-input-small" type="number" id="admintotals-week" min="1" max="18" value="13">
+          <input class="admin-input-small" type="number" id="admintotals-week" min="1" max="18" value="1">
         </div>
         <button class="trade-add-btn" style="margin-top:20px;" onclick="loadAdminTotalsTable()">Load existing</button>
       </div>
       <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">All 32 teams are pre-listed. Enter an implied total, or type BYE for teams not playing this week.</div>
+
+      <div id="matchup-builder" style="margin-bottom:24px; border:1px solid #ddd; border-radius:10px; padding:16px; background:#fafafa;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="font-family:'Lato',sans-serif; font-weight:700; font-size:14px;">Build matchups (drag teams into a game, fill in game total + spread — the implied total below fills in automatically)</div>
+          <button class="trade-add-btn" onclick="resetMatchupBuilder()">Clear matchups</button>
+        </div>
+        <div id="matchup-pool" style="display:flex; flex-wrap:wrap; gap:6px; padding:10px; background:#fff; border:1px dashed #ccc; border-radius:8px; margin-bottom:14px; min-height:40px;"></div>
+        <div id="matchup-grid" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;"></div>
+      </div>
 
       <table class="admin-table">
         <thead>
@@ -2586,8 +2611,11 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
+    const matchupsHTML = buildMatchupsPanelHTML(selectedWeek);
     section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.teamTotals[selectedWeek]) +
-      buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows);
+      (matchupsHTML
+        ? '<div class="totals-split-layout"><div class="totals-split-left">' + buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows) + '</div><div class="totals-split-right">' + matchupsHTML + '</div></div>'
+        : buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows));
     container.appendChild(section);
     return;
   }
@@ -5136,6 +5164,10 @@ function switchAdminTool(tool) {
     document.getElementById('admin-tab-' + t).classList.toggle('active', tool === t);
   });
   if (tool === 'totals' && !document.getElementById('admintotals-rows').children.length) {
+    const publishedWeeks = Object.keys(publishedTeamTotals).map(w => parseInt(w, 10)).filter(n => !isNaN(n));
+    if (publishedWeeks.length > 0) {
+      document.getElementById('admintotals-week').value = Math.max(...publishedWeeks);
+    }
     loadAdminTotalsTable();
   }
   if (tool === 'totals-sl' && !document.getElementById('sltotals-rows').children.length) {
@@ -5621,6 +5653,190 @@ Object.keys(POSITION_ROSTERS).forEach(pos => {
 });
 
 const publishedTeamTotals = {}; // key "week" -> { rows: [{team, value}] } — value is a number or "BYE"
+let publishedMatchups = {}; // key "week" -> [{teamA, teamB, gameTotal, spreadA, spreadB, totalA, totalB}, ...]
+
+// ==================== MATCHUP BUILDER (admin) ====================
+// Drag teams into a game, enter game total + each team's own spread, and
+// the implied total (game total/2 - spread/2) auto-fills into the flat
+// totals table below — no manual arithmetic needed. Matchup groupings are
+// also saved (weekly_matchups table) so the site-facing matchups view can
+// show real games, not just a flat ranked list.
+let matchupBuilderState = [];
+
+function emptyMatchupSlot() { return { teamA: null, teamB: null, gameTotal: '', spreadA: '', spreadB: '' }; }
+
+function resetMatchupBuilder() {
+  matchupBuilderState = Array.from({ length: 16 }, emptyMatchupSlot);
+  renderMatchupBuilder();
+  syncMatchupsToFlatTable();
+}
+
+function loadMatchupBuilderFromPublished(week) {
+  const matchups = publishedMatchups[week];
+  if (matchups && matchups.length > 0) {
+    matchupBuilderState = matchups.slice().sort((a, b) => a.matchupIndex - b.matchupIndex).map(m => ({
+      teamA: m.teamA, teamB: m.teamB,
+      gameTotal: String(m.gameTotal), spreadA: String(m.spreadA), spreadB: String(m.spreadB),
+    }));
+    while (matchupBuilderState.length < 16) matchupBuilderState.push(emptyMatchupSlot());
+  } else {
+    matchupBuilderState = Array.from({ length: 16 }, emptyMatchupSlot);
+  }
+  renderMatchupBuilder();
+}
+
+function assignedMatchupTeams() {
+  const set = new Set();
+  matchupBuilderState.forEach(m => { if (m.teamA) set.add(m.teamA); if (m.teamB) set.add(m.teamB); });
+  return set;
+}
+
+function computeMatchupTotals(m) {
+  const gt = parseFloat(m.gameTotal), sa = parseFloat(m.spreadA), sb = parseFloat(m.spreadB);
+  if (isNaN(gt) || isNaN(sa) || isNaN(sb)) return null;
+  return {
+    totalA: Math.round(((gt / 2) - (sa / 2)) * 100) / 100,
+    totalB: Math.round(((gt / 2) - (sb / 2)) * 100) / 100,
+  };
+}
+
+function renderMatchupBuilder() {
+  const pool = document.getElementById('matchup-pool');
+  const grid = document.getElementById('matchup-grid');
+  if (!pool || !grid) return;
+  const assigned = assignedMatchupTeams();
+  const unassigned = NFL_TEAMS.filter(t => !assigned.has(t));
+
+  pool.innerHTML = unassigned.map(team =>
+    '<div draggable="true" data-team="' + team + '" ondragstart="onTeamDragStart(event)" ' +
+    'style="padding:6px 10px; background:#eee; border-radius:6px; font-family:\'Lato\',sans-serif; font-size:12px; font-weight:600; cursor:grab;">' +
+    (NFL_TEAM_ABBR[team] || team) + '</div>'
+  ).join('') || '<div style="font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">All teams assigned</div>';
+
+  grid.innerHTML = matchupBuilderState.map((m, idx) => renderMatchupBox(m, idx)).join('');
+  matchupBuilderState.forEach((m, idx) => updateMatchupComputedDisplay(idx));
+}
+
+function matchupSlotHTML(team, idx, slotKey) {
+  if (team) {
+    return '<div draggable="true" data-team="' + team + '" data-from-idx="' + idx + '" data-from-slot="' + slotKey + '" ondragstart="onTeamDragStart(event)" ' +
+      'style="padding:6px 10px; background:#1a1a1a; color:#fff; border-radius:6px; font-family:\'Lato\',sans-serif; font-size:12px; font-weight:700; cursor:grab; display:flex; align-items:center; gap:6px;">' +
+      (NFL_TEAM_ABBR[team] || team) +
+      '<span onclick="removeTeamFromMatchup(' + idx + ',\'' + slotKey + '\')" style="cursor:pointer; opacity:0.6;">\u00d7</span></div>';
+  }
+  return '<div data-idx="' + idx + '" data-slot="' + slotKey + '" ondragover="onMatchupDragOver(event)" ondrop="onMatchupDrop(event)" ' +
+    'style="padding:6px 10px; background:#f0f0f0; border:1px dashed #bbb; border-radius:6px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999; text-align:center; min-width:56px;">Drop</div>';
+}
+
+function renderMatchupBox(m, idx) {
+  const bothFilled = m.teamA && m.teamB;
+  let calcHTML = '';
+  if (bothFilled) {
+    calcHTML =
+      '<div style="margin-top:8px; font-family:\'Lato\',sans-serif; font-size:11px;">Game total ' +
+        '<input type="number" step="0.5" value="' + m.gameTotal + '" data-field="gameTotal" oninput="updateMatchupField(' + idx + ',\'gameTotal\',this.value)" style="width:52px; font-size:11px; padding:2px 4px;"></div>' +
+      '<div style="display:flex; justify-content:space-between; gap:6px; margin-top:6px; font-family:\'Lato\',sans-serif; font-size:11px;">' +
+        '<div>' + (NFL_TEAM_ABBR[m.teamA] || m.teamA) + ' spread ' +
+          '<input type="number" step="0.5" value="' + m.spreadA + '" data-field="spreadA" oninput="updateMatchupField(' + idx + ',\'spreadA\',this.value)" style="width:46px; font-size:11px; padding:2px 4px;"></div>' +
+        '<div>' + (NFL_TEAM_ABBR[m.teamB] || m.teamB) + ' spread ' +
+          '<input type="number" step="0.5" value="' + m.spreadB + '" data-field="spreadB" oninput="updateMatchupField(' + idx + ',\'spreadB\',this.value)" style="width:46px; font-size:11px; padding:2px 4px;"></div>' +
+      '</div>' +
+      '<div id="matchup-computed-' + idx + '" style="margin-top:6px; font-family:\'Lato\',sans-serif; font-size:11px; font-weight:700; color:#2E9E63; min-height:14px;"></div>';
+  }
+
+  return '<div id="matchup-box-' + idx + '" style="border:1px solid #ddd; border-radius:8px; padding:8px; background:#fff;">' +
+    '<div style="display:flex; gap:6px; align-items:center;">' + matchupSlotHTML(m.teamA, idx, 'A') + '<span style="font-size:11px; color:#999;">@</span>' + matchupSlotHTML(m.teamB, idx, 'B') + '</div>' +
+    calcHTML +
+    '</div>';
+}
+
+function updateMatchupComputedDisplay(idx) {
+  const el = document.getElementById('matchup-computed-' + idx);
+  if (!el) return;
+  const m = matchupBuilderState[idx];
+  const totals = computeMatchupTotals(m);
+  el.textContent = totals ? ((NFL_TEAM_ABBR[m.teamA] || m.teamA) + ': ' + totals.totalA + '  \u00b7  ' + (NFL_TEAM_ABBR[m.teamB] || m.teamB) + ': ' + totals.totalB) : '';
+}
+
+function onTeamDragStart(event) {
+  const team = event.target.getAttribute('data-team');
+  const fromIdx = event.target.getAttribute('data-from-idx');
+  const fromSlot = event.target.getAttribute('data-from-slot');
+  event.dataTransfer.setData('text/plain', JSON.stringify({ team, fromIdx, fromSlot }));
+}
+
+function onMatchupDragOver(event) { event.preventDefault(); }
+
+function onMatchupDrop(event) {
+  event.preventDefault();
+  let data;
+  try { data = JSON.parse(event.dataTransfer.getData('text/plain')); } catch (e) { return; }
+  const toIdx = parseInt(event.currentTarget.getAttribute('data-idx'), 10);
+  const toSlot = event.currentTarget.getAttribute('data-slot');
+  const targetKey = toSlot === 'A' ? 'teamA' : 'teamB';
+  if (matchupBuilderState[toIdx][targetKey]) return; // slot already occupied — ignore drop
+
+  if (data.fromIdx !== null && data.fromIdx !== undefined && data.fromIdx !== '') {
+    const fi = parseInt(data.fromIdx, 10);
+    matchupBuilderState[fi][data.fromSlot === 'A' ? 'teamA' : 'teamB'] = null;
+  }
+  matchupBuilderState[toIdx][targetKey] = data.team;
+  renderMatchupBuilder();
+  syncMatchupsToFlatTable();
+}
+
+function removeTeamFromMatchup(idx, slot) {
+  matchupBuilderState[idx][slot === 'A' ? 'teamA' : 'teamB'] = null;
+  renderMatchupBuilder();
+  syncMatchupsToFlatTable();
+}
+
+function updateMatchupField(idx, field, value) {
+  matchupBuilderState[idx][field] = value;
+  // Spreads are symmetric in a real game — auto-mirror the other team's
+  // spread, but each stays independently editable afterward.
+  if (field === 'spreadA' || field === 'spreadB') {
+    const v = parseFloat(value);
+    if (!isNaN(v)) {
+      const otherField = field === 'spreadA' ? 'spreadB' : 'spreadA';
+      matchupBuilderState[idx][otherField] = String(-v);
+      const otherInput = document.querySelector('#matchup-box-' + idx + ' [data-field="' + otherField + '"]');
+      if (otherInput) otherInput.value = -v;
+    }
+  }
+  updateMatchupComputedDisplay(idx);
+  syncMatchupsToFlatTable();
+}
+
+// Writes each matchup's computed implied total directly into that team's
+// row in the existing flat totals table — the single source of truth the
+// Publish button already reads from.
+function syncMatchupsToFlatTable() {
+  matchupBuilderState.forEach(m => {
+    if (!m.teamA || !m.teamB) return;
+    const totals = computeMatchupTotals(m);
+    if (!totals) return;
+    const inputA = document.querySelector('#admintotals-rows input[data-team="' + m.teamA + '"]');
+    const inputB = document.querySelector('#admintotals-rows input[data-team="' + m.teamB + '"]');
+    if (inputA) inputA.value = totals.totalA;
+    if (inputB) inputB.value = totals.totalB;
+  });
+}
+
+function collectMatchupsForPublish() {
+  const results = [];
+  matchupBuilderState.forEach((m, idx) => {
+    if (!m.teamA || !m.teamB) return;
+    const totals = computeMatchupTotals(m);
+    if (!totals) return;
+    results.push({
+      matchupIndex: idx, teamA: m.teamA, teamB: m.teamB,
+      gameTotal: parseFloat(m.gameTotal), spreadA: parseFloat(m.spreadA), spreadB: parseFloat(m.spreadB),
+      totalA: totals.totalA, totalB: totals.totalB,
+    });
+  });
+  return results;
+}
 
 function loadAdminTotalsTable() {
   const week = document.getElementById('admintotals-week').value;
@@ -5639,6 +5855,8 @@ function loadAdminTotalsTable() {
       '<td><input type="text" data-team="' + team + '" value="' + val + '" placeholder="e.g. 24.5 or BYE"></td>';
     tbody.appendChild(tr);
   });
+
+  loadMatchupBuilderFromPublished(week);
 }
 
 function sortAdminTotalsRows() {
@@ -5666,6 +5884,15 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName) {
   const range = (maxVal - minVal) || 1;
 
   let html = '<div class="totals-pub-wrap">';
+  html += '<div style="position:absolute; top:16px; right:20px; display:flex; align-items:center; gap:6px; z-index:2;">' +
+    '<svg width="26" height="26" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">' +
+      '<circle cx="26" cy="26" r="25" fill="black" stroke="white" stroke-width="1.5"/>' +
+      '<text x="26" y="23" font-family="\'Lato\',sans-serif" font-weight="900" font-size="13" fill="white" text-anchor="middle" letter-spacing="-0.5">P/R</text>' +
+      '<text x="26" y="33" font-family="\'Lato\',sans-serif" font-weight="700" font-size="5.2" fill="white" text-anchor="middle" letter-spacing="0.8">FANTASY</text>' +
+      '<text x="26" y="39" font-family="\'Lato\',sans-serif" font-weight="700" font-size="5.2" fill="white" text-anchor="middle" letter-spacing="0.8">FOOTBALL</text>' +
+    '</svg>' +
+    '<span style="font-family:\'Lato\',sans-serif; font-weight:700; font-size:13px; color:#fff;">Process<span style="color:#2E9E63;">/</span>Results</span>' +
+  '</div>';
   if (exportFnName) {
     html += '<button type="button" class="export-csv-btn" onclick="' + exportFnName + '()">Export as CSV</button>';
   }
@@ -5698,8 +5925,32 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName) {
   return html;
 }
 
+// Site-facing matchups view: team name + implied total, grouped by real
+// game, so users can see who's playing whom rather than just a flat
+// ranked list. Sourced from publishedMatchups (set by the admin drag-drop
+// matchup builder) — shows nothing if that week was published the old
+// way (flat totals only, no matchup groupings saved).
+function buildMatchupsPanelHTML(week) {
+  const matchups = publishedMatchups[week];
+  if (!matchups || matchups.length === 0) return '';
+
+  const sorted = matchups.slice().sort((a, b) => a.matchupIndex - b.matchupIndex);
+  let html = '<div class="matchups-panel">';
+  html += '<div class="matchups-panel-title">Matchups</div>';
+  sorted.forEach(m => {
+    html += '<div class="matchups-panel-game">' +
+      '<div class="matchups-panel-row"><span class="matchups-panel-team">' + m.teamA + '</span><span class="matchups-panel-total">' + m.totalA + '</span></div>' +
+      '<div class="matchups-panel-row"><span class="matchups-panel-team">' + m.teamB + '</span><span class="matchups-panel-total">' + m.totalB + '</span></div>' +
+      '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+
 async function publishAdminTotalsTable() {
   const week = document.getElementById('admintotals-week').value;
+
   const rows = [];
   document.querySelectorAll('#admintotals-rows tr').forEach(tr => {
     const input = tr.querySelector('input');
@@ -5724,6 +5975,8 @@ async function publishAdminTotalsTable() {
 
   publishedTeamTotals[week] = { rows };
   publishedTimestamps.teamTotals[week] = new Date().toISOString();
+  const matchupRows = collectMatchupsForPublish();
+  publishedMatchups[week] = matchupRows;
   saveAppStateLocally();
   const previewWrap = document.getElementById('admintotals-preview-wrap');
   const preview = document.getElementById('admintotals-preview');
@@ -5734,6 +5987,11 @@ async function publishAdminTotalsTable() {
       // before this was accounted for.
       await supabaseReplaceRows('weekly_team_totals', { week: Number(week) },
         rows.map(r => ({ week: Number(week), team: r.team, value: r.value === 'BYE' ? null : r.value })));
+      await supabaseReplaceRows('weekly_matchups', { week: Number(week) },
+        matchupRows.map(m => ({
+          week: Number(week), matchup_index: m.matchupIndex, team_a: m.teamA, team_b: m.teamB,
+          game_total: m.gameTotal, spread_a: m.spreadA, spread_b: m.spreadB, total_a: m.totalA, total_b: m.totalB,
+        })));
     } catch (e) {
       console.error('Supabase publish failed:', e);
       preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Saved locally, but publishing to the database failed: ' + (e.message || e) + '</div>';
@@ -7096,6 +7354,7 @@ function saveAppStateLocally() {
       publishedSeasonLong,
       publishedSeasonLongTotals,
       publishedTeamTotals,
+      publishedMatchups,
       publishedRankings,
       publishedROS,
     };
@@ -7115,6 +7374,7 @@ function loadAppStateLocally() {
     if (state.publishedSeasonLong) Object.assign(publishedSeasonLong, state.publishedSeasonLong);
     if (state.publishedSeasonLongTotals) publishedSeasonLongTotals = state.publishedSeasonLongTotals;
     if (state.publishedTeamTotals) Object.assign(publishedTeamTotals, state.publishedTeamTotals);
+    if (state.publishedMatchups) Object.assign(publishedMatchups, state.publishedMatchups);
     if (state.publishedRankings) Object.assign(publishedRankings, state.publishedRankings);
     if (state.publishedROS) Object.assign(publishedROS, state.publishedROS);
   } catch (e) {
@@ -7199,13 +7459,14 @@ async function loadAppState() {
     return;
   }
   try {
-    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes] = await Promise.all([
+    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes] = await Promise.all([
       supabaseClient.from('articles').select('*'),
       supabaseClient.from('season_long_rankings').select('*'),
       supabaseClient.from('season_long_totals').select('*'),
       supabaseClient.from('weekly_rankings').select('*'),
       supabaseClient.from('ros_rankings').select('*'),
       supabaseClient.from('weekly_team_totals').select('*'),
+      supabaseClient.from('weekly_matchups').select('*'),
     ]);
     if (artRes.error) throw artRes.error;
 
@@ -7264,6 +7525,19 @@ async function loadAppState() {
         publishedTimestamps.teamTotals[row.week] = latestTimestamp(publishedTimestamps.teamTotals[row.week], row.published_at);
       });
       Object.assign(publishedTeamTotals, byWeek);
+    }
+
+    if (!wkMatchRes.error) {
+      const byWeekMatchups = {};
+      (wkMatchRes.data || []).forEach(row => {
+        if (!byWeekMatchups[row.week]) byWeekMatchups[row.week] = [];
+        byWeekMatchups[row.week].push({
+          matchupIndex: row.matchup_index, teamA: row.team_a, teamB: row.team_b,
+          gameTotal: Number(row.game_total), spreadA: Number(row.spread_a), spreadB: Number(row.spread_b),
+          totalA: Number(row.total_a), totalB: Number(row.total_b),
+        });
+      });
+      Object.assign(publishedMatchups, byWeekMatchups);
     }
 
     // Keep the local cache warm too, so a later offline visit still has
