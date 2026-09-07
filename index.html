@@ -571,7 +571,7 @@ footer {
 
 /* PUBLISHED RANKINGS TABLE — matches the reference layout exactly */
 .pub-table-wrap { border: 2px solid #111; border-radius: 4px; overflow: hidden; background: white; width: 85%; min-width: 320px; margin: 0 auto; position: relative; }
-.export-csv-btn { position: absolute; top: 64px; right: 16px; font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #fff; background: #3DB87A; border: none; border-radius: 100px; padding: 6px 16px; cursor: pointer; z-index: 2; transition: background 0.15s; }
+.export-csv-btn { position: absolute; top: 12px; right: 16px; font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #fff; background: #3DB87A; border: none; border-radius: 100px; padding: 6px 16px; cursor: pointer; z-index: 2; transition: background 0.15s; }
 .export-csv-btn:hover { background: #2fa06c; }
 .pub-table-flex { display: flex; align-items: flex-start; }
 .pub-table-flex .pub-table-scroll { flex: 1; min-width: 0; }
@@ -627,11 +627,15 @@ footer {
 .admin-tab:hover { color: #111; }
 
 /* PUBLISHED TEAM TOTALS — Option A: dark ranked list with in-row bar */
-.totals-pub-wrap { background: #0d0d0e; border-radius: 16px; overflow: hidden; font-family: 'Lato', sans-serif; width: 60%; min-width: 460px; margin: 0 auto; position: relative; }
+.totals-pub-outer { width: 60%; min-width: 460px; margin: 0 auto; }
+.totals-pub-exportrow { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.export-csv-btn-inline { font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #fff; background: #3DB87A; border: none; border-radius: 100px; padding: 6px 16px; cursor: pointer; transition: background 0.15s; }
+.export-csv-btn-inline:hover { background: #2fa066; }
+.totals-pub-wrap { background: #0d0d0e; border-radius: 16px; overflow: hidden; font-family: 'Lato', sans-serif; width: 100%; margin: 0; position: relative; }
 
 .totals-split-layout { display: flex; gap: 24px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
 .totals-split-left { flex: 1 1 460px; max-width: 640px; }
-.totals-split-left .totals-pub-wrap { width: 100%; min-width: 0; margin: 0; }
+.totals-split-left .totals-pub-outer { width: 100%; min-width: 0; margin: 0; }
 .totals-split-right { flex: 1 1 340px; max-width: 400px; }
 .matchups-panel { background: #0d0d0e; border-radius: 16px; padding: 20px 20px 8px; font-family: 'Lato', sans-serif; }
 .matchups-panel-title { color: #fff; font-weight: 700; font-size: 18px; margin-bottom: 14px; }
@@ -644,7 +648,7 @@ footer {
   .totals-split-layout { flex-direction: column; align-items: stretch; }
   .totals-split-left, .totals-split-right { max-width: 100%; }
 }
-.totals-pub-header-block { padding: 16px 28px 34px; }
+.totals-pub-header-block { padding: 16px 28px 10px; }
 .totals-pub-week { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #3DB87A; }
 .totals-pub-title { font-size: 22px; font-weight: 900; color: #fff; margin-top: 3px; padding: 0; border: none; text-align: left; }
 .totals-pub-divider { height: 3px; background: #3DB87A; margin: 0; }
@@ -718,7 +722,7 @@ footer {
   .proj-tab, .admin-tab { white-space: nowrap; }
 
   /* Published tables — full width, no min-width floor */
-  .pub-table-wrap, .totals-pub-wrap { width: 100% !important; min-width: 0 !important; }
+  .pub-table-wrap, .totals-pub-outer { width: 100% !important; min-width: 0 !important; }
   .pub-title { font-size: 17px; }
   .totals-pub-title { font-size: 19px; }
   .totals-pub-team { width: 110px; font-size: 13px; }
@@ -5879,11 +5883,21 @@ function scaleColor(t) { return probToColor(t); }
 function buildPublishedTotalsHTML(topLabel, rows, exportFnName) {
   const scored = rows.filter(r => typeof r.value === 'number').sort((a, b) => b.value - a.value);
   const byes = rows.filter(r => r.value === 'BYE');
-  const maxVal = scored.length ? scored[0].value : 1;
-  const minVal = scored.length ? scored[scored.length - 1].value : 0;
-  const range = (maxVal - minVal) || 1;
 
-  let html = '<div class="totals-pub-wrap">';
+  // Same tier thresholds/colors already used for team-abbreviation
+  // coloring elsewhere on the site (getTeamTierColorMap / buildTeamTierMap):
+  // top 12 green, next 8 neutral, bottom 12+ red.
+  function tierColor(rank) {
+    if (rank <= 12) return '#3DB87A';
+    if (rank <= 20) return '#fff';
+    return '#c0392b';
+  }
+
+  let html = '<div class="totals-pub-outer">';
+  if (exportFnName) {
+    html += '<div class="totals-pub-exportrow"><button type="button" class="export-csv-btn-inline" onclick="' + exportFnName + '()">Export as CSV</button></div>';
+  }
+  html += '<div class="totals-pub-wrap">';
   html += '<div style="position:absolute; top:34px; right:20px; display:flex; align-items:center; gap:6px; z-index:2;">' +
     '<svg width="26" height="26" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">' +
       '<circle cx="26" cy="26" r="25" fill="black" stroke="white" stroke-width="1.5"/>' +
@@ -5893,19 +5907,17 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName) {
     '</svg>' +
     '<span style="font-family:\'Lato\',sans-serif; font-weight:700; font-size:13px; color:#fff;">Process<span style="color:#2E9E63;">/</span>Results</span>' +
   '</div>';
-  if (exportFnName) {
-    html += '<button type="button" class="export-csv-btn" onclick="' + exportFnName + '()">Export as CSV</button>';
-  }
   html += '<div class="totals-pub-header-block"><div class="totals-pub-week">' + topLabel + '</div><div class="totals-pub-title">Team implied totals</div></div>';
   html += '<div class="totals-pub-divider"></div>';
   html += '<div class="totals-pub-rows-scroll">';
 
+  const maxVal = scored.length ? scored[0].value : 1;
   scored.forEach((r, i) => {
-    const t = ((r.value - minVal) / range) * 100;
-    const color = scaleColor(t);
+    const rank = i + 1;
+    const color = tierColor(rank);
     const barPct = (r.value / maxVal) * 100;
     html += '<div class="totals-pub-row">' +
-      '<div class="totals-pub-rank">' + (i + 1) + '</div>' +
+      '<div class="totals-pub-rank">' + rank + '</div>' +
       '<div class="totals-pub-team">' + r.team + '</div>' +
       '<div class="totals-pub-bar-track"><div class="totals-pub-bar-fill" style="width:' + barPct + '%;background:' + color + ';"></div></div>' +
       '<div class="totals-pub-value" style="color:' + color + ';">' + r.value + '</div>' +
@@ -5921,7 +5933,7 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName) {
       '</div>';
   });
 
-  html += '</div></div>';
+  html += '</div></div></div>';
   return html;
 }
 
