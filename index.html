@@ -737,15 +737,15 @@ footer {
 .totals-pub-wrap { background: #0d0d0e; border-radius: 16px; overflow: hidden; font-family: 'Lato', sans-serif; width: 100%; margin: 0; position: relative; }
 
 .totals-pub-legend { font-family: 'Lato', sans-serif; font-size: 12px; color: #666; text-align: center; margin: 0 auto 10px; }
-.totals-pub-header-row { display: flex; align-items: flex-end; justify-content: space-between; }
-.totals-pub-header-right { display: flex; align-items: center; gap: 10px; padding: 16px 20px 10px; flex-shrink: 0; width: 300px; box-sizing: border-box; border-left: 1px solid rgba(255,255,255,0.1); justify-content: flex-end; }
+.totals-pub-header-row { display: flex; align-items: stretch; justify-content: space-between; }
+.totals-pub-header-right { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 10px; flex-shrink: 0; width: 300px; box-sizing: border-box; border-left: 1px solid rgba(255,255,255,0.1); }
 .totals-pub-title-right { font-size: 22px; font-weight: 900; color: #fff; white-space: nowrap; }
+.totals-pub-header-right-sub { font-family: 'Lato', sans-serif; font-size: 10px; font-weight: 700; color: #999; white-space: nowrap; align-self: flex-end; }
 .totals-pub-columns { display: flex; }
 .totals-pub-col-left { flex: 1 1 auto; min-width: 0; }
 .totals-pub-col-right { flex: 0 0 300px; width: 300px; border-left: 1px solid rgba(255,255,255,0.1); }
-.matchups-colhead { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-family: 'Lato', sans-serif; font-size: 10px; font-weight: 700; color: #999; padding: 0 20px 1px; }
 .matchups-colhead-logo { display: flex; align-items: center; gap: 6px; }
-.matchups-rows { padding: 0 20px 12px; }
+.matchups-rows { padding: 6px 20px 12px; }
 .matchups-game { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 8px 0; }
 .matchups-game:first-child { padding-top: 0; }
 .matchups-game:last-child { border-bottom: none; }
@@ -757,7 +757,7 @@ footer {
   .totals-pub-columns { flex-direction: column; }
   .totals-pub-col-right { width: 100%; border-left: none; border-top: 1px solid rgba(255,255,255,0.1); }
   .totals-pub-header-row { flex-direction: column; align-items: flex-start; }
-  .totals-pub-header-right { padding: 0 20px 10px; }
+  .totals-pub-header-right { padding: 0 20px 10px; width: 100%; border-left: none; }
 }
 .totals-pub-header-block { padding: 16px 28px 10px; }
 .totals-pub-week { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #3DB87A; }
@@ -6649,7 +6649,7 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   html += '<div class="totals-pub-header-row">';
   html += '<div class="totals-pub-header-block"><div class="totals-pub-week">' + topLabel + '</div><div class="totals-pub-title">Team Implied Totals</div></div>';
   if (hasMatchups) {
-    html += '<div class="totals-pub-header-right"><div class="totals-pub-title-right">Matchups</div></div>';
+    html += '<div class="totals-pub-header-right"><div class="totals-pub-title-right">Matchups</div><div class="totals-pub-header-right-sub">Team Implied Totals</div></div>';
   }
   html += '</div>';
   html += '<div class="totals-pub-divider"></div>';
@@ -6685,7 +6685,6 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   if (hasMatchups) {
     const sortedMatchups = matchupsForWeek.slice().sort((a, b) => a.matchupIndex - b.matchupIndex);
     html += '<div class="totals-pub-col-right">';
-    html += '<div class="matchups-colhead">Team Implied Totals</div>';
     html += '<div class="matchups-rows">';
     sortedMatchups.forEach(m => {
       const colorA = nameColorForTeam(m.teamA);
