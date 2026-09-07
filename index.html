@@ -511,6 +511,8 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 }
 .trade-locked-title { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: #111; margin-bottom: 8px; }
 .trade-locked-sub { font-family: 'Lato', sans-serif; font-size: 14px; color: #777; margin-bottom: 24px; }
+.locked-actions { display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.locked-signin-link { font-family: 'Lato', sans-serif; font-size: 13px; color: #555; text-decoration: underline; }
 .trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
 .trade-col { background: white; border: 1px solid #e2e0da; border-radius: 16px; padding: 24px; }
 .trade-col-name {
@@ -1501,14 +1503,20 @@ footer {
     <div>
       <div class="section-label">Trade/Team Analyzer</div>
       <div class="section-title">Who wins the trade?</div>
-      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">This acts as a trade analyzer or current team analyzer. Enter your current team and/or trade targets vs others in your league and we'll tell you whose team we predict to score more points using our rest of season predictions and how those positions matchup using historical data. For example: If analyzing the RB6 vs RB7, the analyzer shows how many times the RB6 has outscored the RB7 since 2015. The name associated with the RB6 and RB7 reflect our ROS projections and have no bearing on historical analysis.</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">Enter a trade, compare two partial/full teams, or check a start/sit decision &mdash; we'll tell you who's projected to score more using our projections and 11 seasons of historical matchup data (2015&ndash;2025).</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Trades and team comparisons use our Rest of Season projections (ex. entering AJ Brown gets assigned WR9 to reflect our projections). Start/sit decisions use that week's Weekly rankings instead, since a player's rank can shift week to week &mdash; the WR9 on a random week isn't necessarily the WR9 for the season.</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Prefer to skip names? Turn on Numbers Mode and enter ranks directly (like RB6 vs RB7) to see how those ranks have matched up since 2015, regardless of who actually held them.</p>
+      <p style="font-family:'Lato',sans-serif; font-style:italic; font-size:13px; line-height:1.6; color:#777; margin:12px 0 0; max-width:640px;">Save any of the entered lineups and analysis for the entire season and come back to it any time.</p>
     </div>
   </div>
 
   <div id="trade-locked" class="trade-locked" style="display:none;">
     <div class="trade-locked-title">🔒 Sign in to use the Trade/Team Analyzer</div>
     <div class="trade-locked-sub">Create a free account to grade trades and see which side benefits.</div>
-    <a class="btn-pro" href="#" onclick="showPage(event,'signup')">Sign up free →</a>
+    <div class="locked-actions">
+      <a class="btn-pro" href="#" onclick="showPage(event,'signup')">Sign up free →</a>
+      <a class="locked-signin-link" href="#" onclick="showPage(event,'signin')">Sign In</a>
+    </div>
   </div>
 
   <div id="trade-builder" style="display:none;">
@@ -1603,6 +1611,7 @@ footer {
         <button class="trade-analyze-btn" onclick="analyzeTeams()">Analyze Teams</button>
         <button class="trade-analyze-btn" onclick="runStartSitDecision()">Start/Sit Decision</button>
       </div>
+      <button class="trade-reset-btn" onclick="resetTradeBuilder()">Click here to reset selections</button>
     </div>
     <div id="startsit-result" style="display:none; margin-top:14px; background:#111; border-radius:16px; padding:28px 32px; font-family:'Lato',sans-serif;">
       <div style="font-size:20px; font-weight:900; color:white; margin-bottom:4px;" id="startsit-title"></div>
@@ -4157,6 +4166,42 @@ const TRADE_PANEL_PREF_KEY = 'prff_trade_panel_open';
 // choice in this browser (localStorage) so it stays how you left it next
 // time you visit the Trade/Team Analyzer — a light per-browser convenience,
 // not account data, so it's fine if it's empty on a different device.
+function resetTradeBuilder() {
+  document.getElementById('trade-teamA-name').value = 'Team A';
+  document.getElementById('trade-teamB-name').value = 'Team B';
+
+  ['A', 'B'].forEach(side => {
+    document.getElementById('trade-team' + side + '-rows').innerHTML = '';
+    Object.keys(ROSTER_GROUPS).forEach(groupKey => {
+      document.getElementById('trade-team' + side + '-roster-' + groupKey).innerHTML = '';
+    });
+  });
+  tradeRowCounts = { A: { offer: 0 }, B: { offer: 0 } };
+  rosterSlotCounts = {
+    A: { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 },
+    B: { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 }
+  };
+
+  addPlayerRow('A', 'offer'); addPlayerRow('A', 'offer');
+  addPlayerRow('B', 'offer'); addPlayerRow('B', 'offer');
+  seedRosterGroups('A');
+  seedRosterGroups('B');
+  refreshRosteredPlayers('A');
+  refreshRosteredPlayers('B');
+
+  // Numbers Mode carries a "type QB6 instead of a name" state that wouldn't
+  // make sense to leave on after everything else has been wiped — turn it
+  // back off so the reset really is a fresh start.
+  if (numbersMode) toggleNumbersMode();
+
+  document.getElementById('trade-result').style.display = 'none';
+  document.getElementById('startsit-result').style.display = 'none';
+  const dupWarning = document.getElementById('trade-duplicate-warning');
+  if (dupWarning) dupWarning.style.display = 'none';
+
+  document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function toggleTradeSidePanel(open) {
   const panel = document.getElementById('trade-side-panel');
   const backdrop = document.getElementById('trade-side-panel-backdrop');
