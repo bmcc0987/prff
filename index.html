@@ -740,11 +740,11 @@ footer {
 .totals-pub-header-row { display: flex; align-items: flex-end; justify-content: space-between; }
 .totals-pub-header-right { display: flex; align-items: center; gap: 10px; padding: 16px 20px 10px; flex-shrink: 0; }
 .totals-pub-title-right { font-size: 22px; font-weight: 900; color: #fff; white-space: nowrap; }
-.totals-pub-header-logo { display: flex; align-items: center; gap: 6px; }
 .totals-pub-columns { display: flex; }
 .totals-pub-col-left { flex: 1 1 auto; min-width: 0; }
 .totals-pub-col-right { flex: 0 0 300px; width: 300px; border-left: 1px solid rgba(255,255,255,0.1); }
-.matchups-colhead { font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #999; text-align: right; padding: 14px 20px 8px; }
+.matchups-colhead { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700; color: #999; padding: 14px 20px 8px; }
+.matchups-colhead-logo { display: flex; align-items: center; gap: 6px; }
 .matchups-rows { padding: 0 20px 12px; }
 .matchups-game { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 8px 0; }
 .matchups-game:last-child { border-bottom: none; }
@@ -6650,13 +6650,13 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   html += '<div class="totals-pub-header-row">';
   html += '<div class="totals-pub-header-block"><div class="totals-pub-week">' + topLabel + '</div><div class="totals-pub-title">Team implied totals</div></div>';
   if (hasMatchups) {
-    html += '<div class="totals-pub-header-right"><div class="totals-pub-title-right">Matchups</div><div class="totals-pub-header-logo">' + logoHTML + '</div></div>';
+    html += '<div class="totals-pub-header-right"><div class="totals-pub-title-right">Matchups</div></div>';
   }
   html += '</div>';
-  html += '<div class="totals-pub-divider"></div>';
 
   html += '<div class="totals-pub-columns">';
   html += '<div class="totals-pub-col-left">';
+  html += '<div class="totals-pub-divider"></div>';
   html += '<div class="totals-pub-rows-scroll">';
 
   scored.forEach((r, i) => {
@@ -6686,14 +6686,14 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   if (hasMatchups) {
     const sortedMatchups = matchupsForWeek.slice().sort((a, b) => a.matchupIndex - b.matchupIndex);
     html += '<div class="totals-pub-col-right">';
-    html += '<div class="matchups-colhead">Team Implied Totals</div>';
+    html += '<div class="matchups-colhead"><span class="matchups-colhead-logo">' + logoHTML + '</span><span>Team Implied Totals</span></div>';
     html += '<div class="matchups-rows">';
     sortedMatchups.forEach(m => {
       const colorA = nameColorForTeam(m.teamA);
       const colorB = nameColorForTeam(m.teamB);
       html += '<div class="matchups-game">' +
-        '<div class="matchups-row"><span class="matchups-team"' + (colorA ? ' style="color:' + colorA + ';"' : '') + '>' + m.teamA + '</span><span class="matchups-total">' + m.totalA + '</span></div>' +
-        '<div class="matchups-row"><span class="matchups-team"' + (colorB ? ' style="color:' + colorB + ';"' : '') + '>' + m.teamB + '</span><span class="matchups-total">' + m.totalB + '</span></div>' +
+        '<div class="matchups-row"><span class="matchups-team"' + (colorA ? ' style="color:' + colorA + ';"' : '') + '>' + m.teamA + '</span><span class="matchups-total"' + (colorA ? ' style="color:' + colorA + ';"' : '') + '>' + m.totalA + '</span></div>' +
+        '<div class="matchups-row"><span class="matchups-team"' + (colorB ? ' style="color:' + colorB + ';"' : '') + '>' + m.teamB + '</span><span class="matchups-total"' + (colorB ? ' style="color:' + colorB + ';"' : '') + '>' + m.totalB + '</span></div>' +
         '</div>';
     });
     html += '</div></div>'; // close matchups-rows, col-right
