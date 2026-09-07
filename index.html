@@ -6643,9 +6643,7 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
     '<span style="font-family:\'Lato\',sans-serif; font-weight:700; font-size:13px; color:#fff; white-space:nowrap;">Process<span style="color:#2E9E63;">/</span>Results</span>';
 
   html += '<div class="totals-pub-wrap">';
-  if (!hasMatchups) {
-    html += '<div style="position:absolute; top:34px; right:20px; display:flex; align-items:center; gap:6px; z-index:2;">' + logoHTML + '</div>';
-  }
+  html += '<div style="position:absolute; top:34px; right:' + (hasMatchups ? '329px' : '20px') + '; display:flex; align-items:center; gap:6px; z-index:2;">' + logoHTML + '</div>';
 
   html += '<div class="totals-pub-header-row">';
   html += '<div class="totals-pub-header-block"><div class="totals-pub-week">' + topLabel + '</div><div class="totals-pub-title">Team implied totals</div></div>';
@@ -6686,7 +6684,7 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   if (hasMatchups) {
     const sortedMatchups = matchupsForWeek.slice().sort((a, b) => a.matchupIndex - b.matchupIndex);
     html += '<div class="totals-pub-col-right">';
-    html += '<div class="matchups-colhead"><span class="matchups-colhead-logo">' + logoHTML + '</span><span>Team Implied Totals</span></div>';
+    html += '<div class="matchups-colhead">Team Implied Totals</div>';
     html += '<div class="matchups-rows">';
     sortedMatchups.forEach(m => {
       const colorA = nameColorForTeam(m.teamA);
