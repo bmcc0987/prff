@@ -1994,7 +1994,7 @@ footer {
       <datalist id="admin-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:5.7%;">Rank</th><th style="width:23.085%;">Player</th><th style="width:9.1%;">Team</th><th style="width:8.2%;">Prob %</th><th style="width:50.415%;">Notes</th><th style="width:3.6%;"></th></tr>
+          <tr><th style="width:5.7%;">Rank</th><th style="width:23.085%;">Player</th><th style="width:9.1%;">Team</th><th style="width:8.2%;">Prob %</th><th style="width:44.415%;">Notes</th><th style="width:6%;">Select</th><th style="width:3.6%;"></th></tr>
         </thead>
         <tbody id="admin-rows"></tbody>
       </table>
@@ -2012,6 +2012,7 @@ footer {
       <div id="admin-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
       <div class="admin-sum-row">Sum: <span id="admin-prob-sum-value">(0)/1 = 0</span></div>
+      <div class="admin-sum-row">Selected sum: <span id="admin-selected-sum-value">(0)/1 = 0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('admin-rows','admin-selected-sum-value')">Clear selection</button></div>
 
       <div id="admin-preview-wrap" style="display:none;">
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
@@ -2041,7 +2042,7 @@ footer {
       <datalist id="sl-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:5.7%;">Rank</th><th style="width:23.085%;">Player</th><th style="width:9.1%;">Team</th><th style="width:8.2%;">Prob %</th><th style="width:50.415%;">Notes</th><th style="width:3.6%;"></th></tr>
+          <tr><th style="width:5.7%;">Rank</th><th style="width:23.085%;">Player</th><th style="width:9.1%;">Team</th><th style="width:8.2%;">Prob %</th><th style="width:44.415%;">Notes</th><th style="width:6%;">Select</th><th style="width:3.6%;"></th></tr>
         </thead>
         <tbody id="sl-rows"></tbody>
       </table>
@@ -2059,6 +2060,7 @@ footer {
       <div id="sl-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
       <div class="admin-sum-row">Sum: <span id="sl-prob-sum-value">(0)/1 = 0</span></div>
+      <div class="admin-sum-row">Selected sum: <span id="sl-selected-sum-value">(0)/1 = 0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('sl-rows','sl-selected-sum-value')">Clear selection</button></div>
 
       <div id="sl-preview-wrap" style="display:none;">
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
@@ -2092,7 +2094,7 @@ footer {
       <datalist id="ros-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:60px;">Rank</th><th>Player</th><th style="width:100px;">Team</th><th style="width:110px;">Prob %</th><th style="width:40px;"></th></tr>
+          <tr><th style="width:60px;">Rank</th><th>Player</th><th style="width:100px;">Team</th><th style="width:110px;">Prob %</th><th style="width:60px;">Select</th><th style="width:40px;"></th></tr>
         </thead>
         <tbody id="ros-rows"></tbody>
       </table>
@@ -2104,6 +2106,7 @@ footer {
       </div>
 
       <div class="admin-sum-row">Sum: <span id="ros-prob-sum-value">(0)/1 = 0</span></div>
+      <div class="admin-sum-row">Selected sum: <span id="ros-selected-sum-value">(0)/1 = 0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('ros-rows','ros-selected-sum-value')">Clear selection</button></div>
 
       <div id="ros-preview-wrap" style="display:none;">
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
@@ -3003,7 +3006,7 @@ function renderProjectionsPage() {
     const section = document.createElement('div');
     section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
       lastUpdatedBlurbHTML(publishedTimestamps.seasonLong[key]) +
-      buildPublishedTableHTML(activeWeeklyPosition, 'Season Long', data.topN, data.rows, 'exportSeasonLongPositionCSV', true);
+      buildPublishedTableHTML(activeWeeklyPosition, 'Season Long', data.topN, data.rows, 'exportSeasonLongPositionCSV', 'seasonlong');
     container.appendChild(section);
     return;
   }
@@ -3090,7 +3093,7 @@ function renderProjectionsPage() {
     const section = document.createElement('div');
     section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
       lastUpdatedBlurbHTML(publishedTimestamps.weekly[key]) +
-      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows);
+      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows, null, selectedWeek);
     container.appendChild(section);
   }
 }
@@ -5403,25 +5406,45 @@ function addAdminRow(player, team, prob, notes) {
   tr.innerHTML =
     '<td class="admin-rank-cell">' + (tbody.children.length + 1) + '</td>' +
     '<td><input type="text" list="admin-player-list" value="' + (player || '') + '" placeholder="Player name" style="width:100%;"></td>' +
-    '<td><input type="text" class="admin-team-input" value="' + (team || '') + '" placeholder="TEAM" maxlength="4" style="text-transform:uppercase;width:100%;" oninput="applyTeamTierColorToInput(this)"></td>' +
+    '<td><input type="text" class="admin-team-input" value="' + (team || '') + '" placeholder="TEAM" maxlength="4" style="text-transform:uppercase;width:100%;" oninput="applyTeamTierColorToInput(this, document.getElementById(\'admin-week\').value)"></td>' +
     '<td><input type="number" min="0" max="100" value="' + (prob !== undefined ? prob : '') + '" placeholder="0-100" style="width:100%;"></td>' +
     '<td><input type="text" class="admin-notes-input" value="' + (notes ? escapeAttr(notes) : '') + '" placeholder="Notes (optional)" style="width:100%;"></td>' +
+    '<td style="text-align:center;"><input type="checkbox" class="admin-select-checkbox" title="Include this player in the Selected sum below"></td>' +
     '<td><button class="admin-row-remove" onclick="removeAdminRow(\'' + rowId + '\')">×</button></td>';
   tbody.appendChild(tr);
-  applyTeamTierColorToInput(tr.querySelector('.admin-team-input'));
+  applyTeamTierColorToInput(tr.querySelector('.admin-team-input'), document.getElementById('admin-week').value);
   renumberAdminRows();
 }
 
 // Colors a team input's text green/red if that team is currently a Top 12
-// / Bottom 12 season-long implied-total team — same colors as the public
-// projections table, applied live as the admin types or right after a row
-// is created/imported with a team already filled in.
-function applyTeamTierColorToInput(input) {
+// / Bottom 12 team. Weekly Player Projections rows pass a `week`, so the
+// color reflects THAT WEEK's Team Implied Totals tiers (matching the same
+// week's published Team Implied Totals card) — Season Long and Rest of
+// Season rows call this with no `week`, which keeps using season-long
+// tiers, since there's no single week those apply to.
+function applyTeamTierColorToInput(input, week) {
   if (!input) return;
   const abbr = input.value.trim().toUpperCase();
-  const color = getTeamTierColorMap()[abbr];
+  const color = (week !== undefined && week !== null && week !== '')
+    ? getWeeklyTeamTierColorMap(week)[abbr]
+    : getTeamTierColorMap()[abbr];
   input.style.color = color || '';
   input.style.fontWeight = color ? '700' : '';
+}
+
+// Same shape as getTeamTierColorMap() (abbreviation -> color), but built
+// from a specific week's published Team Implied Totals (buildTeamTierMap)
+// instead of the season-long totals. BYE and mid-tier (rank 13-20) teams
+// get no entry, same as season-long — just the default text color.
+function getWeeklyTeamTierColorMap(week) {
+  const map = {};
+  const tierByAbbr = buildTeamTierMap(week);
+  if (!tierByAbbr) return map;
+  Object.keys(tierByAbbr).forEach(abbr => {
+    if (tierByAbbr[abbr] === 'top') map[abbr] = '#3DB87A';
+    else if (tierByAbbr[abbr] === 'bottom') map[abbr] = '#c0392b';
+  });
+  return map;
 }
 
 // Escapes a value for safe use inside an HTML attribute (double quotes,
@@ -5778,19 +5801,33 @@ async function downloadCheatSheetPDF() {
   doc.save('process-results-cheat-sheet.pdf');
 }
 
-function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, highlightTeamTier) {
+// `teamTierWeek` controls the Team-column highlighting: pass `true` (or
+// the string 'seasonlong') for season-long Top 12/Bottom 12 tiers, or a
+// specific week (number or string) to use THAT week's Team Implied Totals
+// tiers instead — so a Weekly player-projections table always agrees with
+// the same week's Team Implied Totals card, the same fix already applied
+// to the Admin editor's Team column. Omit it entirely for no highlighting
+// (used by Rest of Season, which isn't tied to a single week's tiers).
+function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, teamTierWeek) {
   const uid = 'pubtbl-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const teamTierColor = highlightTeamTier ? getTeamTierColorMap() : {};
+  const useSeasonLong = teamTierWeek === true || teamTierWeek === 'seasonlong';
+  const useWeekly = !useSeasonLong && teamTierWeek !== undefined && teamTierWeek !== null && teamTierWeek !== '';
+  const highlightTeamTier = useSeasonLong || useWeekly;
+  const teamTierColor = useSeasonLong ? getTeamTierColorMap() : (useWeekly ? getWeeklyTeamTierColorMap(teamTierWeek) : {});
 
   let html = '<div class="pub-table-wrap">';
   if (exportFnName) {
     html += '<button type="button" class="export-csv-btn" onclick="' + exportFnName + '()">Export as CSV</button>';
   }
   html += '<div class="pub-title">' + position + ' Probabilities to Finish in the Top ' + topN + ' – ' + weekLabel + '</div>';
-  if (highlightTeamTier) {
+  if (useSeasonLong) {
     html += '<div style="font-family:\'Lato\',sans-serif;font-size:12px;color:#666;padding:0 16px 10px;">' +
       '<span style="color:#3DB87A;font-weight:700;">■</span> Top 12 season-long implied-total team &nbsp;&nbsp;' +
       '<span style="color:#c0392b;font-weight:700;">■</span> Bottom 12 (21-32) season-long implied-total team</div>';
+  } else if (useWeekly) {
+    html += '<div style="font-family:\'Lato\',sans-serif;font-size:12px;color:#666;padding:0 16px 10px;">' +
+      '<span style="color:#3DB87A;font-weight:700;">■</span> Top 12 implied total team &nbsp;&nbsp;' +
+      '<span style="color:#c0392b;font-weight:700;">■</span> Bottom 12 implied total team</div>';
   }
   html += '<div class="pub-table-flex">';
 
@@ -5921,7 +5958,7 @@ async function publishAdminTable() {
     }
   }
 
-  preview.innerHTML = buildPublishedTableHTML(position, 'Week ' + week, topN, rows);
+  preview.innerHTML = buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week);
   previewWrap.style.display = 'block';
 }
 
@@ -5968,6 +6005,7 @@ function addRankRow(mode, player, team, prob, notes) {
     '<td><input type="text" class="admin-team-input" value="' + (team || '') + '" placeholder="TEAM" maxlength="4" style="text-transform:uppercase;width:100%;" oninput="applyTeamTierColorToInput(this)"></td>' +
     '<td><input type="number" min="0" max="100" value="' + (prob !== undefined ? prob : '') + '" placeholder="0-100" style="width:100%;"></td>' +
     notesCell +
+    '<td style="text-align:center;"><input type="checkbox" class="admin-select-checkbox" title="Include this player in the Selected sum below"></td>' +
     '<td><button class="admin-row-remove" onclick="document.getElementById(\'' + rowId + '\').remove(); renumberRankRows(\'' + mode + '\');">×</button></td>';
   tbody.appendChild(tr);
   applyTeamTierColorToInput(tr.querySelector('.admin-team-input'));
@@ -6154,6 +6192,7 @@ async function publishRankTable(mode) {
 document.addEventListener('input', function (e) {
   if (e.target.closest('#sl-rows')) {
     updateRankProbSum('seasonlong');
+    updateSelectedProbSum('sl-rows', 'sl-selected-sum-value');
     autosaveAdminDraft();
     if (e.target.classList.contains('admin-notes-input')) {
       const tr = e.target.closest('tr');
@@ -6161,7 +6200,10 @@ document.addEventListener('input', function (e) {
       scheduleLiveNoteSave('seasonlong', document.getElementById('sl-position').value, null, player, e.target.value);
     }
   }
-  if (e.target.closest('#ros-rows')) updateRankProbSum('ros');
+  if (e.target.closest('#ros-rows')) {
+    updateRankProbSum('ros');
+    updateSelectedProbSum('ros-rows', 'ros-selected-sum-value');
+  }
 });
 
 // --- CSV EXPORTS -------------------------------------------------------
@@ -7589,6 +7631,39 @@ function toDecimalStr(percentVal) {
   if (str.startsWith('-0.')) str = '-' + str.slice(2);
   return str;
 }
+// --- "Selected sum" for Admin probability tables ---------------------------
+// Check any subset of players in a table (Weekly, Season Long, or Rest of
+// Season) and see what just THOSE probabilities add up to, live, as you
+// check/uncheck boxes or edit numbers — in addition to the full-table Sum
+// already shown above it. Handy for a quick sanity check on a specific
+// group of players ("if I trust these 4, does that add up to something
+// reasonable") while still mid-edit, without publishing first and using
+// the public page's own click-and-drag select-and-sum feature.
+function updateSelectedProbSum(rowsId, sumElId) {
+  const el = document.getElementById(sumElId);
+  if (!el) return;
+  const decimals = [];
+  document.querySelectorAll('#' + rowsId + ' tr').forEach(tr => {
+    const checkbox = tr.querySelector('.admin-select-checkbox');
+    if (!checkbox || !checkbox.checked) return;
+    const probInput = tr.querySelector('input[type="number"]');
+    const v = probInput ? parseFloat(probInput.value) : NaN;
+    if (!isNaN(v)) decimals.push(v / 100);
+  });
+  if (decimals.length === 0) { el.textContent = '(0)/1 = 0'; return; }
+  const sum = decimals.reduce((a, b) => a + b, 0);
+  const sumRounded = Math.round(sum * 1000) / 1000;
+  const equation = '(' + decimals.map(d => toDecimalStr(d * 100)).join('+') + ')/1';
+  el.textContent = equation + ' = ' + sumRounded;
+}
+
+// "Clear selection" button — unchecks every box in that table and resets
+// its Selected sum back to 0, without touching any of the actual data.
+function clearSelectedProbCheckboxes(rowsId, sumElId) {
+  document.querySelectorAll('#' + rowsId + ' .admin-select-checkbox').forEach(cb => { cb.checked = false; });
+  updateSelectedProbSum(rowsId, sumElId);
+}
+
 function updateAdminProbSum() {
   const el = document.getElementById('admin-prob-sum-value');
   if (!el) return;
@@ -7609,6 +7684,7 @@ function updateAdminProbSum() {
 document.addEventListener('input', function (e) {
   if (e.target.closest('#admin-rows')) {
     updateAdminProbSum();
+    updateSelectedProbSum('admin-rows', 'admin-selected-sum-value');
     autosaveAdminDraft();
     if (e.target.classList.contains('admin-notes-input')) {
       const tr = e.target.closest('tr');
