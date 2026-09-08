@@ -7396,7 +7396,7 @@ function autoFillPositionRankings(position, week) {
       if (tier === 'bye') {
         prob = 0;
       } else if (typeof it === 'number') {
-        prob = Math.round(qbTop12Probability(it) * 100) / 100; // e.g. 58.41
+        prob = Math.ceil(qbTop12Probability(it)); // round up to the nearest whole number, e.g. 58.41 -> 59
       } else {
         // Team wasn't in this week's published totals at all — fall back
         // to the old flat bottom-tier number rather than guessing.
