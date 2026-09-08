@@ -1914,7 +1914,7 @@ footer {
       <div class="admin-controls">
         <div class="admin-field">
           <label class="auth-label">Week</label>
-          <input class="admin-input-small" type="number" id="admintotals-week" min="1" max="18" value="13">
+          <input class="admin-input-small" type="number" id="admintotals-week" min="1" max="18" value="1" onchange="loadAdminTotalsTable()">
         </div>
         <button class="trade-add-btn" style="margin-top:20px;" onclick="loadAdminTotalsTable()">Load existing</button>
       </div>
@@ -1982,7 +1982,7 @@ footer {
         </div>
         <div class="admin-field">
           <label class="auth-label">Week</label>
-          <input class="admin-input-small" type="number" id="admin-week" min="1" max="18" value="4">
+          <input class="admin-input-small" type="number" id="admin-week" min="1" max="18" value="1" onchange="smartLoadPositionRankings(document.getElementById('admin-position').value, this.value)">
         </div>
         <div class="admin-field">
           <label class="auth-label">Top N</label>
@@ -6344,12 +6344,11 @@ function switchAdminTool(tool) {
     loadAdminSLTotalsTable();
   }
   if (tool === 'rankings' && !document.getElementById('admin-rows').children.length) {
-    // A locally-saved draft (including notes) takes priority over
-    // re-loading whatever's already published, since the draft represents
-    // more recent, not-yet-published work — otherwise reopening this tool
-    // would silently overwrite exactly the in-progress work being protected.
-    restoreAdminDraft('weekly');
-    if (!document.getElementById('admin-rows').children.length) loadAdminTable();
+    // Same draft -> published -> auto-fill-from-tiers chain as clicking
+    // "Load existing" (smartLoadPositionRankings) — opening this tab used
+    // to only check for a draft and otherwise leave blank rows, which is
+    // why fields looked empty until you manually clicked Load existing.
+    smartLoadPositionRankings(document.getElementById('admin-position').value, document.getElementById('admin-week').value);
   }
   if (tool === 'seasonlong' && !document.getElementById('sl-rows').children.length) {
     restoreAdminDraft('seasonlong');
@@ -7021,9 +7020,19 @@ function loadAdminTotalsTable() {
   const tbody = document.getElementById('admintotals-rows');
   tbody.innerHTML = '';
 
-  const existing = publishedTeamTotals[week];
+  // A locally-saved draft (not-yet-published edits) takes priority over
+  // whatever's already published, since the draft represents more recent,
+  // in-progress work — otherwise reopening this tool, or switching weeks
+  // and back, would silently wipe out numbers you'd typed but hadn't
+  // published yet.
+  const draftRows = readDraftTotalsForWeek(week);
   const valueByTeam = {};
-  if (existing) existing.rows.forEach(r => valueByTeam[r.team] = r.value);
+  if (draftRows) {
+    draftRows.forEach(r => valueByTeam[r.team] = r.value);
+  } else {
+    const existing = publishedTeamTotals[week];
+    if (existing) existing.rows.forEach(r => valueByTeam[r.team] = r.value);
+  }
 
   NFL_TEAMS.forEach(team => {
     const tr = document.createElement('tr');
@@ -7609,6 +7618,12 @@ document.addEventListener('input', function (e) {
       scheduleLiveNoteSave('weekly', position, week, player, e.target.value);
     }
   }
+  // Weekly Team Implied Totals — same continuous-autosave treatment as
+  // Weekly player projections above, so in-progress numbers survive a
+  // reload/reopen even before you hit Publish.
+  if (e.target.closest('#admintotals-rows')) {
+    autosaveAdminDraft();
+  }
 });
 
 // --- ADMIN DRAFT AUTOSAVE -----------------------------------------------
@@ -7633,6 +7648,39 @@ function readRowsFromTable(rowsId, hasNotes) {
     rows.push(row);
   });
   return rows;
+}
+
+// Reads the flat Team / Total-or-BYE grid used by Weekly Team Implied
+// Totals (#admintotals-rows) — one input per team, keyed by its data-team
+// attribute rather than by row position. Blank inputs are skipped, same as
+// the published-data loader already does.
+function readTotalsRowsFromTable() {
+  const rows = [];
+  document.querySelectorAll('#admintotals-rows tr').forEach(tr => {
+    const input = tr.querySelector('input');
+    if (!input) return;
+    const team = input.getAttribute('data-team');
+    const raw = input.value.trim();
+    if (!raw) return;
+    rows.push({ team, value: raw });
+  });
+  return rows;
+}
+
+// Looks up a locally-saved (not-yet-published) draft of Weekly Team
+// Implied Totals for a given week, if one was ever autosaved. Returns null
+// if there's no draft for that week, so the caller can fall back to
+// whatever's actually been published.
+function readDraftTotalsForWeek(week) {
+  try {
+    const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    const saved = draft.weeklyTotals && draft.weeklyTotals.byWeek && draft.weeklyTotals.byWeek[week];
+    return (saved && saved.rows && saved.rows.length) ? saved.rows : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Live autosave for notes specifically — separate from and in addition to
@@ -7695,6 +7743,16 @@ function autosaveAdminDraft() {
         topN: (document.getElementById('sl-topn') || {}).value,
         rows: readRowsFromTable('sl-rows', true),
       };
+    }
+
+    // Weekly Team Implied Totals gets its own slot per week too, same
+    // pattern as Weekly player projections above — this is what lets you
+    // leave a week half-filled-in and have it still be there next time,
+    // without needing to hit Publish first.
+    draft.weeklyTotals = draft.weeklyTotals || { byWeek: {} };
+    const totalsWeek = (document.getElementById('admintotals-week') || {}).value;
+    if (totalsWeek && document.getElementById('admintotals-rows')) {
+      draft.weeklyTotals.byWeek[totalsWeek] = { rows: readTotalsRowsFromTable() };
     }
 
     localStorage.setItem(ADMIN_DRAFT_KEY, JSON.stringify(draft));
