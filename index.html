@@ -7333,6 +7333,44 @@ function buildTeamTierMap(week) {
   return tierByAbbr;
 }
 
+// Raw team implied-total number (by abbreviation) from a published Team
+// Implied Totals week — unlike buildTeamTierMap, this keeps the actual
+// value instead of collapsing it into a top/mid/bottom bucket. Needed by
+// the QB probability model below, which is a continuous function of the
+// team's implied total rather than a flat per-tier number. BYE rows map
+// to null.
+function buildTeamValueMap(week) {
+  const data = publishedTeamTotals[week];
+  if (!data) return null;
+  const valueByAbbr = {};
+  data.rows.forEach(r => {
+    const abbr = NFL_TEAM_ABBR[r.team];
+    if (!abbr) return;
+    valueByAbbr[abbr] = typeof r.value === 'number' ? r.value : null;
+  });
+  return valueByAbbr;
+}
+
+// QB Top-12 probability model — refit on the full 2015-2025 corrected
+// weekly QB sample (5,790 QB-week observations, with the weekly pool
+// sized to however many teams actually played that week rather than an
+// end-of-season QB pool). Takes a team's implied total for the week and
+// returns a 0-100 probability that its QB finishes the week in the top 12
+// at the position. This replaces the old flat top/mid/bottom tier lookup
+// for QB specifically — WR/RB/TE keep using TIER_PROB_BY_POSITION, which
+// has never had enough per-team data behind it to support its own curve.
+//
+// Reference points this formula was checked against:
+//   Implied total 22.25 -> 37.96%
+//   Implied total 28.00 -> 58.41%
+//   Implied total 28.25 -> 59.29%
+const QB_LOGIT_INTERCEPT = -3.707638422208551;
+const QB_LOGIT_SLOPE = 0.144548357238277;
+function qbTop12Probability(impliedTotal) {
+  const z = QB_LOGIT_INTERCEPT + QB_LOGIT_SLOPE * impliedTotal;
+  return 100 / (1 + Math.exp(-z));
+}
+
 // Fills the Position rankings editor with the full roster for `position`,
 // with team abbreviations and tier-based probabilities already computed
 // from that week's published Team Implied Totals.
@@ -7345,10 +7383,33 @@ function autoFillPositionRankings(position, week) {
   }
 
   const probTable = TIER_PROB_BY_POSITION[position];
-  const filled = roster.map(p => {
-    const tier = tierByAbbr[p.team] || 'bottom';
-    return { player: p.name, team: p.team, prob: probTable[tier] };
-  });
+  let filled;
+  if (position === 'QB') {
+    // QB uses the continuous logistic model (qbTop12Probability), fit
+    // directly on each team's implied-total number, instead of the flat
+    // top/mid/bottom tier numbers WR/RB/TE still use below.
+    const valueByAbbr = buildTeamValueMap(week) || {};
+    filled = roster.map(p => {
+      const tier = tierByAbbr[p.team] || 'bottom';
+      const it = valueByAbbr[p.team];
+      let prob;
+      if (tier === 'bye') {
+        prob = 0;
+      } else if (typeof it === 'number') {
+        prob = Math.round(qbTop12Probability(it) * 100) / 100; // e.g. 58.41
+      } else {
+        // Team wasn't in this week's published totals at all — fall back
+        // to the old flat bottom-tier number rather than guessing.
+        prob = probTable.bottom;
+      }
+      return { player: p.name, team: p.team, prob };
+    });
+  } else {
+    filled = roster.map(p => {
+      const tier = tierByAbbr[p.team] || 'bottom';
+      return { player: p.name, team: p.team, prob: probTable[tier] };
+    });
+  }
   filled.sort((a, b) => b.prob - a.prob);
 
   const tbody = document.getElementById('admin-rows');
