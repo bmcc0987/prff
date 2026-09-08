@@ -2257,7 +2257,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
 <script>
 // Runs synchronously, before the page paints — hides the homepage
 // immediately if the URL isn't actually "/", so a direct visit to (or
-// refresh on) e.g. /trade doesn't flash the homepage first while the rest
+// refresh on) e.g. /analyzer doesn't flash the homepage first while the rest
 // of the app finishes loading asynchronously. The full router
 // (routeFromLocation, further down) takes over once articles/auth are
 // ready and does the real, complete page setup — this is just the
@@ -2266,7 +2266,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
   var STATIC_PATH_TO_PAGE = {
     '/': 'home', '/terms': 'terms', '/privacy': 'privacy', '/contact': 'contact',
     '/account': 'account', '/signup': 'signup', '/signin': 'signin', '/upgrade': 'upgrade',
-    '/projections': 'projections', '/trade': 'trade', '/admin': 'admin', '/articles': 'articles',
+    '/projections': 'projections', '/analyzer': 'trade', '/admin': 'admin', '/articles': 'articles',
   };
   var path = window.location.pathname;
   var pageName = STATIC_PATH_TO_PAGE[path];
@@ -2414,7 +2414,7 @@ let currentUser = null;
 const PAGE_PATHS = {
   home: '/', terms: '/terms', privacy: '/privacy', contact: '/contact',
   account: '/account', signup: '/signup', signin: '/signin', upgrade: '/upgrade',
-  projections: '/projections', trade: '/trade', admin: '/admin', articles: '/articles',
+  projections: '/projections', trade: '/analyzer', admin: '/admin', articles: '/articles',
 };
 
 // Sub-tabs within the Projections page get their own real path too —
