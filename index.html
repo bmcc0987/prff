@@ -5851,6 +5851,32 @@ async function downloadCheatSheetPDF() {
   doc.save('process-results-cheat-sheet.pdf');
 }
 
+// Computes each row's displayed Rank, giving tied probabilities the same
+// rank and skipping the ranks in between — e.g. three players tied for
+// 11th (all at 32%) are all shown as "11", and the next player after them
+// is "14", not "12" (standard "1-2-2-4" competition ranking). Assumes rows
+// are already in descending-probability order, which is true everywhere
+// this is used (Weekly/Season Long/Rest of Season tables and the Draft
+// Cheat Sheet all sort/publish in that order already). `getProb(row)`
+// should return a comparable number — pass parseFloat for admin-entered
+// string probabilities, or the number directly if it's already numeric.
+function computeDisplayRanks(rows, getProb) {
+  const ranks = [];
+  let lastProb = null;
+  let lastRank = 0;
+  rows.forEach((r, i) => {
+    const prob = getProb(r);
+    if (lastProb !== null && prob === lastProb) {
+      ranks.push(lastRank);
+    } else {
+      ranks.push(i + 1);
+      lastRank = i + 1;
+      lastProb = prob;
+    }
+  });
+  return ranks;
+}
+
 // `teamTierWeek` controls the Team-column highlighting: pass `true` (or
 // the string 'seasonlong') for season-long Top 12/Bottom 12 tiers, or a
 // specific week (number or string) to use THAT week's Team Implied Totals
@@ -5869,7 +5895,7 @@ function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, 
   if (exportFnName) {
     html += '<button type="button" class="export-csv-btn" onclick="' + exportFnName + '()">Export as CSV</button>';
   }
-  html += '<div class="pub-title">' + position + ' Probabilities to Finish in the Top ' + topN + ' – ' + weekLabel + '</div>';
+  html += '<div class="pub-title">' + position + ' Probabilities to Finish in the Top 12 – ' + weekLabel + '</div>';
   if (useSeasonLong) {
     html += '<div style="font-family:\'Lato\',sans-serif;font-size:12px;color:#666;padding:0 16px 10px;">' +
       '<span style="color:#3DB87A;font-weight:700;">■</span> Top 12 season-long implied-total team &nbsp;&nbsp;' +
@@ -5882,12 +5908,13 @@ function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, 
   html += '<div class="pub-table-flex">';
 
   html += '<div class="pub-table-scroll"><table class="pub-table" id="' + uid + '"><thead><tr><th>Rank</th><th>Player</th><th>Team</th><th>Prob</th></tr></thead><tbody>';
-  rows.forEach((r, i) => {
-    if (!r.player) return;
+  const validRows = rows.filter(r => r.player);
+  const displayRanks = computeDisplayRanks(validRows, r => parseFloat(r.prob));
+  validRows.forEach((r, i) => {
     const tierColor = teamTierColor[r.team];
     const teamStyle = tierColor ? ' style="color:' + tierColor + ';font-weight:700;"' : '';
     html += '<tr>' +
-      '<td>' + (i + 1) + '</td>' +
+      '<td>' + displayRanks[i] + '</td>' +
       '<td>' + r.player + '</td>' +
       '<td' + teamStyle + '>' + (r.team || '') + '</td>' +
       '<td class="pub-prob-cell pub-prob-selectable" data-name="' + r.player + '" data-prob="' + r.prob + '" ' +
@@ -9221,11 +9248,23 @@ function renderCheatSheet(mount, data, opts) {
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  // Rank per player, computed once per position (players are already sorted
+  // by probability, descending, in buildCheatSheetDataFromLive) so tied
+  // probabilities share a rank instead of the plain 1/2/3 list position —
+  // same "1-2-2-4" rule as the Weekly/Season Long public tables.
+  const rankByPlayer = new Map(); // position label -> Map(player object -> rank)
+  data.positions.forEach(p => {
+    const ranks = computeDisplayRanks(p.players, pl => pl.prob);
+    const m = new Map();
+    p.players.forEach((pl, i) => m.set(pl, ranks[i]));
+    rankByPlayer.set(p.label, m);
+  });
+
   const colHTML = cols.map(col => {
     const blocks = col.blocks.map(blk => {
       const rows = blk.rows.map((pl) => {
-        const rank = data.positions
-          .find(p => blk.title.indexOf(p.label) === 0).players.indexOf(pl) + 1;
+        const pos = data.positions.find(p => blk.title.indexOf(p.label) === 0);
+        const rank = rankByPlayer.get(pos.label).get(pl);
         return '<div class="cs-row' + (rank % 2 === 0 ? ' alt' : '') + '">' +
           '<span class="cs-rank">' + rank + '</span>' +
           '<span class="cs-name">' + esc(csShortName(pl.name)) + '</span>' +
