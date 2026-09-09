@@ -2282,12 +2282,14 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
         <button class="trade-analyze-btn" onclick="loadUsersList()">Refresh</button>
         <button class="trade-analyze-btn" onclick="exportUsersCSV()">Export as CSV (spreadsheet)</button>
         <button class="trade-analyze-btn" onclick="sendWeek1ReminderEmail()">Email Week 1 Reminder to Free Users</button>
+        <button class="trade-analyze-btn" onclick="sendWeek1ReminderToSelectedUsers()">Email Week 1 Reminder to Selected</button>
       </div>
       <div id="users-list-status" style="font-family:'Lato',sans-serif; font-size:14px; color:#888; margin-bottom:10px;">Click Refresh to load.</div>
       <div style="overflow-x:auto;">
         <table class="admin-table" style="table-layout:auto;">
           <thead>
             <tr>
+              <th style="width:1%;"><input type="checkbox" id="users-select-all" onchange="toggleAllUserCheckboxes(this)"></th>
               <th>Name</th><th>Email</th><th>Signed Up</th><th>Status</th><th>Tier</th><th>Purchased/Redeemed</th><th>Pro Expires</th>
             </tr>
           </thead>
@@ -2481,7 +2483,7 @@ const PROJ_TAB_PATHS = {
   'season': '/projections/season-long-players',
   'cheatsheet': '/projections/cheat-sheet',
   'totals': '/projections/weekly-totals',
-  'weekly': '/projections/weekly-players',
+  'weekly': '/projections/weekly-player-projections',
   'ros': '/projections/ros-players',
 };
 
@@ -6439,7 +6441,7 @@ async function loadUsersList() {
 
     loadedUsersData = result.users;
     tbody.innerHTML = '';
-    result.users.forEach(u => {
+    result.users.forEach((u, idx) => {
       const tr = document.createElement('tr');
       const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
       const signedUp = u.signedUpAt ? new Date(u.signedUpAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -6448,6 +6450,7 @@ async function loadUsersList() {
       const purchased = u.proPurchasedAt ? new Date(u.proPurchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
       const expires = u.proExpiresAt ? new Date(u.proExpiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
       tr.innerHTML =
+        '<td><input type="checkbox" class="user-select-checkbox" data-idx="' + idx + '"></td>' +
         '<td>' + name + (u.isAdmin ? ' <span style="color:#3DB87A;font-weight:700;">(admin)</span>' : '') + '</td>' +
         '<td>' + u.email + '</td>' +
         '<td>' + signedUp + '</td>' +
@@ -6457,6 +6460,8 @@ async function loadUsersList() {
         '<td>' + expires + '</td>';
       tbody.appendChild(tr);
     });
+    const selectAllBox = document.getElementById('users-select-all');
+    if (selectAllBox) selectAllBox.checked = false;
     const proCount = result.users.filter(u => u.isPro).length;
     statusEl.textContent = result.users.length + ' total signups, ' + proCount + ' currently Pro.';
     statusEl.style.color = '#555';
@@ -6479,24 +6484,12 @@ async function loadUsersList() {
 // (rather than one request with the whole list) so a large user list can't
 // time out a single call; each batch's results are added to a running
 // total as they come back.
-async function sendWeek1ReminderEmail() {
-  const statusEl = document.getElementById('users-list-status');
-  if (!currentUser || !currentUser.isAdmin || !supabaseClient) return;
-  if (loadedUsersData.length === 0) {
-    alert('Click Refresh first to load the user list.');
-    return;
-  }
-  const recipients = loadedUsersData
-    .filter(u => !u.isPro)
-    .map(u => ({ email: u.email, firstName: u.firstName }));
-  if (recipients.length === 0) {
-    alert('No free-tier users to email — everyone in the loaded list is already Pro.');
-    return;
-  }
-  if (!confirm('Send the Week 1 free-access reminder email to ' + recipients.length + ' free-tier user(s) who haven\'t upgraded yet? This cannot be undone.')) {
-    return;
-  }
-
+// Shared by both "Email Week 1 Reminder to Free Users" and "...to
+// Selected" below — everything from batching through the final status
+// line is identical between them, only how the recipient list gets built
+// differs. `recipientLabel` is just the noun used in the final status
+// message (e.g. "free-tier users" vs "selected user(s)").
+async function postWeek1ReminderBatches(recipients, statusEl, recipientLabel) {
   const BATCH_SIZE = 40;
   const batches = [];
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
@@ -6525,7 +6518,7 @@ async function sendWeek1ReminderEmail() {
       sentTotal += result.sent;
       if (result.failed && result.failed.length) failedTotal.push(...result.failed);
     }
-    statusEl.textContent = 'Sent to ' + sentTotal + ' of ' + recipients.length + ' free-tier users.' +
+    statusEl.textContent = 'Sent to ' + sentTotal + ' of ' + recipients.length + ' ' + recipientLabel + '.' +
       (failedTotal.length ? ' ' + failedTotal.length + ' failed — see browser console for details.' : '');
     statusEl.style.color = failedTotal.length ? '#c0392b' : '#3DB87A';
     if (failedTotal.length) console.warn('Week 1 reminder email failures:', failedTotal);
@@ -6533,6 +6526,62 @@ async function sendWeek1ReminderEmail() {
     statusEl.textContent = 'Stopped after sending ' + sentTotal + ' of ' + recipients.length + ' — error: ' + e.message;
     statusEl.style.color = '#c0392b';
   }
+}
+
+async function sendWeek1ReminderEmail() {
+  const statusEl = document.getElementById('users-list-status');
+  if (!currentUser || !currentUser.isAdmin || !supabaseClient) return;
+  if (loadedUsersData.length === 0) {
+    alert('Click Refresh first to load the user list.');
+    return;
+  }
+  const recipients = loadedUsersData
+    .filter(u => !u.isPro)
+    .map(u => ({ email: u.email, firstName: u.firstName }));
+  if (recipients.length === 0) {
+    alert('No free-tier users to email — everyone in the loaded list is already Pro.');
+    return;
+  }
+  if (!confirm('Send the Week 1 free-access reminder email to ' + recipients.length + ' free-tier user(s) who haven\'t upgraded yet? This cannot be undone.')) {
+    return;
+  }
+  await postWeek1ReminderBatches(recipients, statusEl, 'free-tier users');
+}
+
+// Toggles every row's checkbox to match the header "select all" checkbox.
+function toggleAllUserCheckboxes(headerCheckbox) {
+  document.querySelectorAll('#users-list-rows .user-select-checkbox').forEach(cb => {
+    cb.checked = headerCheckbox.checked;
+  });
+}
+
+// "Email Week 1 Reminder to Selected" — same email, same endpoint, but the
+// recipient list comes from whichever checkboxes are ticked in the table
+// instead of the automatic !isPro filter. This intentionally does NOT
+// exclude Pro users — checking a box is an explicit, individual choice by
+// the admin, so it overrides the usual free-tier-only rule on purpose
+// (e.g. for a one-off resend to someone specific, Pro or not).
+async function sendWeek1ReminderToSelectedUsers() {
+  const statusEl = document.getElementById('users-list-status');
+  if (!currentUser || !currentUser.isAdmin || !supabaseClient) return;
+  if (loadedUsersData.length === 0) {
+    alert('Click Refresh first to load the user list.');
+    return;
+  }
+  const checked = Array.from(document.querySelectorAll('#users-list-rows .user-select-checkbox:checked'));
+  if (checked.length === 0) {
+    alert('Check the box next to at least one account first.');
+    return;
+  }
+  const recipients = checked
+    .map(cb => loadedUsersData[Number(cb.dataset.idx)])
+    .filter(Boolean)
+    .map(u => ({ email: u.email, firstName: u.firstName }));
+  const names = recipients.map(r => r.firstName || r.email).join(', ');
+  if (!confirm('Send the Week 1 reminder email to ' + recipients.length + ' selected account(s) — ' + names + '? This cannot be undone.')) {
+    return;
+  }
+  await postWeek1ReminderBatches(recipients, statusEl, 'selected user(s)');
 }
 
 function exportUsersCSV() {
