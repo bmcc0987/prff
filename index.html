@@ -4,6 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Process/Results — Superforecasting Fantasy Football</title>
+<meta name="description" content="Superforecasting fantasy football — implied totals, projections & a draft cheat sheet built from 11 seasons of data.">
+
+<!-- Open Graph / Twitter Card — this is what makes a link to prffball.com
+     show a rich preview card (image, title, description) when pasted into
+     X, Facebook, iMessage, Slack, etc., instead of just a bare link.
+     og-image.png (1200x630, already built — see og_image.html/render_og.py)
+     needs to be uploaded to your site alongside index.html so it's
+     reachable at https://www.prffball.com/og-image.png — these tags just
+     point to it, they don't embed it. If you ever change the domain or
+     move the image, update the URLs below to match. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.prffball.com/">
+<meta property="og:site_name" content="Process/Results">
+<meta property="og:title" content="Process/Results — Superforecasting Fantasy Football">
+<meta property="og:description" content="Superforecasting fantasy football — implied totals, projections & a draft cheat sheet built from 11 seasons of data.">
+<meta property="og:image" content="https://www.prffball.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@PRFFBall">
+<meta name="twitter:title" content="Process/Results — Superforecasting Fantasy Football">
+<meta name="twitter:description" content="Superforecasting fantasy football — implied totals, projections & a draft cheat sheet built from 11 seasons of data.">
+<meta name="twitter:image" content="https://www.prffball.com/og-image.png">
+
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2052%2052%22%3E%3Ccircle%20cx%3D%2226%22%20cy%3D%2226%22%20r%3D%2225%22%20fill%3D%22black%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22/%3E%3Ctext%20x%3D%2226%22%20y%3D%2234%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-weight%3D%22900%22%20font-size%3D%2220%22%20fill%3D%22white%22%20text-anchor%3D%22middle%22%3EP/R%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&family=Bebas+Neue&family=Playfair+Display:ital,wght@1,400&family=Oswald:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -830,6 +854,24 @@ footer {
 .matchups-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
 .matchups-team { font-size: 13px; font-weight: 700; color: #fff; }
 .matchups-total { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; }
+
+/* ADMIN WEEKLY PLAYER PROJECTIONS — matchups side panel (mirrors the
+   public Team Implied Totals card's Matchups column, same dark styling,
+   reusing .matchups-rows/.matchups-game/.matchups-row/.matchups-team/
+   .matchups-total above) */
+.admin-rankings-body { display: flex; gap: 20px; align-items: flex-start; }
+.admin-rankings-main { flex: 1 1 auto; min-width: 0; }
+.admin-matchups-panel-wrap { flex: 0 0 280px; width: 280px; }
+.admin-matchups-panel { background: #0d0d0e; border-radius: 16px; overflow: hidden; font-family: 'Lato', sans-serif; position: sticky; top: 20px; }
+.admin-matchups-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 14px 20px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.admin-matchups-header-title { font-size: 16px; font-weight: 900; color: #fff; }
+.admin-matchups-header-sub { font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.admin-matchups-empty { padding: 16px 20px; font-family: 'Lato', sans-serif; font-size: 12px; color: #999; font-style: italic; }
+@media (max-width: 900px) {
+  .admin-rankings-body { flex-direction: column; }
+  .admin-matchups-panel-wrap { width: 100%; flex: 0 0 auto; }
+  .admin-matchups-panel { position: static; }
+}
 @media (max-width: 720px) {
   .totals-pub-outer-wide { width: 100%; min-width: 0; }
   .totals-pub-columns { flex-direction: column; }
@@ -1991,10 +2033,12 @@ footer {
         <button class="trade-add-btn" style="margin-top:20px;" onclick="smartLoadPositionRankings(document.getElementById('admin-position').value, document.getElementById('admin-week').value)">Load existing</button>
       </div>
 
+      <div class="admin-rankings-body">
+      <div class="admin-rankings-main">
       <datalist id="admin-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:5.7%;">Rank</th><th style="width:23.085%;">Player</th><th style="width:9.1%;">Team</th><th style="width:8.2%;">Prob %</th><th style="width:44.415%;">Notes</th><th style="width:6%;">Select</th><th style="width:3.6%;"></th></tr>
+          <tr><th style="width:6%;">Rank</th><th style="width:14%;">Player</th><th style="width:16%;">Team</th><th style="width:15%;">Prob %</th><th style="width:32%;">Notes</th><th style="width:11%;">Select</th><th style="width:6%;"></th></tr>
         </thead>
         <tbody id="admin-rows"></tbody>
       </table>
@@ -2013,6 +2057,12 @@ footer {
 
       <div class="admin-sum-row">Sum: <span id="admin-prob-sum-value">(0)/1 = 0</span></div>
       <div class="admin-sum-row">Selected sum: <span id="admin-selected-sum-value">(0)/1 = 0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('admin-rows','admin-selected-sum-value')">Clear selection</button></div>
+      </div>
+
+      <div class="admin-matchups-panel-wrap">
+        <div id="admin-matchups-panel" class="admin-matchups-panel"></div>
+      </div>
+      </div>
 
       <div id="admin-preview-wrap" style="display:none;">
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
@@ -7105,6 +7155,47 @@ function sortAdminTotalsRows() {
 // 0-100 position since implied totals aren't already a percentage.
 function scaleColor(t) { return probToColor(t); }
 
+// Renders the inner rows of a Matchups display (one row per game, each
+// team colored by that week's implied-total tier) — shared by the public
+// Team Implied Totals card's right-hand column (buildPublishedTotalsHTML)
+// and the Admin Weekly Player Projections side panel (renderAdminMatchupsPanel)
+// so both stay visually/behaviorally identical without duplicating markup.
+// nameColorForTeam(team) -> a hex color string or falsy for default color.
+function buildMatchupsRowsHTML(matchupsForWeek, nameColorForTeam) {
+  const sortedMatchups = matchupsForWeek.slice().sort((a, b) => a.matchupIndex - b.matchupIndex);
+  let html = '';
+  sortedMatchups.forEach(m => {
+    const colorA = nameColorForTeam(m.teamA);
+    const colorB = nameColorForTeam(m.teamB);
+    html += '<div class="matchups-game">' +
+      '<div class="matchups-row"><span class="matchups-team"' + (colorA ? ' style="color:' + colorA + ';"' : '') + '>' + m.teamA + '</span><span class="matchups-total"' + (colorA ? ' style="color:' + colorA + ';"' : '') + '>' + m.totalA + '</span></div>' +
+      '<div class="matchups-row"><span class="matchups-team"' + (colorB ? ' style="color:' + colorB + ';"' : '') + '>' + m.teamB + '</span><span class="matchups-total"' + (colorB ? ' style="color:' + colorB + ';"' : '') + '>' + m.totalB + '</span></div>' +
+      '</div>';
+  });
+  return html;
+}
+
+// Renders the Matchups side panel on the Admin Weekly Player Projections
+// tool (#admin-matchups-panel) for whichever week is currently selected —
+// same game pairings/implied totals/tier coloring as the public Team
+// Implied Totals card's Matchups column for that week, sourced from
+// getWeeklyTeamTierColorMap (the same tested weekly-tier logic already used
+// to color the Team input in this table), so the two never disagree.
+function renderAdminMatchupsPanel(week) {
+  const panel = document.getElementById('admin-matchups-panel');
+  if (!panel) return;
+  const matchups = publishedMatchups[week];
+  if (!matchups || !matchups.length) {
+    panel.innerHTML = '<div class="admin-matchups-empty">No matchups published for Week ' + (week || '?') + ' yet. Build them in Weekly Team Implied Totals.</div>';
+    return;
+  }
+  const colorMap = getWeeklyTeamTierColorMap(week); // abbreviation -> color
+  function nameColorForTeam(team) { return colorMap[NFL_TEAM_ABBR[team]] || null; }
+  let html = '<div class="admin-matchups-header"><span class="admin-matchups-header-title">Matchups</span><span class="admin-matchups-header-sub">Week ' + week + '</span></div>';
+  html += '<div class="matchups-rows">' + buildMatchupsRowsHTML(matchups, nameColorForTeam) + '</div>';
+  panel.innerHTML = html;
+}
+
 // Renders the full Team Implied Totals card. When matchupsForWeek is
 // passed (non-empty), the card gets a second, right-hand column showing
 // real game pairings — merged into the SAME card, not a separate box.
@@ -7190,18 +7281,9 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   html += '</div></div>'; // close rows-scroll, col-left
 
   if (hasMatchups) {
-    const sortedMatchups = matchupsForWeek.slice().sort((a, b) => a.matchupIndex - b.matchupIndex);
     html += '<div class="totals-pub-col-right">';
-    html += '<div class="matchups-rows">';
-    sortedMatchups.forEach(m => {
-      const colorA = nameColorForTeam(m.teamA);
-      const colorB = nameColorForTeam(m.teamB);
-      html += '<div class="matchups-game">' +
-        '<div class="matchups-row"><span class="matchups-team"' + (colorA ? ' style="color:' + colorA + ';"' : '') + '>' + m.teamA + '</span><span class="matchups-total"' + (colorA ? ' style="color:' + colorA + ';"' : '') + '>' + m.totalA + '</span></div>' +
-        '<div class="matchups-row"><span class="matchups-team"' + (colorB ? ' style="color:' + colorB + ';"' : '') + '>' + m.teamB + '</span><span class="matchups-total"' + (colorB ? ' style="color:' + colorB + ';"' : '') + '>' + m.totalB + '</span></div>' +
-        '</div>';
-    });
-    html += '</div></div>'; // close matchups-rows, col-right
+    html += '<div class="matchups-rows">' + buildMatchupsRowsHTML(matchupsForWeek, nameColorForTeam) + '</div>';
+    html += '</div>'; // close col-right
   }
 
   html += '</div>'; // close totals-pub-columns
@@ -7267,6 +7349,7 @@ async function publishAdminTotalsTable() {
   // week's team tiers (top 12 / middle 8 / bottom 12).
   switchAdminTool('rankings');
   document.getElementById('admin-week').value = week;
+  renderAdminMatchupsPanel(week);
   autoFillPositionRankings(document.getElementById('admin-position').value, week);
 }
 
@@ -7476,6 +7559,7 @@ function autoFillPositionRankings(position, week) {
 // fresh auto-fill from team tiers. Only auto-fills for positions that
 // haven't been published yet.
 async function smartLoadPositionRankings(position, week) {
+  renderAdminMatchupsPanel(week);
   if (restoreDraftForWeeklyPosition(position, week)) return;
   const key = position + '-' + week;
   if (publishedRankings[key]) {
