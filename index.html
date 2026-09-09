@@ -3431,8 +3431,11 @@ function updateUpgradeNavVisibility() {
 // "projected season-long finish" like RB4 or WR12.
 // Returns a player's real current rank label (e.g. "QB16"), pulled from
 // whatever's actually published — Rest of Season, then Season Long, then
-// Weekly — same priority the trade verdict itself uses. Falls back to null
-// (displayed as "Unranked") if nothing's published for that player yet.
+// Weekly — the same season-long-first priority Analyze Trade/Analyze Teams
+// use (this is only ever shown in those two, never Start/Sit — see
+// resolvePlayerRank's `preferWeekly` for the one place that differs).
+// Falls back to null (displayed as "Unranked") if nothing's published for
+// that player yet.
 function getPositionalFinish(name) {
   const entry = playerValues[name];
   if (!entry) return null;
@@ -4419,11 +4422,13 @@ function playersByGroupFromRoster(side) {
 // straight from the typed shorthand, e.g. "RB13" -> rank 13) — no
 // player-name/projection lookup, so ties in My Projections' probabilities
 // can never shift which rank actually gets used. Real-name entries still
-// resolve through resolvePlayerRank (Rest of Season > Season Long > Weekly)
-// exactly as before.
-function resolveRankFor(p, week) {
+// resolve through resolvePlayerRank — Rest of Season > Season Long > Weekly
+// by default (Analyze Trade, Analyze Teams), or Weekly first when
+// `preferWeekly` is passed true (Start/Sit Decision only — see
+// resolvePlayerRank for why).
+function resolveRankFor(p, week, preferWeekly) {
   if (p.numbersLabel) return { rank: p.rank, source: null };
-  return resolvePlayerRank(p.name, p.pos, week);
+  return resolvePlayerRank(p.name, p.pos, week, preferWeekly);
 }
 
 function pickFlexWinners(candidates) {
@@ -4604,29 +4609,42 @@ function computeStartSitHistory(pairsA, pairsB) {
   };
 }
 
-function resolvePlayerRank(name, position, week) {
-  const rosData = publishedROS[position + '-' + week];
-  if (rosData) {
-    const sorted = rosData.rows.slice().sort((a, b) => b.prob - a.prob);
-    const rank = findTiedRank(sorted, name);
-    if (rank !== -1) return { rank, source: 'Rest of Season' };
-  }
-
-  const slData = publishedSeasonLong[position];
-  if (slData) {
-    const sorted = slData.rows.slice().sort((a, b) => b.prob - a.prob);
-    const rank = findTiedRank(sorted, name);
-    if (rank !== -1) return { rank, source: 'Season Long' };
-  }
-
-  const weeklyData = publishedRankings[position + '-' + week];
-  if (weeklyData) {
+// `preferWeekly` (default false) flips the priority to check Weekly first —
+// used ONLY by Start/Sit Decision, since that's a literal "this week"
+// question and Weekly Player Projections are the freshest, most
+// current-context number for that specific week (already reflecting that
+// week's own Team Implied Totals, and now carrying roster edits forward
+// week to week). Analyze Trade and Analyze Teams are season-long value
+// questions, not single-week ones, so they keep the original order (Rest
+// of Season, then Season Long, then Weekly only as a last resort) —
+// leave `preferWeekly` unset/false for those.
+function resolvePlayerRank(name, position, week, preferWeekly) {
+  function tryWeekly() {
+    const weeklyData = publishedRankings[position + '-' + week];
+    if (!weeklyData) return null;
     const sorted = weeklyData.rows.slice().sort((a, b) => b.prob - a.prob);
     const rank = findTiedRank(sorted, name);
-    if (rank !== -1) return { rank, source: 'Weekly' };
+    return rank !== -1 ? { rank, source: 'Weekly' } : null;
+  }
+  function tryROS() {
+    const rosData = publishedROS[position + '-' + week];
+    if (!rosData) return null;
+    const sorted = rosData.rows.slice().sort((a, b) => b.prob - a.prob);
+    const rank = findTiedRank(sorted, name);
+    return rank !== -1 ? { rank, source: 'Rest of Season' } : null;
+  }
+  function trySeasonLong() {
+    const slData = publishedSeasonLong[position];
+    if (!slData) return null;
+    const sorted = slData.rows.slice().sort((a, b) => b.prob - a.prob);
+    const rank = findTiedRank(sorted, name);
+    return rank !== -1 ? { rank, source: 'Season Long' } : null;
   }
 
-  return null;
+  if (preferWeekly) {
+    return tryWeekly() || tryROS() || trySeasonLong();
+  }
+  return tryROS() || trySeasonLong() || tryWeekly();
 }
 
 function formatRankList(ranks, position) {
@@ -4975,8 +4993,12 @@ async function runStartSitDecision() {
   }
 
   const week = getCurrentTradeWeek();
-  const resolvedA = starterListA.map(p => ({ name: p.name, pos: p.pos, resolved: resolveRankFor(p, week) }));
-  const resolvedB = starterListB.map(p => ({ name: p.name, pos: p.pos, resolved: resolveRankFor(p, week) }));
+  // preferWeekly: true — Start/Sit Decision is a literal "this week"
+  // question, so it should use that week's live Weekly Player Projections
+  // rank ahead of Rest of Season/Season Long when one's published (unlike
+  // Analyze Trade/Analyze Teams, which stay on the season-long-first order).
+  const resolvedA = starterListA.map(p => ({ name: p.name, pos: p.pos, resolved: resolveRankFor(p, week, true) }));
+  const resolvedB = starterListB.map(p => ({ name: p.name, pos: p.pos, resolved: resolveRankFor(p, week, true) }));
   const unresolvedA = resolvedA.filter(p => !p.resolved).map(p => p.name);
   const unresolvedB = resolvedB.filter(p => !p.resolved).map(p => p.name);
 
