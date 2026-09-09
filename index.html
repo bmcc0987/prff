@@ -2038,7 +2038,7 @@ footer {
       <datalist id="admin-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:6%;">Rank</th><th style="width:14%;">Player</th><th style="width:16%;">Team</th><th style="width:15%;">Prob %</th><th style="width:32%;">Notes</th><th style="width:11%;">Select</th><th style="width:6%;"></th></tr>
+          <tr><th style="width:5%;">Rank</th><th style="width:28%;">Player</th><th style="width:11%;">Team</th><th style="width:9%;">Prob %</th><th style="width:35%;">Notes</th><th style="width:7%;">Select</th><th style="width:5%;"></th></tr>
         </thead>
         <tbody id="admin-rows"></tbody>
       </table>
@@ -7532,13 +7532,66 @@ function qbTop12Probability(impliedTotal) {
   return 100 / (1 + Math.exp(-z));
 }
 
-// Fills the Position rankings editor with the full roster for `position`,
-// with team abbreviations and tier-based probabilities already computed
-// from that week's published Team Implied Totals.
+// Resolves the player pool to auto-fill for a Weekly Player Projections
+// position/week, so a roster change (adding a call-up, dropping an injured
+// starter) made once sticks for every later week until it's edited again,
+// instead of resetting back to a fixed list every week:
+//   1. If THIS exact week already has published rankings for this
+//      position, use its own player list — this is what lets re-publishing
+//      Team Implied Totals (which re-runs auto-fill to refresh probabilities
+//      off the new tiers) recompute numbers WITHOUT wiping out a roster
+//      edit you already made and published for that specific week.
+//   2. Otherwise, walk backward to the most recent EARLIER week that was
+//      published for this position, and carry its roster forward — this is
+//      the actual "sticky" behavior: whatever you last published (add/drop)
+//      is what every future week starts from until you touch it again.
+//   3. If this position has never been published for any week yet, fall
+//      back to the Season Long published list for this position — Season
+//      Long is already the maintained, current list of relevant players,
+//      so a fresh season/position starts from that instead of a separate,
+//      easy-to-forget-to-update roster.
+//   4. If Season Long hasn't been published for this position either
+//      (brand new setup, nothing published anywhere yet), fall back to the
+//      original hardcoded POSITION_ROSTERS default so the tool still works
+//      out of the box.
+function getCurrentRosterForPosition(position, week) {
+  const targetWeek = Number(week);
+  const exactKey = position + '-' + week;
+  if (publishedRankings[exactKey] && publishedRankings[exactKey].rows && publishedRankings[exactKey].rows.length) {
+    return publishedRankings[exactKey].rows.map(r => ({ name: r.player, team: r.team }));
+  }
+
+  let bestWeek = null;
+  Object.keys(publishedRankings).forEach(key => {
+    const sep = key.lastIndexOf('-');
+    if (sep === -1) return;
+    const pos = key.slice(0, sep);
+    const wk = Number(key.slice(sep + 1));
+    if (pos !== position || isNaN(wk) || wk >= targetWeek) return;
+    if (bestWeek === null || wk > bestWeek) bestWeek = wk;
+  });
+  if (bestWeek !== null) {
+    const rows = publishedRankings[position + '-' + bestWeek].rows;
+    if (rows && rows.length) return rows.map(r => ({ name: r.player, team: r.team }));
+  }
+
+  const sl = publishedSeasonLong[position];
+  if (sl && sl.rows && sl.rows.length) {
+    return sl.rows.map(r => ({ name: r.player, team: r.team }));
+  }
+
+  return (POSITION_ROSTERS[position] || []).map(p => ({ name: p.name, team: p.team }));
+}
+
+// Fills the Position rankings editor with the current roster for
+// `position` (see getCurrentRosterForPosition — Season Long by default,
+// or whatever was last published/edited week-to-week), with team
+// abbreviations and tier-based probabilities already computed from that
+// week's published Team Implied Totals.
 function autoFillPositionRankings(position, week) {
   const tierByAbbr = buildTeamTierMap(week);
-  const roster = POSITION_ROSTERS[position];
-  if (!tierByAbbr || !roster) {
+  const roster = getCurrentRosterForPosition(position, week);
+  if (!tierByAbbr || !roster || !roster.length) {
     loadAdminTable(); // fall back to normal load if no totals published yet
     return;
   }
