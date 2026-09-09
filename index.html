@@ -2281,6 +2281,7 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
       <div class="admin-controls" style="margin-bottom:14px;">
         <button class="trade-analyze-btn" onclick="loadUsersList()">Refresh</button>
         <button class="trade-analyze-btn" onclick="exportUsersCSV()">Export as CSV (spreadsheet)</button>
+        <button class="trade-analyze-btn" onclick="sendWeek1ReminderEmail()">Email Week 1 Reminder to Free Users</button>
       </div>
       <div id="users-list-status" style="font-family:'Lato',sans-serif; font-size:14px; color:#888; margin-bottom:10px;">Click Refresh to load.</div>
       <div style="overflow-x:auto;">
@@ -6461,6 +6462,75 @@ async function loadUsersList() {
     statusEl.style.color = '#555';
   } catch (e) {
     statusEl.textContent = 'Could not load users: ' + e.message;
+    statusEl.style.color = '#c0392b';
+  }
+}
+
+// One-off, admin-triggered mass email to every free-tier account holder —
+// anyone who created an account but hasn't gone Pro via payment or a promo
+// code — letting them know free access to every feature on the site runs
+// through the end of Week 1 (Tuesday, 9/15/26 at 6:00am ET) and that
+// upgrading to Pro keeps it going for $20 for the whole season.
+//
+// Uses whatever is currently in loadedUsersData (from the last Refresh),
+// filtered to !isPro, so it always reflects the freshest list an admin has
+// pulled up — click Refresh first if you want to be sure it's current.
+// Sends in small batches to the send-week1-reminder-email Edge Function
+// (rather than one request with the whole list) so a large user list can't
+// time out a single call; each batch's results are added to a running
+// total as they come back.
+async function sendWeek1ReminderEmail() {
+  const statusEl = document.getElementById('users-list-status');
+  if (!currentUser || !currentUser.isAdmin || !supabaseClient) return;
+  if (loadedUsersData.length === 0) {
+    alert('Click Refresh first to load the user list.');
+    return;
+  }
+  const recipients = loadedUsersData
+    .filter(u => !u.isPro)
+    .map(u => ({ email: u.email, firstName: u.firstName }));
+  if (recipients.length === 0) {
+    alert('No free-tier users to email — everyone in the loaded list is already Pro.');
+    return;
+  }
+  if (!confirm('Send the Week 1 free-access reminder email to ' + recipients.length + ' free-tier user(s) who haven\'t upgraded yet? This cannot be undone.')) {
+    return;
+  }
+
+  const BATCH_SIZE = 40;
+  const batches = [];
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    batches.push(recipients.slice(i, i + BATCH_SIZE));
+  }
+
+  let sentTotal = 0;
+  const failedTotal = [];
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData.session.access_token;
+
+    for (let i = 0; i < batches.length; i++) {
+      statusEl.textContent = 'Sending batch ' + (i + 1) + ' of ' + batches.length + ' (' + sentTotal + ' sent so far)…';
+      statusEl.style.color = '#888';
+      const res = await fetch(SUPABASE_URL + '/functions/v1/send-week1-reminder-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken,
+        },
+        body: JSON.stringify({ recipients: batches[i] }),
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      sentTotal += result.sent;
+      if (result.failed && result.failed.length) failedTotal.push(...result.failed);
+    }
+    statusEl.textContent = 'Sent to ' + sentTotal + ' of ' + recipients.length + ' free-tier users.' +
+      (failedTotal.length ? ' ' + failedTotal.length + ' failed — see browser console for details.' : '');
+    statusEl.style.color = failedTotal.length ? '#c0392b' : '#3DB87A';
+    if (failedTotal.length) console.warn('Week 1 reminder email failures:', failedTotal);
+  } catch (e) {
+    statusEl.textContent = 'Stopped after sending ' + sentTotal + ' of ' + recipients.length + ' — error: ' + e.message;
     statusEl.style.color = '#c0392b';
   }
 }
