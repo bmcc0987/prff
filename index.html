@@ -67,13 +67,6 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 }
 .nav-dropdown a:hover { background: #f2f1ee; color: #111; }
 .nav-link:hover { color: #111; }
-.nav-link-with-badge { display: flex; align-items: center; gap: 8px; }
-.nav-badge-link {
-  font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #3DB87A;
-  cursor: pointer; text-decoration: none; white-space: nowrap; transition: color 0.15s;
-}
-.nav-badge-link:hover { color: #2E9E63; text-decoration: underline; }
-.mobile-nav-link.nav-badge-link { font-size: 13px; font-weight: 700; color: #3DB87A; }
 .nav-actions { display: flex; gap: 12px; align-items: center; }
 .nav-sign-in { font-family: 'Lato', sans-serif; font-size: 14px; color: #555; cursor: pointer; text-decoration: none; }
 .nav-account-icon {
@@ -1077,10 +1070,7 @@ footer {
       </div>
     </div>
     <a class="nav-link" href="#" onclick="goToArticlesPage(event)">Articles</a>
-    <span class="nav-link-with-badge">
-      <a class="nav-link" href="#" onclick="goToTrade(event)">Trade/Team Analyzer</a>
-      <a class="nav-badge-link" href="#" onclick="goToStartSit(event)">+ Start/Sit Tool</a>
-    </span>
+    <a class="nav-link" href="#" onclick="goToStartSit(event)">Analyzer + Start/Sit</a>
     <a class="nav-link" href="#" onclick="goToAdmin(event)" id="nav-link-admin" style="display:none;">Admin</a>
   </div>
   <div class="nav-actions" id="nav-actions-loggedout">
@@ -1105,8 +1095,7 @@ footer {
 <div id="mobile-nav-menu" class="mobile-nav-menu">
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToProjections, event)">Projections</a>
   <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToArticlesPage, event)">Articles</a>
-  <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToTrade, event)">Trade/Team Analyzer</a>
-  <a class="mobile-nav-link nav-badge-link" href="#" style="padding-left:28px;" onclick="closeMobileNavThen(goToStartSit, event)">+ Start/Sit Tool</a>
+  <a class="mobile-nav-link" href="#" onclick="closeMobileNavThen(goToStartSit, event)">Analyzer + Start/Sit</a>
   <a class="mobile-nav-link" href="#" id="mobile-nav-admin" style="display:none;" onclick="closeMobileNavThen(goToAdmin, event)">Admin</a>
   <div class="mobile-nav-divider"></div>
   <a class="mobile-nav-link" href="#" id="mobile-nav-signin" onclick="closeMobileNavThen(function(e){showPage(e,'signin')}, event)">Sign in</a>
@@ -1652,11 +1641,10 @@ footer {
  <div class="trade-main-col">
   <div class="proj-header">
     <div>
-      <div class="section-label">Trade/Team Analyzer</div>
-      <div class="section-title">Who wins the trade?</div>
-      <div class="section-title" style="margin-top:2px;">Who do I start or sit?</div>
+      <div class="section-label">Trade/Team Analyzer + Start/Sit</div>
+      <div class="section-title">Who wins the trade? Who do I start or sit?</div>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:8px 0 0; max-width:640px;">Enter a trade, compare two partial/full teams, or check a start/sit decision &mdash; we'll tell you who's projected to score more using our projections and 11 seasons of historical matchup data (2015&ndash;2025).</p>
-      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Trades and team comparisons use our Rest of Season projections (ex. entering AJ Brown gets assigned WR9 to reflect our projections). Start/sit decisions use that week's Weekly rankings instead, since a player's rank can shift week to week &mdash; the WR9 on a random week isn't necessarily the WR9 for the season.</p>
+      <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Trades and team comparisons use our Rest of Season Projections (ex. entering AJ Brown gets assigned WR9 to reflect our projections). Start/sit decisions use that specific week's Weekly Player Projections since a player's rank can shift week to week &mdash; the WR9 on a random week isn't necessarily the WR9 for the season.</p>
       <p style="font-family:'Lato',sans-serif; font-size:15px; line-height:1.6; color:#555; margin:12px 0 0; max-width:640px;">Prefer to skip names? Turn on Numbers Mode and enter ranks directly (like RB6 vs RB7) to see how those ranks have matched up since 2015, regardless of who actually held them.</p>
       <p style="font-family:'Lato',sans-serif; font-style:italic; font-size:13px; line-height:1.6; color:#777; margin:12px 0 0; max-width:640px;">Save any of the entered lineups and analysis for the entire season and come back to it any time.</p>
     </div>
