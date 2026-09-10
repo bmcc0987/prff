@@ -9300,6 +9300,20 @@ async function loadAppState() {
   }
 }
 
+// Old article ids that changed after the article was already published and
+// shared/indexed — e.g. an id that was minted while the piece was still a
+// draft (getting a "-draft-N" suffix) and kept that suffix even after
+// publishing, instead of picking up a clean id the way a fresh draft-to-
+// publish promotion does. Anyone who still has the old /articles/<old-id>
+// link (a bookmark, a social share, a search result) gets sent straight to
+// the article's current URL instead of landing on "article not found."
+// Add an entry here any time an already-published article's id is changed
+// in the database, so old links don't silently break.
+const ARTICLE_ID_REDIRECTS = {
+  'using-team-implied-totals-to-predict-fantasy-football-outcomes-draft-2':
+    'superforecasting-fantasy-football-the-importance-of-team-implied-totals-part1'
+};
+
 // Load whatever's published BEFORE the first render, so it shows up
 // immediately on open rather than popping in after a delayed fetch.
 // --- URL ROUTING -------------------------------------------------------
@@ -9310,7 +9324,14 @@ function routeFromLocation() {
 
   const articleMatch = path.match(/^\/articles\/([^\/]+)\/?$/);
   if (articleMatch) {
-    const id = decodeURIComponent(articleMatch[1]);
+    let id = decodeURIComponent(articleMatch[1]);
+    if (ARTICLE_ID_REDIRECTS[id]) {
+      // Swap in the new id and rewrite the visible URL to match — so the
+      // address bar shows the clean, current link rather than silently
+      // serving the article under its old stale URL.
+      id = ARTICLE_ID_REDIRECTS[id];
+      history.replaceState({ page: 'article', articleId: id }, '', '/articles/' + encodeURIComponent(id));
+    }
     if (publishedArticles[id]) {
       goToArticle(id, { skipPush: true });
     } else {
