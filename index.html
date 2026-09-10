@@ -1801,7 +1801,7 @@ footer {
             <tr style="border-bottom:1px solid #ccc;">
               <th style="text-align:left; padding:4px 8px;">Year</th>
               <th style="text-align:right; padding:4px 8px;">Weeks</th>
-              <th style="text-align:right; padding:4px 8px;" id="startsit-year-winhdr">Team A wins</th>
+              <th style="text-align:right; padding:4px 8px;" id="startsit-year-winhdr">Winner</th>
               <th style="text-align:right; padding:4px 8px;">%</th>
             </tr>
           </thead>
@@ -4586,7 +4586,7 @@ function computeStartSitHistory(pairsA, pairsB) {
     }
     if (!weeks || weeks.size === 0) continue;
 
-    let yearTotal = 0, yearAWins = 0;
+    let yearTotal = 0, yearAWins = 0, yearBWins = 0;
     for (const wk of [...weeks].sort((a, b) => Number(a) - Number(b))) {
       let aSum = 0, bSum = 0, valid = true;
       for (const p of pairsA) {
@@ -4604,10 +4604,10 @@ function computeStartSitHistory(pairsA, pairsB) {
       aScores.push(aSum); bScores.push(bSum);
       yearTotal++;
       if (aSum > bSum) { aWins++; yearAWins++; }
-      else if (aSum < bSum) bWins++;
+      else if (aSum < bSum) { bWins++; yearBWins++; }
       else ties++;
     }
-    if (yearTotal > 0) byYear[season] = { weeks: yearTotal, aWins: yearAWins };
+    if (yearTotal > 0) byYear[season] = { weeks: yearTotal, aWins: yearAWins, bWins: yearBWins };
   }
 
   const total = aWins + bWins + ties;
@@ -5055,10 +5055,11 @@ async function runStartSitDecision() {
   // highlight on the lineup card, and the order of the results table.
   const aLeads = result.aWins >= result.bWins;
   const winName = aLeads ? nameA : nameB;
+  const loseName = aLeads ? nameB : nameA;
   const winPct = aLeads ? result.aPct : result.bPct;
 
   document.getElementById('startsit-title').textContent =
-    winName + ' won ' + pct(winPct) + ' of weeks since 2015.';
+    winName + ' outscored ' + loseName + ' in ' + pct(winPct) + ' of weeks since 2015.';
   document.getElementById('startsit-sub').textContent =
     nameA + ': ' + formatNamedRankList(namedA) + '  \u00b7  ' + nameB + ': ' + formatNamedRankList(namedB) +
     '  \u00b7  historical weekly results (2015\u20132025)';
@@ -5089,8 +5090,8 @@ async function runStartSitDecision() {
   bigB.textContent = pct(result.bPct);
   bigA.style.color = aLeads ? '#2E9E63' : '#999';
   bigB.style.color = aLeads ? '#999' : '#2E9E63';
-  document.getElementById('startsit-big-subA').textContent = result.aWins + ' of ' + result.total + ' weeks';
-  document.getElementById('startsit-big-subB').textContent = result.bWins + ' of ' + result.total + ' weeks';
+  document.getElementById('startsit-big-subA').textContent = 'Outscored ' + nameB + ' in ' + result.aWins + ' of ' + result.total + ' weeks.';
+  document.getElementById('startsit-big-subB').textContent = 'Outscored ' + nameA + ' in ' + result.bWins + ' of ' + result.total + ' weeks.';
   document.getElementById('startsit-bignums').style.display = 'flex';
 
   const bar = document.getElementById('startsit-bar');
@@ -5120,12 +5121,18 @@ async function runStartSitDecision() {
     'Avg ' + nameA + ' score: ' + result.avgA.toFixed(2) + '  \u00b7  Avg ' + nameB + ' score: ' + result.avgB.toFixed(2) +
     '  \u00b7  Avg gap: ' + (result.avgGap >= 0 ? '+' : '') + result.avgGap.toFixed(2) + ' pts  \u00b7  ' + result.total + ' total weeks';
 
-  document.getElementById('startsit-year-winhdr').textContent = nameA + ' wins';
-  document.getElementById('startsit-year-body').innerHTML = Object.entries(result.byYear).map(([yr, d]) =>
-    '<tr><td style="padding:4px 8px;">' + yr + '</td><td style="text-align:right; padding:4px 8px;">' + d.weeks +
-    '</td><td style="text-align:right; padding:4px 8px;">' + d.aWins + '</td><td style="text-align:right; padding:4px 8px;">' +
-    (d.aWins / d.weeks * 100).toFixed(1) + '%</td></tr>'
-  ).join('');
+  // "Winner" per year — whichever team actually won more weeks that year,
+  // not always Team A. Ties (d.aWins === d.bWins, including a 0-0 year
+  // where every week tied) default to Team A, per B's request.
+  document.getElementById('startsit-year-body').innerHTML = Object.entries(result.byYear).map(([yr, d]) => {
+    const yearALeads = d.aWins >= d.bWins;
+    const yearWinnerName = yearALeads ? nameA : nameB;
+    const yearWinnerWins = yearALeads ? d.aWins : d.bWins;
+    return '<tr><td style="padding:4px 8px;">' + yr + '</td><td style="text-align:right; padding:4px 8px;">' + d.weeks +
+      '</td><td style="text-align:right; padding:4px 8px;">' + yearWinnerName + ' (' + yearWinnerWins + ')' +
+      '</td><td style="text-align:right; padding:4px 8px;">' +
+      (yearWinnerWins / d.weeks * 100).toFixed(1) + '%</td></tr>';
+  }).join('');
 }
 
 
