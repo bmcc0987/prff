@@ -1796,12 +1796,13 @@ footer {
       <div style="font-size:12px; color:#333; margin-bottom:14px;" id="startsit-avgline"></div>
       <details>
         <summary style="cursor:pointer; font-size:12px; color:#2E9E63; font-weight:600;">By year</summary>
+        <div style="font-size:12px; color:#333; font-weight:600; margin:10px 0 6px;" id="startsit-year-caption"></div>
         <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:8px;">
           <thead>
             <tr style="border-bottom:1px solid #ccc;">
               <th style="text-align:left; padding:4px 8px;">Year</th>
               <th style="text-align:right; padding:4px 8px;">Weeks</th>
-              <th style="text-align:right; padding:4px 8px;" id="startsit-year-winhdr">Winner</th>
+              <th style="text-align:right; padding:4px 8px;">Outscored</th>
               <th style="text-align:right; padding:4px 8px;">%</th>
             </tr>
           </thead>
@@ -4998,6 +4999,7 @@ async function runStartSitDecision() {
     document.getElementById('startsit-table-body').innerHTML = '';
     document.getElementById('startsit-avgline').textContent = '';
     document.getElementById('startsit-year-body').innerHTML = '';
+    document.getElementById('startsit-year-caption').textContent = '';
     document.getElementById('startsit-lineups').style.display = 'none';
     document.getElementById('startsit-bignums').style.display = 'none';
     document.getElementById('startsit-bar').style.display = 'none';
@@ -5021,6 +5023,7 @@ async function runStartSitDecision() {
     document.getElementById('startsit-table-body').innerHTML = '';
     document.getElementById('startsit-avgline').textContent = '';
     document.getElementById('startsit-year-body').innerHTML = '';
+    document.getElementById('startsit-year-caption').textContent = '';
     document.getElementById('startsit-lineups').style.display = 'none';
     document.getElementById('startsit-bignums').style.display = 'none';
     document.getElementById('startsit-bar').style.display = 'none';
@@ -5041,6 +5044,7 @@ async function runStartSitDecision() {
     document.getElementById('startsit-table-body').innerHTML = '';
     document.getElementById('startsit-avgline').textContent = '';
     document.getElementById('startsit-year-body').innerHTML = '';
+    document.getElementById('startsit-year-caption').textContent = '';
     document.getElementById('startsit-lineups').style.display = 'none';
     document.getElementById('startsit-bignums').style.display = 'none';
     document.getElementById('startsit-bar').style.display = 'none';
@@ -5121,17 +5125,21 @@ async function runStartSitDecision() {
     'Avg ' + nameA + ' score: ' + result.avgA.toFixed(2) + '  \u00b7  Avg ' + nameB + ' score: ' + result.avgB.toFixed(2) +
     '  \u00b7  Avg gap: ' + (result.avgGap >= 0 ? '+' : '') + result.avgGap.toFixed(2) + ' pts  \u00b7  ' + result.total + ' total weeks';
 
-  // "Winner" per year — whichever team actually won more weeks that year,
-  // not always Team A. Ties (d.aWins === d.bWins, including a 0-0 year
-  // where every week tied) default to Team A, per B's request.
+  // By-year breakdown: one fixed direction for every row — how many weeks
+  // the OVERALL series winner (winName, from the headline above) outscored
+  // the overall loser (loseName) — rather than switching which team's
+  // number is shown from row to row. A caption states that direction in
+  // plain language, and it flips automatically (Team A <-> Team B)
+  // depending on whichever team actually won the majority of weeks
+  // overall, per B's request.
+  document.getElementById('startsit-year-caption').textContent =
+    'How many weeks per season did ' + winName + ' outscore ' + loseName + '?';
   document.getElementById('startsit-year-body').innerHTML = Object.entries(result.byYear).map(([yr, d]) => {
-    const yearALeads = d.aWins >= d.bWins;
-    const yearWinnerName = yearALeads ? nameA : nameB;
-    const yearWinnerWins = yearALeads ? d.aWins : d.bWins;
+    const winCount = aLeads ? d.aWins : d.bWins;
     return '<tr><td style="padding:4px 8px;">' + yr + '</td><td style="text-align:right; padding:4px 8px;">' + d.weeks +
-      '</td><td style="text-align:right; padding:4px 8px;">' + yearWinnerName + ' (' + yearWinnerWins + ')' +
+      '</td><td style="text-align:right; padding:4px 8px;">' + winCount +
       '</td><td style="text-align:right; padding:4px 8px;">' +
-      (yearWinnerWins / d.weeks * 100).toFixed(1) + '%</td></tr>';
+      (winCount / d.weeks * 100).toFixed(1) + '%</td></tr>';
   }).join('');
 }
 
@@ -7531,12 +7539,27 @@ async function publishAdminTotalsTable() {
   preview.innerHTML = buildPublishedTotalsHTML('Week ' + week, rows, null, matchupRows);
   previewWrap.style.display = 'block';
 
-  // Jump to Position rankings and auto-fill the current position using this
-  // week's team tiers (top 12 / middle 8 / bottom 12).
+  // Jump to Position rankings for this week. IMPORTANT: use
+  // smartLoadPositionRankings here, NOT a direct autoFillPositionRankings
+  // call — smartLoadPositionRankings already contains the "don't touch it
+  // if it's already published" guard (draft first, then published data,
+  // and ONLY auto-fills from the new team tiers if this position/week has
+  // never been published at all). Calling autoFillPositionRankings()
+  // directly, as this used to do, bypassed that guard entirely: it always
+  // overwrote the currently-selected position's editor with freshly
+  // recomputed probabilities off the new tiers, even when that exact
+  // position/week was already published — so republishing Team Implied
+  // Totals could silently change an already-published position's numbers
+  // in the admin editor, one accidental "Publish" away from changing what
+  // was actually live. The Season Long Totals publish flow above
+  // (publishAdminSLTotalsTable) already avoids this same mistake for
+  // season-long positions (see its comment) — this brings Weekly in line
+  // with that same rule: once a position/week is published, it stays
+  // exactly as published, on the admin side and the live site, until you
+  // manually change it yourself.
   switchAdminTool('rankings');
   document.getElementById('admin-week').value = week;
-  renderAdminMatchupsPanel(week);
-  autoFillPositionRankings(document.getElementById('admin-position').value, week);
+  await smartLoadPositionRankings(document.getElementById('admin-position').value, week);
 }
 
 // --- ADMIN: SEASON LONG TEAM IMPLIED TOTALS ---------------------------------
@@ -7696,10 +7719,12 @@ function qbTop12Probability(impliedTotal) {
 // starter) made once sticks for every later week until it's edited again,
 // instead of resetting back to a fixed list every week:
 //   1. If THIS exact week already has published rankings for this
-//      position, use its own player list — this is what lets re-publishing
-//      Team Implied Totals (which re-runs auto-fill to refresh probabilities
-//      off the new tiers) recompute numbers WITHOUT wiping out a roster
-//      edit you already made and published for that specific week.
+//      position, use its own player list (kept here as a safety net —
+//      in practice this position/week already being published means
+//      smartLoadPositionRankings loads the published data directly
+//      instead of ever calling this auto-fill function at all, so
+//      republishing Team Implied Totals never recomputes or touches an
+//      already-published position's numbers; see publishAdminTotalsTable).
 //   2. Otherwise, walk backward to the most recent EARLIER week that was
 //      published for this position, and carry its roster forward — this is
 //      the actual "sticky" behavior: whatever you last published (add/drop)
