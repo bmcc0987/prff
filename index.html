@@ -1101,21 +1101,31 @@ footer {
 .support-chat-send:disabled { background: #ccc; cursor: default; }
 
 /* --- Admin > Messages tab -------------------------------------------------- */
-.admin-messages-layout { display: flex; gap: 16px; min-height: 420px; }
-.admin-messages-threads { width: 260px; flex-shrink: 0; border: 1px solid #e2e0da; border-radius: 10px; overflow-y: auto; max-height: 560px; background: #fff; }
+/* Both columns need an actual FIXED height (not just min-height) for their
+   internal overflow-y:auto to ever kick in — a flex child with no bounded
+   height just grows to fit its content instead of scrolling, which was the
+   bug: min-height:420px alone lets the whole panel keep growing forever as
+   messages pile up, so there was never anything for the browser to scroll.
+   height:100% below then hands that fixed height down to each column, and
+   min-height:0 on the two inner flex:1 bodies overrides flexbox's default
+   min-height:auto (which otherwise stops a flex item from shrinking below
+   its content size — the second, less obvious half of this same bug). */
+.admin-messages-layout { display: flex; gap: 16px; height: 560px; }
+.admin-messages-threads { width: 260px; flex-shrink: 0; height: 100%; border: 1px solid #e2e0da; border-radius: 10px; overflow-y: auto; background: #fff; }
 .admin-thread-item { padding: 11px 13px; border-bottom: 1px solid #eeece7; cursor: pointer; font-family: 'Lato', sans-serif; }
 .admin-thread-item:hover { background: #f9f8f6; }
 .admin-thread-item.active { background: #eafaf1; }
 .admin-thread-name { font-size: 12.5px; font-weight: 700; color: #111; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .admin-thread-preview { font-size: 11px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .admin-thread-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: #c0392b; flex-shrink: 0; }
-.admin-messages-detail { flex: 1; border: 1px solid #e2e0da; border-radius: 10px; display: flex; flex-direction: column; background: #fff; min-height: 420px; }
+.admin-messages-detail { flex: 1; min-width: 0; height: 100%; border: 1px solid #e2e0da; border-radius: 10px; display: flex; flex-direction: column; background: #fff; overflow: hidden; }
 .admin-messages-detail-empty { margin: auto; font-family: 'Lato', sans-serif; font-size: 13px; color: #999; }
-.admin-messages-detail-header { padding: 12px 16px; border-bottom: 1px solid #eeece7; font-family: 'Lato', sans-serif; font-size: 13.5px; font-weight: 900; }
-.admin-messages-detail-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.admin-messages-detail-header { padding: 12px 16px; border-bottom: 1px solid #eeece7; font-family: 'Lato', sans-serif; font-size: 13.5px; font-weight: 900; flex-shrink: 0; }
+.admin-messages-detail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
 @media (max-width: 640px) {
-  .admin-messages-layout { flex-direction: column; }
-  .admin-messages-threads { width: auto; max-height: 200px; }
+  .admin-messages-layout { flex-direction: column; height: auto; }
+  .admin-messages-threads { width: auto; height: 200px; }
+  .admin-messages-detail { height: 400px; }
 }
 </style>
 <script>
@@ -2589,6 +2599,7 @@ let supportChatOpen = false;        // whether the panel itself is expanded righ
 let adminSupportMessages = [];      // ALL threads' messages — admin view only
 let adminSupportReadState = {};     // user_id -> { user_last_read_at, admin_last_read_at }
 let adminOpenThreadUserId = null;   // which thread is open in the Admin > Messages detail pane
+let adminMessagesPollTimer = null;  // setInterval handle while the Admin > Messages tab is the active admin tool
 
 // Maps each static page name to its real URL path. 'article' isn't listed
 // here since its path is dynamic (/articles/{id}) — goToArticle handles
@@ -3535,6 +3546,7 @@ async function logOut(evt) {
   evt.preventDefault();
   if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
+  stopAdminMessagesPolling(); // in case you were logged in as admin with Messages open
   document.getElementById('nav-actions-loggedout').style.display = 'flex';
   document.getElementById('nav-actions-loggedin').style.display = 'none';
   document.getElementById('mobile-nav-signin').style.display = 'block';
@@ -3730,10 +3742,33 @@ async function sendSupportChatMessage() {
 // the client. Plenty fast at this site's message volume, and it keeps this
 // feature consistent with the rest of the admin panel, which is all
 // "click Refresh/a tab, pull everything, render it" rather than paginated.
-async function loadSupportThreadsList() {
+//
+// Live-updates while this tab is open (so a new message from a user shows
+// up here the same way your replies already show up automatically for
+// them): polled every ADMIN_MESSAGES_POLL_MS, started/stopped from
+// switchAdminTool() below so it only runs while you're actually looking at
+// this tab. Set to 5 seconds (shorter than the user-facing widget's own
+// 20-second SUPPORT_CHAT_POLL_MS) at your request, for a snappier feel
+// during an active back-and-forth — still a trivially cheap database read
+// at this site's message volume even at this shorter interval.
+const ADMIN_MESSAGES_POLL_MS = 5000;
+
+function startAdminMessagesPolling() {
+  if (adminMessagesPollTimer) return;
+  adminMessagesPollTimer = setInterval(() => loadSupportThreadsList(true), ADMIN_MESSAGES_POLL_MS);
+}
+function stopAdminMessagesPolling() {
+  if (adminMessagesPollTimer) { clearInterval(adminMessagesPollTimer); adminMessagesPollTimer = null; }
+}
+
+// `silent`, when true (every background poll tick), skips the "Loading…"
+// flash and skips overwriting the list with an error message on a single
+// failed background fetch — an already-working list shouldn't blank out
+// just because one poll tick had a hiccup; it'll just try again next tick.
+async function loadSupportThreadsList(silent) {
   const list = document.getElementById('admin-messages-threads');
-  list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">Loading…</div>';
-  if (!supabaseClient) { list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">No database connected.</div>'; return; }
+  if (!silent) list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">Loading…</div>';
+  if (!supabaseClient) { if (!silent) list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">No database connected.</div>'; return; }
   try {
     const [{ data: msgs, error: msgErr }, { data: reads, error: readErr }] = await Promise.all([
       supabaseClient.from('support_messages').select('*').order('created_at', { ascending: true }),
@@ -3745,7 +3780,7 @@ async function loadSupportThreadsList() {
     adminSupportReadState = {};
     (reads || []).forEach(r => { adminSupportReadState[r.user_id] = r; });
   } catch (e) {
-    list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#c0392b;">Could not load: ' + escapeHtml(e.message) + '</div>';
+    if (!silent) list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#c0392b;">Could not load: ' + escapeHtml(e.message) + '</div>';
     return;
   }
   renderSupportThreadsList();
@@ -3754,6 +3789,10 @@ async function loadSupportThreadsList() {
 
 function renderSupportThreadsList() {
   const list = document.getElementById('admin-messages-threads');
+  // Preserve scroll position across re-renders — this runs on every poll
+  // tick now, and shouldn't yank the list back to the top out from under
+  // you if you're scrolled down through a long thread list.
+  const prevScrollTop = list.scrollTop;
   const byUser = {};
   adminSupportMessages.forEach(m => {
     if (!byUser[m.user_id]) byUser[m.user_id] = [];
@@ -3778,6 +3817,7 @@ function renderSupportThreadsList() {
       '<div class="admin-thread-preview">' + escapeHtml(t.lastBody) + '</div>' +
       '</div>';
   }).join('');
+  list.scrollTop = prevScrollTop;
 }
 
 async function openSupportThread(userId) {
@@ -3796,6 +3836,20 @@ function renderAdminThreadDetail(userId) {
   const detail = document.getElementById('admin-messages-detail');
   const msgs = adminSupportMessages.filter(m => m.user_id === userId);
   if (!msgs.length) { detail.innerHTML = '<div class="admin-messages-detail-empty">Select a conversation on the left.</div>'; return; }
+
+  // This now also re-runs on every poll tick (see startAdminMessagesPolling
+  // above) while you're looking at this exact thread, so a background
+  // refresh must not wipe out a reply you're still mid-typing, or yank your
+  // scroll position back to the bottom if you've scrolled up to read
+  // earlier messages. Both are captured from whatever's currently on
+  // screen (only when it's still showing this SAME thread) before the
+  // innerHTML rebuild below, then restored after.
+  const prevInput = document.getElementById('admin-reply-input');
+  const draftValue = (prevInput && adminOpenThreadUserId === userId) ? prevInput.value : '';
+  const prevBody = document.getElementById('admin-thread-body');
+  const wasNearBottom = !prevBody || (prevBody.scrollTop + prevBody.clientHeight >= prevBody.scrollHeight - 20);
+  const prevScrollTop = prevBody ? prevBody.scrollTop : 0;
+
   const name = msgs[msgs.length - 1].user_name || msgs[msgs.length - 1].user_email;
   const email = msgs[msgs.length - 1].user_email;
   detail.innerHTML =
@@ -3808,11 +3862,11 @@ function renderAdminThreadDetail(userId) {
       }).join('') +
     '</div>' +
     '<div class="support-chat-input-row">' +
-      '<textarea class="support-chat-input" id="admin-reply-input" rows="1" placeholder="Reply…" onkeydown="if(event.key===\'Enter\' &amp;&amp; !event.shiftKey){event.preventDefault(); sendAdminReply(\'' + userId + '\');}"></textarea>' +
+      '<textarea class="support-chat-input" id="admin-reply-input" rows="1" placeholder="Reply…" onkeydown="if(event.key===\'Enter\' &amp;&amp; !event.shiftKey){event.preventDefault(); sendAdminReply(\'' + userId + '\');}">' + escapeHtml(draftValue) + '</textarea>' +
       '<button class="support-chat-send" id="admin-reply-send-btn" onclick="sendAdminReply(\'' + userId + '\')">Send</button>' +
     '</div>';
   const body = document.getElementById('admin-thread-body');
-  body.scrollTop = body.scrollHeight;
+  body.scrollTop = wasNearBottom ? body.scrollHeight : prevScrollTop;
 }
 
 async function sendAdminReply(userId) {
@@ -7066,8 +7120,14 @@ function switchAdminTool(tool) {
   if (tool === 'users' && !document.getElementById('users-list-rows').children.length) {
     loadUsersList();
   }
+  // Only poll for new support messages while this tab is actually the one
+  // on screen — switching to any other admin tool stops it, same idea as
+  // the widget's own polling only running while it's visible to a user.
   if (tool === 'messages') {
     loadSupportThreadsList();
+    startAdminMessagesPolling();
+  } else {
+    stopAdminMessagesPolling();
   }
 }
 
