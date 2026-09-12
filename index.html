@@ -1058,6 +1058,22 @@ footer {
   transition: background 0.15s, transform 0.15s;
 }
 .support-chat-btn:hover { background: #2E9E63; transform: translateY(-2px); }
+/* Blinking green draws the eye to the button itself, on top of the red
+   count badge, when there's an unread reply and the panel is closed — see
+   the "has-unread" class toggled in refreshSupportChatBadge()/
+   loadSupportChatThread(). Pulses between the button's normal dark
+   background and brand green rather than fully disappearing, so it never
+   reads as "broken" mid-blink. prefers-reduced-motion gets a solid green
+   button instead of an animated one — same visual cue, no motion, for
+   anyone who's asked their device to minimize animation. */
+.support-chat-btn.has-unread { animation: support-chat-blink 1.1s ease-in-out infinite; }
+@keyframes support-chat-blink {
+  0%, 100% { background: #111; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+  50% { background: #3DB87A; box-shadow: 0 6px 22px rgba(61,184,122,0.55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .support-chat-btn.has-unread { animation: none; background: #3DB87A; }
+}
 .support-chat-badge {
   position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px;
   border-radius: 9px; background: #c0392b; color: #fff; font-family: 'Lato', sans-serif;
@@ -1114,7 +1130,12 @@ footer {
 .admin-messages-threads { width: 260px; flex-shrink: 0; height: 100%; border: 1px solid #e2e0da; border-radius: 10px; overflow-y: auto; background: #fff; }
 .admin-thread-item { padding: 11px 13px; border-bottom: 1px solid #eeece7; cursor: pointer; font-family: 'Lato', sans-serif; }
 .admin-thread-item:hover { background: #f9f8f6; }
-.admin-thread-item.active { background: #eafaf1; }
+/* Green here means "unread," full stop — it's driven by the exact same
+   hasUnread check that shows the red dot, not by whether this happens to
+   be the thread currently open in the detail pane. Opening a thread (or
+   simply being the thread that's already open when a new message arrives
+   — see markAdminThreadRead() below) clears both the same instant. */
+.admin-thread-item.unread { background: #eafaf1; }
 .admin-thread-name { font-size: 12.5px; font-weight: 700; color: #111; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .admin-thread-preview { font-size: 11px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .admin-thread-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: #c0392b; flex-shrink: 0; }
@@ -3592,7 +3613,33 @@ function updateUpgradeNavVisibility() {
 //
 // Updates are polled (not pushed via Supabase Realtime), consistent with
 // the rest of this app, which doesn't use Realtime anywhere else.
-const SUPPORT_CHAT_POLL_MS = 20000;
+//
+// BATTERY: a naive "poll every N seconds, forever, the instant you're
+// signed in as Pro" was draining phone batteries on mobile, reported
+// directly — a JS timer making a network request on a schedule keeps a
+// phone's radio and CPU waking up periodically, and that adds up over a
+// browsing session even though each individual check is tiny. Two changes
+// fix this instead of just living with one fixed interval everywhere:
+//   1. Two speeds instead of one: a snappy SUPPORT_CHAT_POLL_MS_OPEN while
+//      the panel is actually open and being used for a live back-and-forth
+//      (checking often is worth the cost there), and a much slower
+//      SUPPORT_CHAT_POLL_MS_IDLE the rest of the time — the panel is
+//      closed, so this is only keeping the little unread badge fresh, and
+//      that doesn't need to happen anywhere near as often (an admin reply
+//      also always sends an email, so the badge isn't the only way you'd
+//      find out). restartSupportChatPolling() below re-picks the right
+//      speed any time the panel opens or closes.
+//   2. Fully pausing (not just slowing) whenever the page itself isn't
+//      visible — screen off, phone locked, or the browser app switched
+//      away from — via the Page Visibility API listener near the bottom of
+//      this section. A backgrounded tab still runs its JS timers unless
+//      something explicitly stops them, so without this a phone sitting in
+//      someone's pocket with the site still open in a background tab would
+//      keep polling and keep waking the radio for no one to see, which is
+//      exactly the kind of background activity that shows up as battery
+//      drain in a phone's OS-level battery report.
+const SUPPORT_CHAT_POLL_MS_OPEN = 5000;
+const SUPPORT_CHAT_POLL_MS_IDLE = 60000;
 
 function updateSupportChatVisibility() {
   const widget = document.getElementById('support-chat-widget');
@@ -3612,8 +3659,17 @@ function updateSupportChatVisibility() {
 
 function startSupportChatPolling() {
   refreshSupportChatBadge();
-  if (supportChatPollTimer) return;
-  supportChatPollTimer = setInterval(refreshSupportChatBadge, SUPPORT_CHAT_POLL_MS);
+  restartSupportChatPolling();
+}
+// Clears and re-sets the interval at whichever speed currently applies
+// (open vs idle — see the comment above SUPPORT_CHAT_POLL_MS_OPEN). Called
+// on first start AND every time the panel opens/closes, so the speed
+// change takes effect immediately rather than waiting for the current
+// interval to finish.
+function restartSupportChatPolling() {
+  stopSupportChatPolling();
+  const ms = supportChatOpen ? SUPPORT_CHAT_POLL_MS_OPEN : SUPPORT_CHAT_POLL_MS_IDLE;
+  supportChatPollTimer = setInterval(refreshSupportChatBadge, ms);
 }
 function stopSupportChatPolling() {
   if (supportChatPollTimer) { clearInterval(supportChatPollTimer); supportChatPollTimer = null; }
@@ -3634,14 +3690,20 @@ async function refreshSupportChatBadge() {
     const lastRead = readRow && readRow.user_last_read_at ? new Date(readRow.user_last_read_at) : null;
     const unread = supportChatMessages.filter(m => m.sender === 'admin' && (!lastRead || new Date(m.created_at) > lastRead)).length;
     const badge = document.getElementById('support-chat-badge');
+    const hasUnread = unread > 0 && !supportChatOpen;
     if (badge) {
-      if (unread > 0 && !supportChatOpen) {
+      if (hasUnread) {
         badge.textContent = unread > 9 ? '9+' : String(unread);
         badge.style.display = 'flex';
       } else {
         badge.style.display = 'none';
       }
     }
+    // Blink the launcher button green on top of the count badge — a
+    // louder, harder-to-miss cue that a new reply is waiting, on top of
+    // the number itself.
+    const toggleBtn = document.getElementById('support-chat-toggle-btn');
+    if (toggleBtn) toggleBtn.classList.toggle('has-unread', hasUnread);
     if (supportChatOpen) {
       renderSupportChatMessages();
       markSupportChatReadByUser();
@@ -3657,6 +3719,10 @@ function toggleSupportChat(forceOpen) {
   const shouldOpen = forceOpen !== undefined ? forceOpen : !panel.classList.contains('open');
   supportChatOpen = shouldOpen;
   panel.classList.toggle('open', shouldOpen);
+  // Switch polling speed immediately (fast while actually open, slow again
+  // once closed) rather than waiting for whatever's left of the previous
+  // interval — see the battery-saving comment above SUPPORT_CHAT_POLL_MS_OPEN.
+  if (supportChatPollTimer) restartSupportChatPolling();
   if (shouldOpen) loadSupportChatThread();
 }
 
@@ -3675,6 +3741,8 @@ async function loadSupportChatThread() {
   markSupportChatReadByUser();
   const badge = document.getElementById('support-chat-badge');
   if (badge) badge.style.display = 'none';
+  const toggleBtn = document.getElementById('support-chat-toggle-btn');
+  if (toggleBtn) toggleBtn.classList.remove('has-unread');
 }
 
 function renderSupportChatMessages() {
@@ -3783,8 +3851,29 @@ async function loadSupportThreadsList(silent) {
     if (!silent) list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#c0392b;">Could not load: ' + escapeHtml(e.message) + '</div>';
     return;
   }
+  // If a thread is the one currently open in the detail pane, treat
+  // whatever just came in for it as read right away — this runs on every
+  // poll tick too, so a new message arriving WHILE you're already looking
+  // at that exact conversation never flashes it green/red in the list
+  // next to it. Must happen before renderSupportThreadsList() below, since
+  // that's what actually computes each thread's unread state.
+  if (adminOpenThreadUserId) await markAdminThreadRead(adminOpenThreadUserId);
   renderSupportThreadsList();
   if (adminOpenThreadUserId) renderAdminThreadDetail(adminOpenThreadUserId);
+}
+
+// Marks one thread read on the admin side (both in the database and in the
+// local adminSupportReadState cache used to compute hasUnread), shared by
+// openSupportThread() (opening a thread for the first time) and
+// loadSupportThreadsList() (keeping an already-open thread continuously
+// marked read as new messages arrive via polling).
+async function markAdminThreadRead(userId) {
+  try {
+    const now = new Date().toISOString();
+    await supabaseClient.from('support_read_state').upsert({ user_id: userId, admin_last_read_at: now }, { onConflict: 'user_id' });
+    if (!adminSupportReadState[userId]) adminSupportReadState[userId] = {};
+    adminSupportReadState[userId].admin_last_read_at = now;
+  } catch (e) { /* non-critical — worst case the unread indicator is stale until the next successful mark */ }
 }
 
 function renderSupportThreadsList() {
@@ -3812,7 +3901,7 @@ function renderSupportThreadsList() {
     return;
   }
   list.innerHTML = threads.map(t => {
-    return '<div class="admin-thread-item' + (t.userId === adminOpenThreadUserId ? ' active' : '') + '" onclick="openSupportThread(\'' + t.userId + '\')">' +
+    return '<div class="admin-thread-item' + (t.hasUnread ? ' unread' : '') + '" onclick="openSupportThread(\'' + t.userId + '\')">' +
       '<div class="admin-thread-name">' + escapeHtml(t.name) + (t.hasUnread ? '<span class="admin-thread-unread-dot"></span>' : '') + '</div>' +
       '<div class="admin-thread-preview">' + escapeHtml(t.lastBody) + '</div>' +
       '</div>';
@@ -3824,12 +3913,8 @@ async function openSupportThread(userId) {
   adminOpenThreadUserId = userId;
   renderSupportThreadsList();
   renderAdminThreadDetail(userId);
-  try {
-    await supabaseClient.from('support_read_state').upsert({ user_id: userId, admin_last_read_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    if (!adminSupportReadState[userId]) adminSupportReadState[userId] = {};
-    adminSupportReadState[userId].admin_last_read_at = new Date().toISOString();
-    renderSupportThreadsList();
-  } catch (e) { /* non-critical — worst case the unread dot is stale until the next successful mark */ }
+  await markAdminThreadRead(userId);
+  renderSupportThreadsList();
 }
 
 function renderAdminThreadDetail(userId) {
@@ -3889,21 +3974,49 @@ async function sendAdminReply(userId) {
     renderSupportThreadsList();
     renderAdminThreadDetail(userId);
 
-    const { data: sessionData } = await supabaseClient.auth.getSession();
-    const accessToken = sessionData && sessionData.session && sessionData.session.access_token;
-    if (accessToken) {
-      fetch(SUPABASE_URL + '/functions/v1/notify-new-support-message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-        body: JSON.stringify({ direction: 'to_user', userId: userId, preview: body.slice(0, 300) }),
-      }).catch(() => {});
-    }
+    // NOTE: this used to also call notify-new-support-message with
+    // direction:'to_user' here, which emailed the paying user every time
+    // you replied. Removed at your explicit request ("I don't want them
+    // to" [receive email notifications]) — a reply now only shows up for
+    // them live in the chat widget (polling / the visibility-resume
+    // instant-check covered elsewhere in this file), with no email sent.
+    // The notify-new-support-message Edge Function itself still supports
+    // to_user (untouched, in case you ever want this back) — this is the
+    // only place that ever called it, so simply removing this block is
+    // enough to fully stop it; no redeploy of that function is needed
+    // either way, since it's this client-side call that decides whether it
+    // ever gets invoked in the first place. The OTHER direction — emailing
+    // YOU (to_admin) when a Pro user sends a new message — is untouched
+    // and still happens, since that's the "Email me" half of what you
+    // originally asked for.
   } catch (e) {
     alert('Could not send reply: ' + e.message);
   } finally {
     btn.disabled = false;
   }
 }
+
+// Pauses BOTH chat polling loops (the Pro user's widget and your own
+// Admin > Messages tab) the instant the page isn't actually visible —
+// screen locked, phone put to sleep, browser tab/app switched away from —
+// and resumes them (with an immediate check, not a stale wait for the next
+// tick) the moment it's visible again. This is the main fix for the
+// reported mobile battery drain: a background tab's JS timers keep firing
+// on schedule unless something explicitly stops them, so without this, a
+// phone sitting in a pocket with the site still open in the background
+// would keep polling — and keep waking the phone's radio — for no one to
+// see. document.hidden / the visibilitychange event are the standard,
+// widely-supported browser APIs for detecting exactly this.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopSupportChatPolling();
+    stopAdminMessagesPolling();
+  } else {
+    if (currentUser && currentUser.isPro) startSupportChatPolling();
+    const messagesTab = document.getElementById('admin-tab-messages');
+    if (messagesTab && messagesTab.classList.contains('active')) startAdminMessagesPolling();
+  }
+});
 
 // --- TRADE ANALYZER --------------------------------------------------------
 // Real historical PPR scoring data, 2015-2024 (FantasyPros weekly points).
