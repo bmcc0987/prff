@@ -1074,11 +1074,12 @@ footer {
 .support-chat-panel.open { display: flex; }
 .support-chat-header {
   background: #111; color: #fff; padding: 12px 14px; display: flex;
-  align-items: center; justify-content: space-between; flex-shrink: 0;
+  align-items: flex-start; justify-content: space-between; gap: 8px; flex-shrink: 0;
 }
+.support-chat-header-text { flex: 1; min-width: 0; }
 .support-chat-title { font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 900; }
-.support-chat-sub { font-family: 'Lato', sans-serif; font-size: 10.5px; color: #bbb; margin-top: 1px; }
-.support-chat-close { background: none; border: none; color: #bbb; font-size: 16px; cursor: pointer; padding: 2px 4px; }
+.support-chat-sub { font-family: 'Lato', sans-serif; font-size: 10.5px; color: #bbb; margin-top: 3px; line-height: 1.45; }
+.support-chat-close { background: none; border: none; color: #bbb; font-size: 16px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
 .support-chat-close:hover { color: #fff; }
 .support-chat-messages { flex: 1; overflow-y: auto; padding: 12px 14px; background: #f9f8f6; display: flex; flex-direction: column; gap: 8px; }
 .support-chat-empty { font-family: 'Lato', sans-serif; font-size: 12px; color: #999; line-height: 1.5; text-align: center; margin-top: 20px; }
@@ -2407,9 +2408,9 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
   </button>
   <div class="support-chat-panel" id="support-chat-panel">
     <div class="support-chat-header">
-      <div>
+      <div class="support-chat-header-text">
         <div class="support-chat-title">Message Us</div>
-        <div class="support-chat-sub">Pro support — replies usually within a day</div>
+        <div class="support-chat-sub">Have start/sit or trade questions? Add/drop? Comments or suggestions for the site? Ask them here. Channel is private and is only between you and Admin.</div>
       </div>
       <button class="support-chat-close" onclick="toggleSupportChat(false)">&times;</button>
     </div>
@@ -8649,6 +8650,31 @@ function slugify(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'article';
 }
 
+// Turns a title's slug into a permanent id/URL that's only ever LONGER than
+// the plain slug when it actually has to be — i.e. only when another
+// article already has that exact same slug. Every article ever
+// first-published before this function existed instead got a trailing
+// "-<n>" appended UNCONDITIONALLY (n was just a running, in-memory counter
+// that reset to 1 on every page load), which is why some existing live
+// URLs — e.g. "waiver-wire-week-1-2", or the earlier
+// "...-outcomes-draft-2" — end in a meaningless number that has nothing to
+// do with the article itself. Fixed here so every NEWLY first-published
+// article from now on gets a clean "waiver-wire-week-1"-style URL instead,
+// with a numeric suffix only added (starting at -2, then -3, ...) in the
+// rare case two articles really do share the same title. Already-published
+// articles keep whatever id they were first given — per this app's
+// existing rule that an id, once live, never changes on its own — so
+// fixing an already-published article's URL still means renaming it once
+// in the database and adding an entry to ARTICLE_ID_REDIRECTS (see
+// routeFromLocation below), the same way the earlier "-draft-2" URL was
+// fixed.
+function uniqueArticleId(baseSlug, existingIds) {
+  if (!existingIds[baseSlug]) return baseSlug;
+  let n = 2;
+  while (existingIds[baseSlug + '-' + n]) n++;
+  return baseSlug + '-' + n;
+}
+
 function formatInline(text) {
   text = text.replace(/\[size=(\d+)\]([\s\S]+?)\[\/size\]/g, '<span style="font-size:$1px;">$2</span>');
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -9131,7 +9157,7 @@ async function publishArticle() {
   const displayOrder = displayOrderRaw === '' ? null : parseInt(displayOrderRaw, 10);
   const featured = document.getElementById('article-featured').checked;
 
-  const id = (existingId && editingType === 'published') ? existingId : (slugify(title) + '-' + (++articleIdCounter));
+  const id = (existingId && editingType === 'published') ? existingId : uniqueArticleId(slugify(title), publishedArticles);
   const dateLabel = (existingId && publishedArticles[existingId])
     ? publishedArticles[existingId].dateLabel
     : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -9757,7 +9783,12 @@ async function loadAppState() {
 // in the database, so old links don't silently break.
 const ARTICLE_ID_REDIRECTS = {
   'using-team-implied-totals-to-predict-fantasy-football-outcomes-draft-2':
-    'superforecasting-fantasy-football-the-importance-of-team-implied-totals-part1'
+    'superforecasting-fantasy-football-the-importance-of-team-implied-totals-part1',
+  // The old counter-based id scheme (see uniqueArticleId above, and its
+  // comment) put a meaningless trailing "-2" on this one too — it isn't
+  // "part 2" of anything, that's just what the running counter happened to
+  // be when it was first published.
+  'waiver-wire-week-1-2': 'waiver-wire-week-1'
 };
 
 // Load whatever's published BEFORE the first render, so it shows up
