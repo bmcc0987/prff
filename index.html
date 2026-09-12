@@ -1039,6 +1039,83 @@ footer {
   .no-print { display: none; }
   nav.nav, footer, .proj-header, .proj-tabs { display: none !important; }
 }
+
+/* --- SUPPORT CHAT (Pro-only direct message to admin) -----------------------
+   A floating button in the bottom-right corner, visible only to signed-in
+   Pro users (currentUser.isPro — the real paid flag, not the free-access-
+   window contentUnlocked() check; see updateSupportChatVisibility() in the
+   AUTH section of the script below). Clicking it opens a small slide-up
+   panel with the user's own private thread with admin. Admin sees every
+   thread from the Admin > Messages tab instead of this widget — see the
+   .admin-messages-* rules further down. */
+#support-chat-widget { display: none; }
+.support-chat-btn {
+  position: fixed; right: 20px; bottom: 20px; z-index: 800;
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  background: #111; color: #fff; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, transform 0.15s;
+}
+.support-chat-btn:hover { background: #2E9E63; transform: translateY(-2px); }
+.support-chat-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px;
+  border-radius: 9px; background: #c0392b; color: #fff; font-family: 'Lato', sans-serif;
+  font-size: 10.5px; font-weight: 700; display: none; align-items: center; justify-content: center;
+  padding: 0 4px; box-shadow: 0 0 0 2px #fff;
+}
+.support-chat-panel {
+  position: fixed; right: 20px; bottom: 88px; z-index: 800;
+  width: 340px; max-width: calc(100vw - 32px); height: 440px; max-height: calc(100vh - 140px);
+  background: #fff; border: 1px solid #e2e0da; border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+  display: none; flex-direction: column; overflow: hidden;
+}
+.support-chat-panel.open { display: flex; }
+.support-chat-header {
+  background: #111; color: #fff; padding: 12px 14px; display: flex;
+  align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.support-chat-title { font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 900; }
+.support-chat-sub { font-family: 'Lato', sans-serif; font-size: 10.5px; color: #bbb; margin-top: 1px; }
+.support-chat-close { background: none; border: none; color: #bbb; font-size: 16px; cursor: pointer; padding: 2px 4px; }
+.support-chat-close:hover { color: #fff; }
+.support-chat-messages { flex: 1; overflow-y: auto; padding: 12px 14px; background: #f9f8f6; display: flex; flex-direction: column; gap: 8px; }
+.support-chat-empty { font-family: 'Lato', sans-serif; font-size: 12px; color: #999; line-height: 1.5; text-align: center; margin-top: 20px; }
+.support-chat-msg { max-width: 82%; padding: 8px 11px; border-radius: 12px; font-family: 'Lato', sans-serif; font-size: 12.5px; line-height: 1.4; word-wrap: break-word; }
+.support-chat-msg.from-user { align-self: flex-end; background: #3DB87A; color: #fff; border-bottom-right-radius: 3px; }
+.support-chat-msg.from-admin { align-self: flex-start; background: #fff; border: 1px solid #e2e0da; color: #222; border-bottom-left-radius: 3px; }
+.support-chat-msg-time { display: block; font-size: 9.5px; margin-top: 3px; opacity: 0.7; }
+.support-chat-input-row { flex-shrink: 0; display: flex; gap: 8px; padding: 10px; border-top: 1px solid #e2e0da; background: #fff; }
+.support-chat-input {
+  flex: 1; border: 1px solid #d6d4cf; border-radius: 100px; padding: 8px 14px;
+  font-family: 'Lato', sans-serif; font-size: 12.5px; resize: none; outline: none; max-height: 70px;
+}
+.support-chat-input:focus { border-color: #3DB87A; }
+.support-chat-send {
+  background: #111; color: #fff; border: none; border-radius: 100px; padding: 0 16px;
+  font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+}
+.support-chat-send:hover { background: #2E9E63; }
+.support-chat-send:disabled { background: #ccc; cursor: default; }
+
+/* --- Admin > Messages tab -------------------------------------------------- */
+.admin-messages-layout { display: flex; gap: 16px; min-height: 420px; }
+.admin-messages-threads { width: 260px; flex-shrink: 0; border: 1px solid #e2e0da; border-radius: 10px; overflow-y: auto; max-height: 560px; background: #fff; }
+.admin-thread-item { padding: 11px 13px; border-bottom: 1px solid #eeece7; cursor: pointer; font-family: 'Lato', sans-serif; }
+.admin-thread-item:hover { background: #f9f8f6; }
+.admin-thread-item.active { background: #eafaf1; }
+.admin-thread-name { font-size: 12.5px; font-weight: 700; color: #111; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.admin-thread-preview { font-size: 11px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-thread-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: #c0392b; flex-shrink: 0; }
+.admin-messages-detail { flex: 1; border: 1px solid #e2e0da; border-radius: 10px; display: flex; flex-direction: column; background: #fff; min-height: 420px; }
+.admin-messages-detail-empty { margin: auto; font-family: 'Lato', sans-serif; font-size: 13px; color: #999; }
+.admin-messages-detail-header { padding: 12px 16px; border-bottom: 1px solid #eeece7; font-family: 'Lato', sans-serif; font-size: 13.5px; font-weight: 900; }
+.admin-messages-detail-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 640px) {
+  .admin-messages-layout { flex-direction: column; }
+  .admin-messages-threads { width: auto; max-height: 200px; }
+}
 </style>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -1951,6 +2028,7 @@ footer {
       <button class="admin-tab" id="admin-tab-articles" onclick="switchAdminTool('articles')">Articles</button>
       <button class="admin-tab" id="admin-tab-export" onclick="switchAdminTool('export')">Export Data</button>
       <button class="admin-tab" id="admin-tab-users" onclick="switchAdminTool('users')">Users</button>
+      <button class="admin-tab" id="admin-tab-messages" onclick="switchAdminTool('messages')">Messages</button>
     </div>
 
     <div id="admin-tool-totals" style="display:none;">
@@ -2298,6 +2376,17 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
         </table>
       </div>
     </div>
+
+    <div id="admin-tool-messages" style="display:none;">
+      <div class="admin-messages-layout">
+        <div class="admin-messages-threads" id="admin-messages-threads">
+          <div style="padding:14px; font-family:'Lato',sans-serif; font-size:12px; color:#999;">Loading…</div>
+        </div>
+        <div class="admin-messages-detail" id="admin-messages-detail">
+          <div class="admin-messages-detail-empty">Select a conversation on the left.</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2310,6 +2399,29 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
     <a class="footer-link" href="#">© 2026 Process/Results</a>
   </div>
 </footer>
+
+<div id="support-chat-widget">
+  <button class="support-chat-btn" id="support-chat-toggle-btn" onclick="toggleSupportChat()" aria-label="Message support">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H7l-3 3V4z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <span class="support-chat-badge" id="support-chat-badge"></span>
+  </button>
+  <div class="support-chat-panel" id="support-chat-panel">
+    <div class="support-chat-header">
+      <div>
+        <div class="support-chat-title">Message Us</div>
+        <div class="support-chat-sub">Pro support — replies usually within a day</div>
+      </div>
+      <button class="support-chat-close" onclick="toggleSupportChat(false)">&times;</button>
+    </div>
+    <div class="support-chat-messages" id="support-chat-messages">
+      <div class="support-chat-empty">Send a message and we'll get back to you here.</div>
+    </div>
+    <div class="support-chat-input-row">
+      <textarea class="support-chat-input" id="support-chat-input" rows="1" placeholder="Type a message…" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){event.preventDefault(); sendSupportChatMessage();}"></textarea>
+      <button class="support-chat-send" id="support-chat-send-btn" onclick="sendSupportChatMessage()">Send</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // Runs synchronously, before the page paints — hides the homepage
@@ -2465,6 +2577,17 @@ window.addEventListener('resize', updateAuthGateNavOffset);
 // demo-only in-memory store. currentUser.isAdmin gates Admin access;
 // currentUser.isPro gates Pro content.
 let currentUser = null;
+
+// --- SUPPORT CHAT (Pro-only 1:1 message thread with admin) state -----------
+// Reset the same way currentUser is (see logOut()). The functions that use
+// these live further down, after updateUpgradeNavVisibility(), since they
+// need currentUser to already be defined.
+let supportChatMessages = [];       // this signed-in user's own thread, oldest first
+let supportChatPollTimer = null;    // setInterval handle while the widget is visible
+let supportChatOpen = false;        // whether the panel itself is expanded right now
+let adminSupportMessages = [];      // ALL threads' messages — admin view only
+let adminSupportReadState = {};     // user_id -> { user_last_read_at, admin_last_read_at }
+let adminOpenThreadUserId = null;   // which thread is open in the Admin > Messages detail pane
 
 // Maps each static page name to its real URL path. 'article' isn't listed
 // here since its path is dynamic (/articles/{id}) — goToArticle handles
@@ -2795,6 +2918,7 @@ async function redeemPromoCode(suffix) {
     currentUser.isPro = true;
     updateHomepageProState();
     updateUpgradeNavVisibility();
+    updateSupportChatVisibility();
     msg.style.color = '#3DB87A';
     msg.textContent = 'Code applied — you now have Pro access through the end of the season!';
     msg.style.display = 'block';
@@ -2865,6 +2989,7 @@ async function cancelSubscription(suffix) {
     currentUser.isPro = false;
     updateHomepageProState();
     updateUpgradeNavVisibility();
+    updateSupportChatVisibility();
   }
   renderAccountPage();
   renderSubscriptionSection('-upgrade');
@@ -3381,6 +3506,7 @@ async function logIn(authUser) {
 
   updateHomepageProState();
   updateUpgradeNavVisibility();
+  updateSupportChatVisibility();
 }
 
 // The hero CTA block (#hero-subscribe-cta) itself is never hidden anymore —
@@ -3419,6 +3545,7 @@ async function logOut(evt) {
   if (banner) banner.style.display = 'flex';
   updateHomepageProState();
   updateUpgradeNavVisibility();
+  updateSupportChatVisibility();
   showPage(null, 'home');
 }
 
@@ -3430,6 +3557,297 @@ function updateUpgradeNavVisibility() {
   const link = document.getElementById('nav-link-upgrade');
   if (!link) return;
   link.style.display = (currentUser && !currentUser.isPro) ? 'inline' : 'none';
+}
+
+// --- SUPPORT CHAT ------------------------------------------------------
+// A single private message thread per Pro user with the site admin ("for
+// those who paid for the site... Each chat is individualized and only
+// visible to me and the individual user. No other paid users can see
+// another chat" — direct request). Gated strictly on currentUser.isPro —
+// the REAL paid flag set in logIn() from profiles.is_pro (and not yet
+// expired) — never on contentUnlocked(), which also returns true for any
+// signed-in (or even anonymous) visitor during the site's free-access
+// promotional window regardless of whether they've ever paid. This
+// client-side check only controls whether the widget is offered to a given
+// visitor; actual privacy between different users' threads is enforced
+// server-side by Postgres Row Level Security on the support_messages /
+// support_read_state tables (see supabase/sql/support_messages_setup.sql) —
+// this is the first feature in the app that needs real row-level DB
+// security rather than relying on client-side gating alone, since it's the
+// first place two different ordinary (non-admin) users must be prevented
+// from ever seeing each other's data.
+//
+// Updates are polled (not pushed via Supabase Realtime), consistent with
+// the rest of this app, which doesn't use Realtime anywhere else.
+const SUPPORT_CHAT_POLL_MS = 20000;
+
+function updateSupportChatVisibility() {
+  const widget = document.getElementById('support-chat-widget');
+  if (!widget) return;
+  const isRealPro = !!(currentUser && currentUser.isPro);
+  widget.style.display = isRealPro ? 'block' : 'none';
+  if (isRealPro) {
+    startSupportChatPolling();
+  } else {
+    stopSupportChatPolling();
+    const panel = document.getElementById('support-chat-panel');
+    if (panel) panel.classList.remove('open');
+    supportChatOpen = false;
+    supportChatMessages = [];
+  }
+}
+
+function startSupportChatPolling() {
+  refreshSupportChatBadge();
+  if (supportChatPollTimer) return;
+  supportChatPollTimer = setInterval(refreshSupportChatBadge, SUPPORT_CHAT_POLL_MS);
+}
+function stopSupportChatPolling() {
+  if (supportChatPollTimer) { clearInterval(supportChatPollTimer); supportChatPollTimer = null; }
+}
+
+// Pulls the signed-in user's own thread + their own read-state, updates the
+// unread badge on the launcher button, and — if the panel is currently
+// open — re-renders the messages and marks them read. Backs both the poll
+// timer and the very first load right after the widget appears.
+async function refreshSupportChatBadge() {
+  if (!supabaseClient || !currentUser || !currentUser.isPro) return;
+  try {
+    const [{ data: msgs }, { data: readRow }] = await Promise.all([
+      supabaseClient.from('support_messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true }),
+      supabaseClient.from('support_read_state').select('*').eq('user_id', currentUser.id).maybeSingle(),
+    ]);
+    supportChatMessages = msgs || [];
+    const lastRead = readRow && readRow.user_last_read_at ? new Date(readRow.user_last_read_at) : null;
+    const unread = supportChatMessages.filter(m => m.sender === 'admin' && (!lastRead || new Date(m.created_at) > lastRead)).length;
+    const badge = document.getElementById('support-chat-badge');
+    if (badge) {
+      if (unread > 0 && !supportChatOpen) {
+        badge.textContent = unread > 9 ? '9+' : String(unread);
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+    if (supportChatOpen) {
+      renderSupportChatMessages();
+      markSupportChatReadByUser();
+    }
+  } catch (e) {
+    // Silent on purpose — a failed background poll shouldn't interrupt
+    // whatever the visitor is doing; it just tries again next tick.
+  }
+}
+
+function toggleSupportChat(forceOpen) {
+  const panel = document.getElementById('support-chat-panel');
+  const shouldOpen = forceOpen !== undefined ? forceOpen : !panel.classList.contains('open');
+  supportChatOpen = shouldOpen;
+  panel.classList.toggle('open', shouldOpen);
+  if (shouldOpen) loadSupportChatThread();
+}
+
+async function loadSupportChatThread() {
+  const container = document.getElementById('support-chat-messages');
+  container.innerHTML = '<div class="support-chat-empty">Loading…</div>';
+  if (!supabaseClient || !currentUser) return;
+  try {
+    const { data, error } = await supabaseClient.from('support_messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true });
+    if (error) throw error;
+    supportChatMessages = data || [];
+  } catch (e) {
+    supportChatMessages = [];
+  }
+  renderSupportChatMessages();
+  markSupportChatReadByUser();
+  const badge = document.getElementById('support-chat-badge');
+  if (badge) badge.style.display = 'none';
+}
+
+function renderSupportChatMessages() {
+  const container = document.getElementById('support-chat-messages');
+  if (!supportChatMessages.length) {
+    container.innerHTML = '<div class="support-chat-empty">Send a message and we\'ll get back to you here.</div>';
+    return;
+  }
+  const wasScrolledToBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
+  container.innerHTML = supportChatMessages.map(m => {
+    const cls = m.sender === 'admin' ? 'from-admin' : 'from-user';
+    const time = new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return '<div class="support-chat-msg ' + cls + '">' + escapeHtml(m.body) + '<span class="support-chat-msg-time">' + time + '</span></div>';
+  }).join('');
+  if (wasScrolledToBottom || container.scrollTop === 0) container.scrollTop = container.scrollHeight;
+}
+
+async function markSupportChatReadByUser() {
+  if (!supabaseClient || !currentUser) return;
+  try {
+    await supabaseClient.from('support_read_state').upsert({ user_id: currentUser.id, user_last_read_at: new Date().toISOString() }, { onConflict: 'user_id' });
+  } catch (e) { /* non-critical — worst case the unread badge is stale until the next successful mark */ }
+}
+
+async function sendSupportChatMessage() {
+  const input = document.getElementById('support-chat-input');
+  const body = input.value.trim();
+  if (!body || !currentUser || !currentUser.isPro || !supabaseClient) return;
+  const btn = document.getElementById('support-chat-send-btn');
+  btn.disabled = true;
+  const userName = ((currentUser.firstName || '') + ' ' + (currentUser.lastName || '')).trim() || currentUser.email;
+  try {
+    const { data, error } = await supabaseClient.from('support_messages').insert({
+      user_id: currentUser.id, user_email: currentUser.email, user_name: userName,
+      sender: 'user', body: body,
+    }).select().single();
+    if (error) throw error;
+    input.value = '';
+    supportChatMessages.push(data);
+    renderSupportChatMessages();
+    markSupportChatReadByUser();
+
+    // Best-effort email to admin — the message has already sent
+    // successfully above regardless of whether this notification works.
+    supabaseClient.auth.getSession().then(({ data: sessionData }) => {
+      const accessToken = sessionData && sessionData.session && sessionData.session.access_token;
+      if (!accessToken) return;
+      fetch(SUPABASE_URL + '/functions/v1/notify-new-support-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify({ direction: 'to_admin', userId: currentUser.id, preview: body.slice(0, 300) }),
+      }).catch(() => {});
+    }).catch(() => {});
+  } catch (e) {
+    alert('Could not send: ' + e.message + '. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- Admin > Messages tab ------------------------------------------------
+// Your admin account (is_admin=true in profiles) can SELECT every row in
+// support_messages / support_read_state under RLS — there's no per-thread
+// query here, just one full pull of both tables, grouped into threads on
+// the client. Plenty fast at this site's message volume, and it keeps this
+// feature consistent with the rest of the admin panel, which is all
+// "click Refresh/a tab, pull everything, render it" rather than paginated.
+async function loadSupportThreadsList() {
+  const list = document.getElementById('admin-messages-threads');
+  list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">Loading…</div>';
+  if (!supabaseClient) { list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">No database connected.</div>'; return; }
+  try {
+    const [{ data: msgs, error: msgErr }, { data: reads, error: readErr }] = await Promise.all([
+      supabaseClient.from('support_messages').select('*').order('created_at', { ascending: true }),
+      supabaseClient.from('support_read_state').select('*'),
+    ]);
+    if (msgErr) throw msgErr;
+    if (readErr) throw readErr;
+    adminSupportMessages = msgs || [];
+    adminSupportReadState = {};
+    (reads || []).forEach(r => { adminSupportReadState[r.user_id] = r; });
+  } catch (e) {
+    list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#c0392b;">Could not load: ' + escapeHtml(e.message) + '</div>';
+    return;
+  }
+  renderSupportThreadsList();
+  if (adminOpenThreadUserId) renderAdminThreadDetail(adminOpenThreadUserId);
+}
+
+function renderSupportThreadsList() {
+  const list = document.getElementById('admin-messages-threads');
+  const byUser = {};
+  adminSupportMessages.forEach(m => {
+    if (!byUser[m.user_id]) byUser[m.user_id] = [];
+    byUser[m.user_id].push(m);
+  });
+  const threads = Object.keys(byUser).map(userId => {
+    const msgs = byUser[userId];
+    const last = msgs[msgs.length - 1];
+    const readRow = adminSupportReadState[userId];
+    const adminLastRead = readRow && readRow.admin_last_read_at ? new Date(readRow.admin_last_read_at) : null;
+    const hasUnread = msgs.some(m => m.sender === 'user' && (!adminLastRead || new Date(m.created_at) > adminLastRead));
+    return { userId, name: last.user_name || last.user_email, lastBody: last.body, lastAt: last.created_at, hasUnread };
+  }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
+
+  if (!threads.length) {
+    list.innerHTML = '<div style="padding:14px; font-family:\'Lato\',sans-serif; font-size:12px; color:#999;">No messages yet.</div>';
+    return;
+  }
+  list.innerHTML = threads.map(t => {
+    return '<div class="admin-thread-item' + (t.userId === adminOpenThreadUserId ? ' active' : '') + '" onclick="openSupportThread(\'' + t.userId + '\')">' +
+      '<div class="admin-thread-name">' + escapeHtml(t.name) + (t.hasUnread ? '<span class="admin-thread-unread-dot"></span>' : '') + '</div>' +
+      '<div class="admin-thread-preview">' + escapeHtml(t.lastBody) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+async function openSupportThread(userId) {
+  adminOpenThreadUserId = userId;
+  renderSupportThreadsList();
+  renderAdminThreadDetail(userId);
+  try {
+    await supabaseClient.from('support_read_state').upsert({ user_id: userId, admin_last_read_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    if (!adminSupportReadState[userId]) adminSupportReadState[userId] = {};
+    adminSupportReadState[userId].admin_last_read_at = new Date().toISOString();
+    renderSupportThreadsList();
+  } catch (e) { /* non-critical — worst case the unread dot is stale until the next successful mark */ }
+}
+
+function renderAdminThreadDetail(userId) {
+  const detail = document.getElementById('admin-messages-detail');
+  const msgs = adminSupportMessages.filter(m => m.user_id === userId);
+  if (!msgs.length) { detail.innerHTML = '<div class="admin-messages-detail-empty">Select a conversation on the left.</div>'; return; }
+  const name = msgs[msgs.length - 1].user_name || msgs[msgs.length - 1].user_email;
+  const email = msgs[msgs.length - 1].user_email;
+  detail.innerHTML =
+    '<div class="admin-messages-detail-header">' + escapeHtml(name) + ' <span style="font-weight:400; color:#999; font-size:12px;">(' + escapeHtml(email) + ')</span></div>' +
+    '<div class="admin-messages-detail-body" id="admin-thread-body">' +
+      msgs.map(m => {
+        const cls = m.sender === 'admin' ? 'from-admin' : 'from-user';
+        const time = new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        return '<div class="support-chat-msg ' + cls + '">' + escapeHtml(m.body) + '<span class="support-chat-msg-time">' + time + '</span></div>';
+      }).join('') +
+    '</div>' +
+    '<div class="support-chat-input-row">' +
+      '<textarea class="support-chat-input" id="admin-reply-input" rows="1" placeholder="Reply…" onkeydown="if(event.key===\'Enter\' &amp;&amp; !event.shiftKey){event.preventDefault(); sendAdminReply(\'' + userId + '\');}"></textarea>' +
+      '<button class="support-chat-send" id="admin-reply-send-btn" onclick="sendAdminReply(\'' + userId + '\')">Send</button>' +
+    '</div>';
+  const body = document.getElementById('admin-thread-body');
+  body.scrollTop = body.scrollHeight;
+}
+
+async function sendAdminReply(userId) {
+  const input = document.getElementById('admin-reply-input');
+  const body = input.value.trim();
+  if (!body) return;
+  const btn = document.getElementById('admin-reply-send-btn');
+  btn.disabled = true;
+  const existing = adminSupportMessages.find(m => m.user_id === userId);
+  const userEmail = existing ? existing.user_email : '';
+  const userName = existing ? existing.user_name : '';
+  try {
+    const { data, error } = await supabaseClient.from('support_messages').insert({
+      user_id: userId, user_email: userEmail, user_name: userName,
+      sender: 'admin', body: body,
+    }).select().single();
+    if (error) throw error;
+    input.value = '';
+    adminSupportMessages.push(data);
+    renderSupportThreadsList();
+    renderAdminThreadDetail(userId);
+
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData && sessionData.session && sessionData.session.access_token;
+    if (accessToken) {
+      fetch(SUPABASE_URL + '/functions/v1/notify-new-support-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify({ direction: 'to_user', userId: userId, preview: body.slice(0, 300) }),
+      }).catch(() => {});
+    }
+  } catch (e) {
+    alert('Could not send reply: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // --- TRADE ANALYZER --------------------------------------------------------
@@ -6617,7 +7035,7 @@ function exportUsersCSV() {
 }
 
 function switchAdminTool(tool) {
-  ['rankings', 'totals', 'totals-sl', 'seasonlong', 'ros', 'articles', 'export', 'users'].forEach(t => {
+  ['rankings', 'totals', 'totals-sl', 'seasonlong', 'ros', 'articles', 'export', 'users', 'messages'].forEach(t => {
     document.getElementById('admin-tool-' + t).style.display = tool === t ? 'block' : 'none';
     document.getElementById('admin-tab-' + t).classList.toggle('active', tool === t);
   });
@@ -6646,6 +7064,9 @@ function switchAdminTool(tool) {
   }
   if (tool === 'users' && !document.getElementById('users-list-rows').children.length) {
     loadUsersList();
+  }
+  if (tool === 'messages') {
+    loadSupportThreadsList();
   }
 }
 
