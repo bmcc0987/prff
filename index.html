@@ -130,6 +130,12 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .ticker-player .p-pct.high { color: #3DB87A; }
 .ticker-player .p-pct.mid { color: #f0a500; }
 .ticker-player .p-pct.low { color: rgba(255,255,255,0.3); }
+/* Currently unused — renderTicker() no longer adds this class to anything.
+   Ranks 5-8 in each ticker section used to blur as a sign-up/upgrade
+   teaser; removed at your request so the full top 8 always shows in the
+   clear. Left the rule in place (harmless with nothing using it) in case
+   you ever want that teaser back — just re-add the blurClass logic in
+   renderTicker(). */
 .ticker-player .p-name.ticker-blurred, .ticker-player .p-team.ticker-blurred, .ticker-player .p-pct.ticker-blurred {
   filter: blur(4px);
   user-select: none;
@@ -1088,6 +1094,25 @@ footer {
   display: none; flex-direction: column; overflow: hidden;
 }
 .support-chat-panel.open { display: flex; }
+/* Blinks a green glow around the whole panel when a new admin reply lands
+   WHILE the panel is already open — the launcher button's own blink (see
+   .support-chat-btn.has-unread above) only makes sense while the panel is
+   closed, so a message arriving mid-conversation needs its own,
+   equally-hard-to-miss cue. A border/shadow glow rather than pulsing the
+   panel's actual background, since that background is full of message
+   text the reader still needs to read clearly through the pulse. Cleared
+   by clicking into the message list or the reply box (see the two
+   listeners near the end of the SUPPORT CHAT section below) — not by a
+   timer or by the next render, since the point is "did you actually
+   notice," not "did some time pass." */
+.support-chat-panel.new-while-open { animation: support-chat-panel-blink 1.1s ease-in-out infinite; }
+@keyframes support-chat-panel-blink {
+  0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.25); border-color: #e2e0da; }
+  50% { box-shadow: 0 10px 40px rgba(0,0,0,0.25), 0 0 0 3px #3DB87A; border-color: #3DB87A; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .support-chat-panel.new-while-open { animation: none; box-shadow: 0 10px 40px rgba(0,0,0,0.25), 0 0 0 3px #3DB87A; border-color: #3DB87A; }
+}
 .support-chat-header {
   background: #111; color: #fff; padding: 12px 14px; display: flex;
   align-items: flex-start; justify-content: space-between; gap: 8px; flex-shrink: 0;
@@ -3699,23 +3724,48 @@ function subscribeSupportChatRealtime() {
       filter: 'user_id=eq.' + currentUser.id,
     }, (payload) => {
       const msg = payload.new;
+      console.log('[support-chat] live message received:', msg); // console only — see the note above the .subscribe() status log below
       if (supportChatMessages.some(m => m.id === msg.id)) return; // already have it (e.g. our own optimistic insert)
       supportChatMessages.push(msg);
       if (supportChatOpen) {
         renderSupportChatMessages();
         markSupportChatReadByUser();
-      } else if (msg.sender === 'admin') {
-        const badge = document.getElementById('support-chat-badge');
-        if (badge) {
-          const unread = parseInt(badge.textContent, 10) || 0;
-          badge.textContent = unread >= 9 ? '9+' : String(unread + 1);
-          badge.style.display = 'flex';
+        // Panel's already open, so the launcher-button blink doesn't apply
+        // (see the else branch) — instead, a new admin reply while you're
+        // actively looking at the thread blinks the PANEL ITSELF green,
+        // since a message landing at the bottom while you're mid-read is
+        // easy to miss otherwise. Cleared the moment you actually click
+        // into the message list or the reply box — see the two listeners
+        // near the bottom of this section.
+        if (msg.sender === 'admin') {
+          const panel = document.getElementById('support-chat-panel');
+          if (panel) panel.classList.add('new-while-open');
         }
-        const toggleBtn = document.getElementById('support-chat-toggle-btn');
-        if (toggleBtn) toggleBtn.classList.add('has-unread');
+      } else {
+        // Recompute the badge count/blink from the real, authoritative
+        // unread total (a fresh fetch + the actual user_last_read_at
+        // comparison) rather than hand-incrementing whatever the badge
+        // already happened to say. An earlier version of this handler just
+        // bumped badge.textContent by one on every push, which could show
+        // a stale/wrong count — closing the panel hides the badge but
+        // never resets its leftover text, so the next increment would
+        // start from that old number instead of from zero.
+        // refreshSupportChatBadge() is already the single source of truth
+        // for this exact computation (it's also what runs on initial load
+        // and on every reconnect), so reusing it here means there's only
+        // ever one place this logic can be wrong instead of two — and it's
+        // the one already covered by test_realtime_chat_user.js.
+        refreshSupportChatBadge();
       }
     })
-    .subscribe((status) => {
+    .subscribe((status, err) => {
+      // Logged (console only — never shown in the UI) so a live delivery
+      // problem can actually be SEEN instead of failing silently. This was
+      // added after a real report of the launcher button never blinking
+      // for a live message with no obvious cause in the code — if that
+      // happens again, opening the browser console during a test will now
+      // show exactly which of these steps did or didn't happen.
+      console.log('[support-chat] realtime subscription status:', status, err || '');
       if (status === 'SUBSCRIBED') {
         // Re-pull the full thread on every (re)connect — covers both the
         // very first connection and recovering from any earlier drop, per
@@ -3775,8 +3825,18 @@ async function refreshSupportChatBadge() {
       markSupportChatReadByUser();
     }
   } catch (e) {
-    // Silent on purpose — a failed background poll shouldn't interrupt
-    // whatever the visitor is doing; it just tries again next tick.
+    // Silent to the VISITOR on purpose — a failed background refresh
+    // shouldn't pop an error in front of someone just trying to read their
+    // messages; the next live push or reconnect will just try again. But
+    // this is now the ONLY thing that updates the badge/blink after a live
+    // push while the panel's closed (see subscribeSupportChatRealtime), so
+    // silently swallowing an error here with zero trace was a real risk —
+    // a genuine failure (an RLS denial, a dropped request, anything) would
+    // look EXACTLY like "the icon just never blinks," with nothing to go
+    // on. Logging it to the console (never shown in the UI) so that
+    // failure mode is at least visible to whoever opens dev tools while
+    // reproducing a report like that.
+    console.error('[support-chat] refreshSupportChatBadge failed:', e);
   }
 }
 
@@ -3785,6 +3845,12 @@ function toggleSupportChat(forceOpen) {
   const shouldOpen = forceOpen !== undefined ? forceOpen : !panel.classList.contains('open');
   supportChatOpen = shouldOpen;
   panel.classList.toggle('open', shouldOpen);
+  // Every open/close is a fresh start for the "new message arrived while
+  // open" blink (see subscribeSupportChatRealtime's push handler) — it
+  // should never carry over stale from a previous time the panel was open,
+  // whether you closed it without clicking in (leaving it blinking) or
+  // it's simply being opened fresh with nothing new having happened yet.
+  panel.classList.remove('new-while-open');
   if (shouldOpen) loadSupportChatThread();
 }
 
@@ -3864,6 +3930,26 @@ async function sendSupportChatMessage() {
     btn.disabled = false;
   }
 }
+
+// Clears the "a new reply arrived while you had this open" panel blink
+// (see the .new-while-open class added in subscribeSupportChatRealtime's
+// push handler above) the moment you actually click into either the
+// message history or the reply box — exactly "until the user clicks
+// inside the box or the message area," not on a timer and not just
+// because another render happened to run.
+function clearSupportChatOpenBlink() {
+  const panel = document.getElementById('support-chat-panel');
+  if (panel) panel.classList.remove('new-while-open');
+}
+(function () {
+  const messagesEl = document.getElementById('support-chat-messages');
+  const inputEl = document.getElementById('support-chat-input');
+  if (messagesEl) messagesEl.addEventListener('click', clearSupportChatOpenBlink);
+  if (inputEl) {
+    inputEl.addEventListener('click', clearSupportChatOpenBlink);
+    inputEl.addEventListener('focus', clearSupportChatOpenBlink);
+  }
+})();
 
 // --- Admin > Messages tab ------------------------------------------------
 // Your admin account (is_admin=true in profiles) can SELECT every row in
@@ -6808,6 +6894,12 @@ async function publishAdminTable() {
 
   preview.innerHTML = buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week);
   previewWrap.style.display = 'block';
+
+  // The homepage ticker shows Weekly Player Projections (see renderTicker()
+  // / getCurrentTickerWeek()) — refresh it immediately so a newly published
+  // or updated week shows up right away instead of only after the next full
+  // page load.
+  renderTicker();
 }
 
 // --- GENERIC ENGINE: Season Long + Rest of Season projections --------------
@@ -7033,8 +7125,9 @@ async function publishRankTable(mode) {
   const label = cfg.hasWeek ? ('Week ' + document.getElementById(cfg.weekId).value + ' (Rest of Season)') : 'Season Long';
   preview.innerHTML = buildPublishedTableHTML(position, label, topN, rows);
   previewWrap.style.display = 'block';
-
-  if (mode === 'seasonlong') renderTicker();
+  // The homepage ticker shows Weekly Player Projections now, not Season
+  // Long or Rest of Season (see renderTicker()) — neither mode handled by
+  // this function affects what it shows, so there's nothing to refresh here.
 }
 
 document.addEventListener('input', function (e) {
@@ -9836,26 +9929,46 @@ function tickerPctClass(prob) {
   return 'low';
 }
 
-// Builds the homepage ticker from real Season Long Player Projections
-// (top 8 per position, QB/RB/WR/TE), duplicating the set once for the
-// seamless CSS scroll loop. Falls back to leaving the ticker empty for a
-// position with nothing published yet, rather than showing placeholder data.
+// "Current week" for the ticker specifically: the highest week number that
+// actually has a published Weekly Player Projections entry for ANY
+// position. Deliberately its own small function rather than reusing the
+// Trade Analyzer's getCurrentTradeWeek() (which prefers Rest of Season
+// data) — the ticker only ever shows Weekly rankings, so it should always
+// pick a week that dataset actually has something for. Falls back to 1
+// (the start of the season) when nothing's been published at all yet,
+// which is also just correct on its own: week 1 IS the current week the
+// first time anything gets published.
+function getCurrentTickerWeek() {
+  const weeks = Object.keys(publishedRankings)
+    .map(key => parseInt(key.split('-')[1], 10))
+    .filter(n => !isNaN(n));
+  return weeks.length > 0 ? Math.max(...weeks) : 1;
+}
+
+// Builds the homepage ticker from real Weekly Player Projections (top 12
+// per position, QB/RB/WR/TE, for whatever getCurrentTickerWeek() resolves
+// to), duplicating the set once for the seamless CSS scroll loop. Falls
+// back to leaving the ticker empty for a position with nothing published
+// yet for that week, rather than showing placeholder data. Used to show
+// Season Long Player Projections (top 8) instead — switched to Weekly at
+// your request, since that's the more timely, week-specific number people
+// actually want to see scrolling by on the homepage.
 function renderTicker() {
   const container = document.getElementById('ticker-inner');
   if (!container) return;
   const positions = ['QB', 'RB', 'WR', 'TE'];
+  const week = getCurrentTickerWeek();
 
   function buildSection(pos) {
-    const data = publishedSeasonLong[pos];
+    const data = publishedRankings[pos + '-' + week];
     if (!data || !data.rows || data.rows.length === 0) return '';
-    const top8 = data.rows.slice(0, 8);
+    const top12 = data.rows.slice(0, 12);
     let html = '<span class="ticker-section"><span class="ticker-pos-tag ' + pos.toLowerCase() + '">' + pos + '</span>';
-    top8.forEach((r, i) => {
-      const blurClass = (i + 1) > 4 ? ' ticker-blurred' : '';
+    top12.forEach((r, i) => {
       html += '<div class="ticker-player"><span class="p-rank">' + (i + 1) + '</span>' +
-        '<span class="p-name' + blurClass + '">' + abbreviateTickerName(r.player) + '</span>' +
-        '<span class="p-team' + blurClass + '">' + (r.team || '') + '</span>' +
-        '<span class="p-pct ' + tickerPctClass(r.prob) + blurClass + '">' + r.prob + '%</span></div>';
+        '<span class="p-name">' + abbreviateTickerName(r.player) + '</span>' +
+        '<span class="p-team">' + (r.team || '') + '</span>' +
+        '<span class="p-pct ' + tickerPctClass(r.prob) + '">' + r.prob + '%</span></div>';
     });
     html += '</span>';
     return html;
