@@ -297,7 +297,37 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .article-table td { padding: 6px 16px; font-size: 14px; color: #333; border-bottom: 1px solid #e2e0da; }
 .article-table-alt { background: #f7f6f3; }
 .article-pullquote { border-left: 3px solid #3DB87A; padding-left: 16px; margin: 24px 0; font-family: 'Lato', sans-serif; font-size: 19px; font-weight: 700; color: #111; line-height: 1.4; }
-.article-inline-image { width: 100%; border-radius: 10px; margin: 20px 0; display: block; }
+.article-inline-image { width: 100%; border-radius: 10px; margin: 20px 0; display: block; cursor: zoom-in; }
+/* Click-to-enlarge lightbox — one shared overlay reused for every inline
+   article image (see the document-level click listener near the bottom of
+   the script that opens this on any .article-inline-image click). Sized to
+   fit the viewport with room to spare rather than cropping/scrolling, since
+   these are often tall infographics (e.g. a multi-row data sheet) where
+   width-only fitting would push most of the image off-screen vertically. */
+#image-lightbox {
+  display: none; position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.88);
+  align-items: center; justify-content: center;
+  padding: 40px 20px;
+  cursor: zoom-out;
+}
+#image-lightbox.open { display: flex; }
+#image-lightbox-img {
+  max-width: 100%; max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+  cursor: default;
+}
+.image-lightbox-close {
+  position: fixed; top: 16px; right: 20px; z-index: 2001;
+  background: none; border: none; color: #fff; font-size: 34px; line-height: 1;
+  cursor: pointer; padding: 6px 10px; opacity: 0.85;
+}
+.image-lightbox-close:hover { opacity: 1; }
+@media (max-width: 640px) {
+  #image-lightbox { padding: 16px; }
+  .image-lightbox-close { top: 8px; right: 10px; font-size: 30px; }
+}
 .article-video-wrap { position: relative; width: 60%; max-width: 60%; aspect-ratio: 16/9; margin: 20px auto; border-radius: 10px; overflow: hidden; display: block; }
 .article-video-wrap iframe { width: 100%; height: 100%; border: 0; }
 .article-video-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1251,12 +1281,26 @@ footer {
   </div>
 </div>
 
+<!-- Click-to-enlarge lightbox for article inline images (see the
+     "article-inline-image" click delegation near the bottom of the
+     SUPPORT CHAT / ticker section of the script). One shared overlay
+     reused for every image in every article, rather than a separate
+     modal per image. -->
+<div id="image-lightbox" onclick="closeImageLightbox(event)">
+  <button class="image-lightbox-close" onclick="closeImageLightbox(event)" aria-label="Close">&times;</button>
+  <img id="image-lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+</div>
+
 <div id="page-home">
 
-<!-- SINGLE ROW TICKER: Season Long projections, all positions -->
+<!-- SINGLE ROW TICKER: Weekly player projections, all positions. The
+     "Week N" line is filled in by renderTicker()/updateTickerLabel() in
+     the script below — it's the same current-week value the ticker's own
+     content uses (getCurrentTickerWeek()), so the label and the data
+     scrolling next to it can never fall out of sync with each other. -->
 <div class="ticker" style="display:flex; align-items:center;">
   <div style="flex-shrink:0; padding: 0 16px 0 20px; border-right: 1px solid rgba(255,255,255,0.12); margin-right: 4px;">
-    <div style="font-family:'Lato',sans-serif; font-size:9px; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; color:rgba(255,255,255,0.35); line-height:1.4;">Season Long</div>
+    <div id="ticker-label-week" style="font-family:'Lato',sans-serif; font-size:9px; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; color:rgba(255,255,255,0.35); line-height:1.4;">Week 1</div>
     <div style="font-family:'Lato',sans-serif; font-size:11px; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; color:white; line-height:1.4;">Projections</div>
   </div>
   <div style="overflow:hidden; flex:1;">
@@ -9243,6 +9287,42 @@ function renderTeamMovementTable(dataLines) {
     '</thead><tbody>' + rowsHtml + '</tbody></table></div>';
 }
 
+// --- Click-to-enlarge lightbox for article images ---------------------
+// Every inline article photo (".article-inline-image", inserted via the
+// Photo toolbar button — see insertPhotoBlock()/parseArticleBody() above)
+// is clickable to open a full-size overlay version. Uses ONE shared
+// listener on document (event delegation) rather than attaching a
+// click handler to each image individually, since article bodies get
+// rendered/re-rendered into several different containers (the live
+// article-reader-content page, the admin editor's live preview, a draft
+// preview) at different times — delegating to document means this works
+// everywhere those images can appear, including ones inserted after this
+// listener was first registered, with no extra wiring needed anywhere else.
+document.addEventListener('click', function (e) {
+  const img = e.target.closest('.article-inline-image');
+  if (img) openImageLightbox(img.src, img.alt);
+});
+
+function openImageLightbox(src, alt) {
+  const overlay = document.getElementById('image-lightbox');
+  const img = document.getElementById('image-lightbox-img');
+  if (!overlay || !img) return;
+  img.src = src;
+  img.alt = alt || '';
+  overlay.classList.add('open');
+}
+
+function closeImageLightbox(evt) {
+  if (evt) evt.preventDefault();
+  const overlay = document.getElementById('image-lightbox');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  document.getElementById('image-lightbox-img').src = ''; // stop holding the (possibly large) image in memory/paint once closed
+}
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeImageLightbox();
+});
 
 function parseArticleBody(raw) {
   const blocks = (raw || '').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
@@ -9958,6 +10038,13 @@ function renderTicker() {
   if (!container) return;
   const positions = ['QB', 'RB', 'WR', 'TE'];
   const week = getCurrentTickerWeek();
+
+  // Keep the "Week N" label to the left of the scrolling data in sync with
+  // whatever week the data itself is actually showing — set unconditionally
+  // (even if no positions end up with anything published for this week, so
+  // the label never shows a stale week number left over from before).
+  const labelEl = document.getElementById('ticker-label-week');
+  if (labelEl) labelEl.textContent = 'Week ' + week;
 
   function buildSection(pos) {
     const data = publishedRankings[pos + '-' + week];
