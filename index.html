@@ -2235,8 +2235,8 @@ footer {
       </div>
       <div id="admin-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
-      <div class="admin-sum-row">Sum: <span id="admin-prob-sum-value">(0)/1 = 0</span></div>
-      <div class="admin-sum-row">Selected sum: <span id="admin-selected-sum-value">(0)/1 = 0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('admin-rows','admin-selected-sum-value')">Clear selection</button></div>
+      <div class="admin-sum-row">Sum: <span id="admin-prob-sum-value">0</span></div>
+      <div class="admin-sum-row">Selected sum: <span id="admin-selected-sum-value">0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('admin-rows','admin-selected-sum-value')">Clear selection</button></div>
       </div>
 
       <div class="admin-matchups-panel-wrap">
@@ -2289,8 +2289,8 @@ footer {
       </div>
       <div id="sl-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
-      <div class="admin-sum-row">Sum: <span id="sl-prob-sum-value">(0)/1 = 0</span></div>
-      <div class="admin-sum-row">Selected sum: <span id="sl-selected-sum-value">(0)/1 = 0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('sl-rows','sl-selected-sum-value')">Clear selection</button></div>
+      <div class="admin-sum-row">Sum: <span id="sl-prob-sum-value">0</span></div>
+      <div class="admin-sum-row">Selected sum: <span id="sl-selected-sum-value">0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('sl-rows','sl-selected-sum-value')">Clear selection</button></div>
 
       <div id="sl-preview-wrap" style="display:none;">
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
@@ -2335,8 +2335,8 @@ footer {
         <button class="trade-analyze-btn" onclick="publishRankTable('ros')">Publish</button>
       </div>
 
-      <div class="admin-sum-row">Sum: <span id="ros-prob-sum-value">(0)/1 = 0</span></div>
-      <div class="admin-sum-row">Selected sum: <span id="ros-selected-sum-value">(0)/1 = 0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('ros-rows','ros-selected-sum-value')">Clear selection</button></div>
+      <div class="admin-sum-row">Sum: <span id="ros-prob-sum-value">0</span></div>
+      <div class="admin-sum-row">Selected sum: <span id="ros-selected-sum-value">0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('ros-rows','ros-selected-sum-value')">Clear selection</button></div>
 
       <div id="ros-preview-wrap" style="display:none;">
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
@@ -6829,7 +6829,7 @@ function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, 
     '<div class="pub-select-title">Do the math yourself</div>' +
     '<div class="pub-select-hint">Select the probabilities of players - pick specific ones, or select straight down the list. Adding up these probabilities gives us a projected number of how many from the selected group we expect to finish in the Top 12. (Selecting all players will equal 12).</div>' +
     '<div class="pub-select-list" id="' + uid + '-list"></div>' +
-    '<div class="pub-select-sum" id="' + uid + '-sum">(0)/1 = 0</div>' +
+    '<div class="pub-select-sum" id="' + uid + '-sum">0</div>' +
     '<div class="pub-select-reset-hint">Click a selected player again to deselect it, or <a href="#" onclick="pubResetSelection(event,\'' + uid + '\')">click here to reset</a>.</div>' +
     '</div>';
 
@@ -6869,7 +6869,7 @@ function pubResetSelection(evt, uid) {
 }
 
 // Recalculates the live "expected count" equation for a published rankings
-// table's selected probability cells — same (.XX+.XX+...)/1 = X format as the Admin sum.
+// table's selected probability cells — same .XX+.XX+... = X format as the Admin sum.
 function updatePubSelection(uid) {
   const table = document.getElementById(uid);
   const listEl = document.getElementById(uid + '-list');
@@ -6879,7 +6879,7 @@ function updatePubSelection(uid) {
   const selected = Array.from(table.querySelectorAll('.pub-prob-cell.selected'));
   if (selected.length === 0) {
     listEl.innerHTML = '<div class="pub-select-empty">No players selected yet.</div>';
-    sumEl.textContent = '(0)/1 = 0';
+    sumEl.textContent = '0';
     return;
   }
 
@@ -6890,7 +6890,7 @@ function updatePubSelection(uid) {
   const decimals = selected.map(cell => parseFloat(cell.dataset.prob) / 100);
   const sum = decimals.reduce((a, b) => a + b, 0);
   const sumRounded = Math.round(sum * 1000) / 1000;
-  const equation = '(' + decimals.map(d => toDecimalStr(d * 100)).join('+') + ')/1';
+  const equation = decimals.map(d => toDecimalStr(d * 100)).join('+');
   sumEl.textContent = equation + ' = ' + sumRounded;
 }
 
@@ -7109,10 +7109,10 @@ function updateRankProbSum(mode) {
     const v = parseFloat(input.value);
     if (!isNaN(v)) decimals.push(v / 100);
   });
-  if (decimals.length === 0) { el.textContent = '(0)/1 = 0'; return; }
+  if (decimals.length === 0) { el.textContent = '0'; return; }
   const sum = decimals.reduce((a, b) => a + b, 0);
   const sumRounded = Math.round(sum * 1000) / 1000;
-  const equation = '(' + decimals.map(d => toDecimalStr(d * 100)).join('+') + ')/1';
+  const equation = decimals.map(d => toDecimalStr(d * 100)).join('+');
   el.textContent = equation + ' = ' + sumRounded;
 }
 
@@ -8839,8 +8839,8 @@ function restoreDraftForPosition(mode, position) {
 }
 
 // --- Live probability sum for Position rankings -----------------------------
-// Shows the actual equation: each prob as a decimal (67% -> .67), summed in
-// parentheses, divided by 1 — e.g. (.22+.24+.245)/1 = .705
+// Shows the actual equation: each prob as a decimal (67% -> .67), added
+// together — e.g. .22+.24+.245 = .705
 function toDecimalStr(percentVal) {
   const dec = percentVal / 100;
   let str = String(Math.round(dec * 1000) / 1000); // trim float artifacts to 3 decimal places
@@ -8867,10 +8867,10 @@ function updateSelectedProbSum(rowsId, sumElId) {
     const v = probInput ? parseFloat(probInput.value) : NaN;
     if (!isNaN(v)) decimals.push(v / 100);
   });
-  if (decimals.length === 0) { el.textContent = '(0)/1 = 0'; return; }
+  if (decimals.length === 0) { el.textContent = '0'; return; }
   const sum = decimals.reduce((a, b) => a + b, 0);
   const sumRounded = Math.round(sum * 1000) / 1000;
-  const equation = '(' + decimals.map(d => toDecimalStr(d * 100)).join('+') + ')/1';
+  const equation = decimals.map(d => toDecimalStr(d * 100)).join('+');
   el.textContent = equation + ' = ' + sumRounded;
 }
 
@@ -8890,12 +8890,12 @@ function updateAdminProbSum() {
     if (!isNaN(v)) decimals.push(v / 100);
   });
   if (decimals.length === 0) {
-    el.textContent = '(0)/1 = 0';
+    el.textContent = '0';
     return;
   }
   const sum = decimals.reduce((a, b) => a + b, 0);
   const sumRounded = Math.round(sum * 1000) / 1000;
-  const equation = '(' + decimals.map(d => toDecimalStr(d * 100)).join('+') + ')/1';
+  const equation = decimals.map(d => toDecimalStr(d * 100)).join('+');
   el.textContent = equation + ' = ' + sumRounded;
 }
 document.addEventListener('input', function (e) {
