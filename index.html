@@ -964,16 +964,29 @@ footer {
    .matchups-total above) */
 .admin-rankings-body { display: flex; gap: 20px; align-items: flex-start; }
 .admin-rankings-main { flex: 1 1 auto; min-width: 0; }
-.admin-matchups-panel-wrap { flex: 0 0 280px; width: 280px; }
-.admin-matchups-panel { background: #0d0d0e; border-radius: 16px; overflow: hidden; font-family: 'Lato', sans-serif; position: sticky; top: 20px; }
+/* Sidebar of the Weekly Player Projections admin tool. Holds two stacked
+   cards: a read-only Team Implied Totals reference (added so you can see
+   each team's total while setting that team's players' probabilities,
+   without leaving this page or switching to the separate Weekly Team
+   Implied Totals tab, which stays the actual place to edit/publish totals)
+   on top, and the existing Matchups card below it. Sticky lives on the
+   WRAPPER, not the individual cards, so the pair scrolls together as one
+   unit instead of two independently-sticky boxes fighting for the same
+   spot. */
+.admin-matchups-panel-wrap { flex: 0 0 280px; width: 280px; display: flex; flex-direction: column; gap: 20px; position: sticky; top: 20px; }
+.admin-matchups-panel { background: #0d0d0e; border-radius: 16px; overflow: hidden; font-family: 'Lato', sans-serif; }
 .admin-matchups-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 14px 20px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
 .admin-matchups-header-title { font-size: 16px; font-weight: 900; color: #fff; }
 .admin-matchups-header-sub { font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
 .admin-matchups-empty { padding: 16px 20px; font-family: 'Lato', sans-serif; font-size: 12px; color: #999; font-style: italic; }
+.admin-totals-ref-rows { padding: 6px 20px 14px; max-height: 400px; overflow-y: auto; }
+.admin-totals-ref-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+.admin-totals-ref-row span:first-child { font-size: 13px; font-weight: 700; }
+.admin-totals-ref-row span:last-child { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.85); font-family: 'SFMono-Regular', Consolas, monospace; }
+.admin-totals-ref-row.admin-totals-ref-bye span:last-child { color: rgba(255,255,255,0.35); font-style: italic; font-family: 'Lato', sans-serif; }
 @media (max-width: 900px) {
   .admin-rankings-body { flex-direction: column; }
-  .admin-matchups-panel-wrap { width: 100%; flex: 0 0 auto; }
-  .admin-matchups-panel { position: static; }
+  .admin-matchups-panel-wrap { width: 100%; flex: 0 0 auto; position: static; }
 }
 @media (max-width: 720px) {
   .totals-pub-outer-wide { width: 100%; min-width: 0; }
@@ -2351,6 +2364,7 @@ footer {
       </div>
 
       <div class="admin-matchups-panel-wrap">
+        <div id="admin-totals-ref-panel" class="admin-matchups-panel"></div>
         <div id="admin-matchups-panel" class="admin-matchups-panel"></div>
       </div>
       </div>
@@ -2447,8 +2461,10 @@ footer {
       <div class="admin-actions">
         <button class="trade-add-btn" onclick="addRankRow('ros')">+ Add player</button>
         <button class="trade-add-btn" onclick="sortRankRows('ros')">↓ Sort by Prob</button>
+        <button class="trade-add-btn" id="ros-save-draft-btn" onclick="saveDraftNow('ros')" title="Saves your in-progress work in this browser so you can leave and come back to it later. This does NOT publish it live — use Publish for that.">💾 Save</button>
         <button class="trade-analyze-btn" onclick="publishRankTable('ros')">Publish</button>
       </div>
+      <div id="ros-draft-status" class="admin-draft-status" style="display:none;"></div>
 
       <div class="admin-sum-row">Sum: <span id="ros-prob-sum-value">0</span></div>
       <div class="admin-sum-row">Selected sum: <span id="ros-selected-sum-value">0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('ros-rows','ros-selected-sum-value')">Clear selection</button></div>
@@ -7218,6 +7234,24 @@ function findPriorPublishedROSWeek(position, beforeWeek) {
   return bestWeek === null ? null : { week: bestWeek, data: publishedROS[position + '-' + bestWeek] };
 }
 
+// Looks up a locally-saved (not-yet-published) draft for Rest of Season,
+// keyed by position+week exactly like Weekly's own draft slot — returns
+// {topN, rows} or null. Checked first, in loadRankTable below, before ever
+// falling back to published data or carrying forward an earlier published
+// week — same draft-beats-everything-else priority Weekly and Season Long
+// already use.
+function readROSDraft(position, week) {
+  try {
+    const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    const saved = draft.ros && draft.ros.byKey && draft.ros.byKey[position + '-' + week];
+    return (saved && saved.rows && saved.rows.length) ? saved : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 function loadRankTable(mode) {
   const cfg = RANK_MODE[mode];
   const topN = parseInt(document.getElementById(cfg.topNId).value, 10) || 12;
@@ -7225,6 +7259,22 @@ function loadRankTable(mode) {
   const tbody = document.getElementById(cfg.rowsId);
   tbody.innerHTML = '';
   cfg.rowCount = 0;
+
+  if (mode === 'ros') {
+    hideDraftStatus('ros-draft-status');
+    const position = document.getElementById(cfg.posId).value;
+    const week = document.getElementById(cfg.weekId).value;
+    const draft = readROSDraft(position, week);
+    if (draft) {
+      if (draft.topN) document.getElementById(cfg.topNId).value = draft.topN;
+      draft.rows.forEach(r => addRankRow('ros', r.player, r.team, r.prob));
+      updateRankProbSum(mode);
+      showDraftLoadedStatus('ros-draft-status');
+      const statusEl = document.getElementById('ros-load-status');
+      if (statusEl) statusEl.textContent = 'Showing your saved draft for ' + position + ' Week ' + week + ' — not published yet. Edit and click Save to keep working on it, or Publish to make it live.';
+      return;
+    }
+  }
 
   let existing = cfg.store[key];
   const statusEl = mode === 'ros' ? document.getElementById('ros-load-status') : null;
@@ -7285,6 +7335,10 @@ function copySeasonLongIntoROS() {
   source.rows.forEach(r => addRankRow('ros', r.player, r.team, r.prob));
   document.getElementById('ros-topn').value = source.topN || 12;
   updateRankProbSum('ros');
+  // Copying in rows here doesn't type anything (no 'input' events fire),
+  // so without this the copied-but-unpublished table wouldn't be protected
+  // by the draft autosave until you actually edited something by hand.
+  saveDraftNow('ros');
 }
 
 function updateRankProbSum(mode) {
@@ -7376,6 +7430,8 @@ document.addEventListener('input', function (e) {
   if (e.target.closest('#ros-rows')) {
     updateRankProbSum('ros');
     updateSelectedProbSum('ros-rows', 'ros-selected-sum-value');
+    autosaveAdminDraft();
+    markDraftSaved('ros-draft-status');
   }
 });
 
@@ -8426,6 +8482,37 @@ function buildMatchupsRowsHTML(matchupsForWeek, nameColorForTeam) {
   return html;
 }
 
+// Read-only reference card showing the PUBLISHED Weekly Team Implied
+// Totals for whichever week is currently selected on the Admin Weekly
+// Player Projections tool (#admin-totals-ref-panel), sitting above the
+// Matchups card in the same sidebar. Added so you can see each team's
+// implied total while you're setting that team's players' probabilities,
+// without leaving this page or switching over to the separate Weekly Team
+// Implied Totals tab — which is still the only place to actually edit or
+// publish a total; this card never writes anything, it only displays
+// whatever's already published for this week. Same tier coloring
+// (getWeeklyTeamTierColorMap) as the Team input's own auto-coloring and the
+// Matchups card right below it, so all three always agree.
+function renderAdminTotalsRefPanel(week) {
+  const panel = document.getElementById('admin-totals-ref-panel');
+  if (!panel) return;
+  const header = '<div class="admin-matchups-header"><span class="admin-matchups-header-title">Team Implied Totals</span><span class="admin-matchups-header-sub">Week ' + (week || '?') + '</span></div>';
+  const data = publishedTeamTotals[week];
+  if (!data || !data.rows || data.rows.length === 0) {
+    panel.innerHTML = header + '<div class="admin-matchups-empty">No Team Implied Totals published for Week ' + (week || '?') + ' yet. Publish them from the Weekly Team Implied Totals tab.</div>';
+    return;
+  }
+  const colorMap = getWeeklyTeamTierColorMap(week);
+  const scored = data.rows.filter(r => typeof r.value === 'number').sort((a, b) => b.value - a.value);
+  const byes = data.rows.filter(r => r.value === 'BYE');
+  const rowHTML = (r, isBye) =>
+    '<div class="admin-totals-ref-row' + (isBye ? ' admin-totals-ref-bye' : '') + '">' +
+    '<span' + (colorMap[r.team] ? ' style="color:' + colorMap[r.team] + ';"' : '') + '>' + r.team + '</span>' +
+    '<span>' + (isBye ? 'BYE' : r.value) + '</span></div>';
+  const rowsHtml = scored.map(r => rowHTML(r, false)).join('') + byes.map(r => rowHTML(r, true)).join('');
+  panel.innerHTML = header + '<div class="admin-totals-ref-rows">' + rowsHtml + '</div>';
+}
+
 // Renders the Matchups side panel on the Admin Weekly Player Projections
 // tool (#admin-matchups-panel) for whichever week is currently selected —
 // same game pairings/implied totals/tier coloring as the public Team
@@ -8932,6 +9019,7 @@ function autoFillPositionRankings(position, week) {
 // haven't been published yet.
 async function smartLoadPositionRankings(position, week) {
   renderAdminMatchupsPanel(week);
+  renderAdminTotalsRefPanel(week);
   hideDraftStatus('admin-draft-status');
   if (restoreDraftForWeeklyPosition(position, week)) {
     showDraftLoadedStatus('admin-draft-status');
@@ -9286,6 +9374,19 @@ function autosaveAdminDraft() {
       };
     }
 
+    // Rest of Season gets its own slot per position+week, same pattern as
+    // Weekly above (it's the only other mode with a week attached; Season
+    // Long above only needs one slot per position).
+    draft.ros = draft.ros || { byKey: {} };
+    const rosPos = (document.getElementById('ros-position') || {}).value;
+    const rosWeek = (document.getElementById('ros-week') || {}).value;
+    if (rosPos && rosWeek) {
+      draft.ros.byKey[rosPos + '-' + rosWeek] = {
+        topN: (document.getElementById('ros-topn') || {}).value,
+        rows: readRowsFromTable('ros-rows', false),
+      };
+    }
+
     // Weekly Team Implied Totals gets its own slot per week too, same
     // pattern as Weekly player projections above — this is what lets you
     // leave a week half-filled-in and have it still be there next time,
@@ -9334,23 +9435,26 @@ function showDraftLoadedStatus(elId) {
   el.style.display = 'block';
 }
 
-// The explicit "Save" button on Weekly and Season Long Player Projections.
-// This does NOT publish anything — it just makes sure whatever's currently
-// typed into the table is captured into this browser's saved draft right
-// now (rather than waiting for the next keystroke to trigger the same
-// autosave), and gives a clear on-screen confirmation so it doesn't feel
-// like leaving the page risks losing the work. Since the draft is per
-// position (and per position+week for Weekly), coming back to this exact
-// position/week later — even after closing the browser entirely — loads
-// this saved draft automatically, before ever falling back to published or
-// seed data (see smartLoadPositionRankings / smartLoadSeasonLongRankings).
+// The explicit "Save" button on Weekly, Season Long, and Rest of Season
+// Player Projections. This does NOT publish anything — it just makes sure
+// whatever's currently typed into the table is captured into this
+// browser's saved draft right now (rather than waiting for the next
+// keystroke to trigger the same autosave), and gives a clear on-screen
+// confirmation so it doesn't feel like leaving the page risks losing the
+// work. Since the draft is per position (and per position+week for Weekly
+// and Rest of Season), coming back to this exact position/week later —
+// even after closing the browser entirely — loads this saved draft
+// automatically, before ever falling back to published data, a carried-
+// forward earlier week (Rest of Season), or seed data (see
+// smartLoadPositionRankings / smartLoadSeasonLongRankings / loadRankTable).
 // Note this draft lives in THIS browser only (same as the autosave it's
 // built on) — it won't follow you to a different browser or computer;
 // Publish is still the only way to make rankings visible on the site or
 // available from another device.
 function saveDraftNow(mode) {
   autosaveAdminDraft();
-  markDraftSaved(mode === 'weekly' ? 'admin-draft-status' : 'sl-draft-status');
+  const statusId = mode === 'weekly' ? 'admin-draft-status' : (mode === 'ros' ? 'ros-draft-status' : 'sl-draft-status');
+  markDraftSaved(statusId);
 }
 
 // Restores whatever was last typed, if anything was saved. Called once
