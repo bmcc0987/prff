@@ -2164,7 +2164,10 @@ footer {
       </div>
 
       <div id="admintotals-preview-wrap" style="display:none;">
-        <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+          <div class="admin-preview-label" style="margin-bottom:0;">Live preview — this is exactly what publishes</div>
+          <button type="button" id="admintotals-download-img-btn" class="trade-add-btn" style="margin-bottom:12px;" onclick="downloadWeeklyTotalsImage()">⬇ Download as Image (for social media)</button>
+        </div>
         <div id="admintotals-preview"></div>
       </div>
     </div>
@@ -8504,6 +8507,57 @@ async function publishAdminTotalsTable() {
   switchAdminTool('rankings');
   document.getElementById('admin-week').value = week;
   await smartLoadPositionRankings(document.getElementById('admin-position').value, week);
+}
+
+// Downloads the Weekly Team Implied Totals live preview (all 32 teams, plus
+// matchups if built) as a single .png — requested so it can be posted to
+// social media as one image instead of having to scroll and stitch multiple
+// screenshots together. Reuses the same off-screen-render + html2canvas
+// pattern as downloadCurrentComboReport() above: clones the EXACT preview
+// HTML (the same "Live preview — this is exactly what publishes" content,
+// so the image can never drift from what's actually live) into a fixed-width
+// off-screen container so the result looks the same regardless of how wide
+// the admin panel happens to be on screen, rasterizes it, then triggers a
+// direct download — no print dialog, no manual screenshotting.
+async function downloadWeeklyTotalsImage() {
+  const preview = document.getElementById('admintotals-preview');
+  if (!preview || !preview.innerHTML.trim()) {
+    alert('Publish (or load an already-published) week first — there\'s nothing in the preview yet to turn into an image.');
+    return;
+  }
+  const week = document.getElementById('admintotals-week').value;
+  const btn = document.getElementById('admintotals-download-img-btn');
+  const originalLabel = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing image…'; }
+
+  let container = null;
+  try {
+    await loadHtml2Canvas();
+
+    container = document.createElement('div');
+    container.style.cssText = 'position:absolute; left:-99999px; top:0; width:1000px; background:#fff; padding:24px;';
+    container.innerHTML = preview.innerHTML;
+    document.body.appendChild(container);
+
+    // Give web fonts a beat to finish loading so the image doesn't get
+    // captured in a fallback font (same reasoning as the trade report export).
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+
+    const canvas = await html2canvas(container, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+
+    const link = document.createElement('a');
+    link.download = 'week-' + week + '-team-implied-totals.png';
+    link.href = canvas.toDataURL('image/png');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.warn('Weekly totals image failed:', err);
+    alert('Could not build the image — check your connection and try again.');
+  } finally {
+    if (container && container.parentNode) container.parentNode.removeChild(container);
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel || '⬇ Download as Image (for social media)'; }
+  }
 }
 
 // --- ADMIN: SEASON LONG TEAM IMPLIED TOTALS ---------------------------------
