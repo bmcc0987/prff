@@ -979,7 +979,7 @@ footer {
 .admin-matchups-header-title { font-size: 16px; font-weight: 900; color: #fff; }
 .admin-matchups-header-sub { font-size: 10px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
 .admin-matchups-empty { padding: 16px 20px; font-family: 'Lato', sans-serif; font-size: 12px; color: #999; font-style: italic; }
-.admin-totals-ref-rows { padding: 6px 20px 14px; max-height: 400px; overflow-y: auto; }
+.admin-totals-ref-rows { padding: 6px 20px 14px; }
 .admin-totals-ref-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
 .admin-totals-ref-row span:first-child { font-size: 13px; font-weight: 700; }
 .admin-totals-ref-row span:last-child { font-size: 13px; font-weight: 700; font-family: 'SFMono-Regular', Consolas, monospace; }
@@ -2450,10 +2450,12 @@ footer {
       <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Rankings for the rest of the season, starting from this week. Re-publish each week to keep it current. Use "Copy from Season Long" to pull in the published Season Long numbers as a starting point, then adjust and publish. Once you've published any week, later weeks automatically start from the most recent published week's numbers until you publish over them.</div>
       <div id="ros-load-status" style="font-family:'Lato',sans-serif; font-size:12px; color:#666; margin:-6px 0 10px;"></div>
 
+      <div class="admin-rankings-body">
+      <div class="admin-rankings-main">
       <datalist id="ros-player-list"></datalist>
       <table class="admin-table">
         <thead>
-          <tr><th style="width:60px;">Rank</th><th>Player</th><th style="width:100px;">Team</th><th style="width:110px;">Prob %</th><th style="width:60px;">Select</th><th style="width:40px;"></th></tr>
+          <tr><th style="width:8%;">Rank</th><th style="width:45%;">Player</th><th style="width:15%;">Team</th><th style="width:12%;">Prob %</th><th style="width:12%;">Select</th><th style="width:8%;"></th></tr>
         </thead>
         <tbody id="ros-rows"></tbody>
       </table>
@@ -2468,6 +2470,12 @@ footer {
 
       <div class="admin-sum-row">Sum: <span id="ros-prob-sum-value">0</span></div>
       <div class="admin-sum-row">Selected sum: <span id="ros-selected-sum-value">0</span> <button type="button" class="trade-add-btn" style="margin-left:10px;padding:3px 12px;font-size:11px;" onclick="clearSelectedProbCheckboxes('ros-rows','ros-selected-sum-value')">Clear selection</button></div>
+      </div>
+
+      <div class="admin-matchups-panel-wrap">
+        <div id="ros-totals-ref-panel" class="admin-matchups-panel"></div>
+      </div>
+      </div>
 
       <div id="ros-preview-wrap" style="display:none;">
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
@@ -7264,6 +7272,7 @@ function loadRankTable(mode) {
     hideDraftStatus('ros-draft-status');
     const position = document.getElementById(cfg.posId).value;
     const week = document.getElementById(cfg.weekId).value;
+    renderROSTotalsRefPanel(week);
     const draft = readROSDraft(position, week);
     if (draft) {
       if (draft.topN) document.getElementById(cfg.topNId).value = draft.topN;
@@ -8526,6 +8535,60 @@ function renderAdminTotalsRefPanel(week) {
   };
   const rowsHtml = scored.map(r => rowHTML(r, false)).join('') + byes.map(r => rowHTML(r, true)).join('');
   panel.innerHTML = header + '<div class="admin-totals-ref-rows">' + rowsHtml + '</div>';
+}
+
+// Read-only reference card for Rest of Season Player Projections
+// (#ros-totals-ref-panel) — the cumulative equivalent of
+// renderAdminTotalsRefPanel above. Rest of Season doesn't have one single
+// week to show a total for; "As of Week 3" means weeks 1, 2 AND 3 have
+// already happened, so this adds up each team's PUBLISHED Weekly Team
+// Implied Total across every week from 1 through whatever "As of Week" is
+// currently set to (a BYE week contributes 0, same as it would to a real
+// season total) and ranks/colors teams by that running sum — same
+// green/white/red top-12/middle/bottom-12 scheme as the single-week
+// version and the public Team Implied Totals page, just computed from the
+// cumulative numbers instead of one week's. Purely a reference: nothing
+// here is editable, and the actual Weekly Team Implied Totals tab is still
+// the only place any of this gets published.
+function renderROSTotalsRefPanel(week) {
+  const panel = document.getElementById('ros-totals-ref-panel');
+  if (!panel) return;
+  const asOfWeek = parseInt(week, 10);
+  const rangeLabel = isNaN(asOfWeek) || asOfWeek < 1 ? '?' : (asOfWeek === 1 ? 'Week 1' : ('Weeks 1–' + asOfWeek));
+  const header = '<div class="admin-matchups-header"><span class="admin-matchups-header-title">Team Implied Totals</span><span class="admin-matchups-header-sub">' + rangeLabel + '</span></div>';
+  if (isNaN(asOfWeek) || asOfWeek < 1) {
+    panel.innerHTML = header + '<div class="admin-matchups-empty">Enter a valid week to see cumulative totals.</div>';
+    return;
+  }
+
+  const sumByTeam = {};
+  let anyPublished = false;
+  for (let w = 1; w <= asOfWeek; w++) {
+    const data = publishedTeamTotals[w];
+    if (!data || !data.rows) continue;
+    anyPublished = true;
+    data.rows.forEach(r => {
+      if (typeof r.value !== 'number') return; // BYE week: contributes 0
+      sumByTeam[r.team] = (sumByTeam[r.team] || 0) + r.value;
+    });
+  }
+
+  if (!anyPublished) {
+    panel.innerHTML = header + '<div class="admin-matchups-empty">No Team Implied Totals published yet for ' + rangeLabel.toLowerCase() + '.</div>';
+    return;
+  }
+
+  const rows = Object.keys(sumByTeam)
+    .map(team => ({ team, value: Math.round(sumByTeam[team] * 100) / 100 })) // trim float noise from repeated addition
+    .sort((a, b) => b.value - a.value);
+  const rowHTML = (r, i) => {
+    const rank = i + 1;
+    const color = rank <= 12 ? '#3DB87A' : (rank <= 20 ? '#fff' : '#c0392b');
+    return '<div class="admin-totals-ref-row">' +
+      '<span style="color:' + color + ';">' + r.team + '</span>' +
+      '<span style="color:' + color + ';">' + r.value + '</span></div>';
+  };
+  panel.innerHTML = header + '<div class="admin-totals-ref-rows">' + rows.map(rowHTML).join('') + '</div>';
 }
 
 // Renders the Matchups side panel on the Admin Weekly Player Projections
