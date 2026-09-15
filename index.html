@@ -150,7 +150,7 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 /* HERO */
 .hero {
   position: relative; overflow: hidden;
-  display: flex; align-items: flex-start; justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
   background: #1a1a1a;
 }
 .hero-bg {
@@ -161,11 +161,18 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 }
 .hero-overlay {
   position: absolute; inset: 0;
+  /* Darkens progressively toward the bottom so the photo stays visible
+     behind the headline up top, while the "What makes us different?" /
+     "What can we do with these probabilities?" copy further down (still
+     part of this same photo hero — see .philosophy below) has enough
+     contrast to read comfortably. The closing statement and Go Pro button
+     are NOT part of this hero at all anymore (see .philosophy-close-band
+     and .cta-band, both solid black, right after this section closes). */
   background: linear-gradient(to bottom,
-    rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.6) 100%);
+    rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.25) 30%, rgba(0,0,0,0.62) 100%);
 }
 .hero-content {
-  position: relative; z-index: 2;
+  position: relative; z-index: 2; width: 100%;
   text-align: center; padding: 60px 40px 44px; max-width: 900px; margin: 0 auto;
 }
 .hero-win {
@@ -229,42 +236,52 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
   50% { transform: translateX(-50%) translateY(5px); }
 }
 
-/* HOMEPAGE PHILOSOPHY SECTION — sits right below the hero photo, on a flat
-   dark background (no photo), explaining what makes the site different and
-   what the probabilities are for. Replaces the old single-line tagline
-   paragraph that used to be the only copy under "Process over Results". */
-.philosophy {
-  position: relative; background: #0d0d0e; padding: 8px 40px 72px;
-}
-.philosophy-inner { max-width: 880px; margin: 0 auto; }
-.philosophy-block { padding: 40px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+/* HOMEPAGE PHILOSOPHY SECTION — the "What makes us different?" / "What can
+   we do with these probabilities?" copy. Lives as a sibling of
+   .hero-content, INSIDE .hero (so it sits on the same photo + darkening
+   overlay as the headline — see .hero-overlay), right under the headline
+   and tagline. Explains what makes the site different and what the
+   probabilities are for. Replaces the old single-line tagline paragraph
+   that used to be the only copy under "Process over Results". Left-aligned
+   on purpose (overriding .hero-content's centered text) since paragraph
+   copy this long reads better ragged-left than centered. */
+.philosophy { position: relative; z-index: 2; width: 100%; padding: 8px 40px 40px; }
+.philosophy-inner { max-width: 720px; margin: 0 auto; text-align: left; }
+.philosophy-block { padding: 40px 0; border-top: 1px solid rgba(255,255,255,0.12); }
 .philosophy-block:first-child { border-top: none; padding-top: 8px; }
 .philosophy-eyebrow {
   font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 900; letter-spacing: 0.14em;
   text-transform: uppercase; color: #3DB87A; margin-bottom: 10px;
 }
 .philosophy-a {
-  font-family: 'Lato', sans-serif; font-size: 16px; color: rgba(255,255,255,0.72);
-  line-height: 1.75; margin: 0; max-width: 720px;
+  font-family: 'Lato', sans-serif; font-size: 16px; color: rgba(255,255,255,0.82);
+  line-height: 1.75; margin: 0;
 }
-.philosophy-close {
-  margin-top: 8px; padding-top: 36px; border-top: 1px solid rgba(255,255,255,0.08);
-  text-align: center;
-}
+
+/* The closing statement ("If we do things the way they've always been
+   done...") is deliberately NOT part of the photo hero above — it's its
+   own solid black (#0d0d0e), photo-free section, immediately followed by
+   the equally solid-black .cta-band with no gap between them, so the two
+   read as one continuous black area under the photo. No divider border
+   here on purpose: the hard color change from photo to solid black is
+   already the divider. */
+.philosophy-close-band { background: #0d0d0e; padding: 48px 40px 8px; }
+.philosophy-close { text-align: center; }
 .philosophy-close p {
   font-family: 'Lato', sans-serif; font-style: normal; font-weight: 400;
-  font-size: 16px; color: rgba(255,255,255,0.72); line-height: 1.75; max-width: 700px; margin: 0 auto;
+  font-size: 16px; color: rgba(255,255,255,0.82); line-height: 1.75; margin: 0 auto;
 }
 .philosophy-close p + p { margin-top: 16px; }
 
 /* Homepage CTA band — the Go Pro button, the free-access blurb, and the
-   scroll arrow all live here now, on the same flat dark background as the
-   philosophy section right above it, since they're no longer inside the
-   (now much shorter) photo hero. */
-.cta-band { position: relative; background: #0d0d0e; padding: 4px 40px 64px; text-align: center; }
+   scroll arrow. Solid black (#0d0d0e), same as .philosophy-close-band right
+   above it, so there's no visible seam between the two — together they're
+   "that whole section with the Go Pro button" that stays black regardless
+   of the photo hero above it. */
+.cta-band { position: relative; text-align: center; background: #0d0d0e; padding: 4px 40px 64px; }
 .cta-band .row { display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap; }
 .cta-band .fine {
-  font-family: 'Lato', sans-serif; font-size: 14px; color: rgba(255,255,255,0.5);
+  font-family: 'Lato', sans-serif; font-size: 14px; color: rgba(255,255,255,0.6);
   max-width: 520px; margin: 16px auto 0; line-height: 1.6;
 }
 
@@ -1008,10 +1025,11 @@ footer {
   .btn-subscribe { padding: 12px 30px; font-size: 13px; }
   .scroll-arrow { display: none; }
 
-  /* Homepage philosophy section + CTA band */
-  .philosophy { padding: 8px 20px 48px; }
+  /* Homepage philosophy section + closing band + CTA band */
+  .philosophy { padding: 8px 20px 24px; }
   .philosophy-block { padding: 28px 0; }
-  .cta-band { padding: 4px 20px 48px; }
+  .philosophy-close-band { padding: 32px 20px 8px; }
+  .cta-band { padding: 4px 20px 40px; }
 
   /* Ticker */
   .ticker { padding: 10px 16px !important; }
@@ -1367,29 +1385,39 @@ footer {
     </div>
     <p>The probability-based forecasting platform for fantasy football.<br>Make better decisions understanding uncertainty.</p>
   </div>
+
+  <!-- "What makes us different?" / "What can we do with these
+       probabilities?" still sit inside the hero photo + overlay (as a
+       sibling of .hero-content, not nested inside its centered text-align)
+       so the background photo keeps showing through behind this copy too,
+       not just the headline. The closing statement and the Go Pro CTA are
+       deliberately NOT in here — see .philosophy-close-band and .cta-band
+       right after this section closes — that's the solid black part. -->
+  <div class="philosophy">
+    <div class="philosophy-inner">
+      <div class="philosophy-block">
+        <div class="philosophy-eyebrow">What makes us different?</div>
+        <p class="philosophy-a">Rankings project a static order and can give off the illusion of certainty of outcomes. Our projections estimate the probability of those outcomes. We don't deal in certainty, we deal in probability.</p>
+      </div>
+
+      <div class="philosophy-block">
+        <div class="philosophy-eyebrow">What can we do with these probabilities?</div>
+        <p class="philosophy-a">Make better start/sit, trade, weekly, and season long roster decisions. In a game governed by finite rules and driven by variance, we want to embrace variance and combine that with historical datapoints to help us better predict the future.</p>
+      </div>
+    </div>
+  </div>
 </section>
 
-<!-- Homepage philosophy section — replaces the old single-line tagline
-     paragraph that used to be the only copy under "Process over Results".
-     Sits on a flat dark background right below the photo hero. -->
-<div class="philosophy">
+<!-- Solid black — no photo — from the closing statement through the Go Pro
+     button. This is a deliberately plain, flat section: the photo/overlay
+     treatment above is for the headline and the "What..." explainer copy
+     only, not this closing statement + call-to-action. -->
+<div class="philosophy-close-band">
   <div class="philosophy-inner">
-
-    <div class="philosophy-block">
-      <div class="philosophy-eyebrow">What makes us different?</div>
-      <p class="philosophy-a">Rankings project a static order and can give off the illusion of certainty of outcomes. Our projections estimate the probability of those outcomes. We don't deal in certainty, we deal in probability.</p>
-    </div>
-
-    <div class="philosophy-block">
-      <div class="philosophy-eyebrow">What can we do with these probabilities?</div>
-      <p class="philosophy-a">Make better start/sit, trade, weekly, and season long roster decisions. In a game governed by finite rules and driven by variance, we want to embrace variance and combine that with historical datapoints to help us better predict the future.</p>
-    </div>
-
     <div class="philosophy-close">
       <p>If we do things the way they've always been done, where does our edge come from?</p>
       <p>By reframing how we view fantasy football, it opens up the possibility of seeing things others don't.</p>
     </div>
-
   </div>
 </div>
 
