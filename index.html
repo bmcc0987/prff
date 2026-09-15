@@ -2302,7 +2302,7 @@ footer {
       <div class="admin-controls">
         <div class="admin-field">
           <label class="auth-label">Position</label>
-          <select class="admin-select" id="ros-position">
+          <select class="admin-select" id="ros-position" onchange="loadRankTable('ros')">
             <option value="QB">QB</option>
             <option value="WR">WR</option>
             <option value="RB">RB</option>
@@ -2311,7 +2311,7 @@ footer {
         </div>
         <div class="admin-field">
           <label class="auth-label">As of Week</label>
-          <input class="admin-input-small" type="number" id="ros-week" min="1" max="17" value="5">
+          <input class="admin-input-small" type="number" id="ros-week" min="1" max="17" value="5" onchange="loadRankTable('ros')">
         </div>
         <div class="admin-field">
           <label class="auth-label">Top N</label>
@@ -2320,7 +2320,8 @@ footer {
         <button class="trade-add-btn" style="margin-top:20px;" onclick="loadRankTable('ros')">Load existing</button>
         <button class="trade-add-btn" style="margin-top:20px;" onclick="copySeasonLongIntoROS()">Copy from Season Long</button>
       </div>
-      <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Rankings for the rest of the season, starting from this week. Re-publish each week to keep it current. Use "Copy from Season Long" to pull in the published Season Long numbers as a starting point, then adjust and publish.</div>
+      <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Rankings for the rest of the season, starting from this week. Re-publish each week to keep it current. Use "Copy from Season Long" to pull in the published Season Long numbers as a starting point, then adjust and publish. Once you've published any week, later weeks automatically start from the most recent published week's numbers until you publish over them.</div>
+      <div id="ros-load-status" style="font-family:'Lato',sans-serif; font-size:12px; color:#666; margin:-6px 0 10px;"></div>
 
       <datalist id="ros-player-list"></datalist>
       <table class="admin-table">
@@ -7083,6 +7084,28 @@ function exportRankRowsCSV(mode) {
   downloadCSV(mode + '-projections-draft.csv', headers, rows);
 }
 
+// For Rest of Season only: when nothing has been published yet for the
+// exact position+week you've got selected, find the most recently
+// published EARLIER week for that same position, so each new week can
+// start from the last one instead of a blank table. Publish Week 1, and
+// Week 2 (until you publish something for it) shows Week 1's numbers to
+// tweak; publish Week 2, and Week 3 carries that forward, and so on —
+// looking at whatever the highest already-published week below the
+// selected one is, not just "the previous number," so it still works
+// sensibly if a week ever gets skipped.
+function findPriorPublishedROSWeek(position, beforeWeek) {
+  let bestWeek = null;
+  Object.keys(publishedROS).forEach(key => {
+    const idx = key.lastIndexOf('-');
+    if (idx === -1) return;
+    const pos = key.slice(0, idx);
+    const wk = parseInt(key.slice(idx + 1), 10);
+    if (pos !== position || isNaN(wk) || wk >= beforeWeek) return;
+    if (bestWeek === null || wk > bestWeek) bestWeek = wk;
+  });
+  return bestWeek === null ? null : { week: bestWeek, data: publishedROS[position + '-' + bestWeek] };
+}
+
 function loadRankTable(mode) {
   const cfg = RANK_MODE[mode];
   const topN = parseInt(document.getElementById(cfg.topNId).value, 10) || 12;
@@ -7091,7 +7114,20 @@ function loadRankTable(mode) {
   tbody.innerHTML = '';
   cfg.rowCount = 0;
 
-  const existing = cfg.store[key];
+  let existing = cfg.store[key];
+  const statusEl = mode === 'ros' ? document.getElementById('ros-load-status') : null;
+  let carriedOverFromWeek = null;
+
+  if (!existing && mode === 'ros') {
+    const position = document.getElementById(cfg.posId).value;
+    const week = parseInt(document.getElementById(cfg.weekId).value, 10);
+    const prior = !isNaN(week) ? findPriorPublishedROSWeek(position, week) : null;
+    if (prior) {
+      existing = prior.data;
+      carriedOverFromWeek = prior.week;
+    }
+  }
+
   if (existing) {
     document.getElementById(cfg.topNId).value = existing.topN;
     existing.rows.forEach(r => addRankRow(mode, r.player, r.team, r.prob));
@@ -7099,6 +7135,18 @@ function loadRankTable(mode) {
     for (let i = 0; i < topN; i++) addRankRow(mode);
   }
   updateRankProbSum(mode);
+
+  if (statusEl) {
+    const position = document.getElementById(cfg.posId).value;
+    const week = document.getElementById(cfg.weekId).value;
+    if (carriedOverFromWeek !== null) {
+      statusEl.textContent = 'Nothing published yet for ' + position + ' Week ' + week + ' — showing Week ' + carriedOverFromWeek + '\'s published numbers as a starting point. Edit and click Publish to make Week ' + week + ' live.';
+    } else if (cfg.store[key]) {
+      statusEl.textContent = 'Showing the published ' + position + ' Week ' + week + ' data. Edit and re-publish to update it.';
+    } else {
+      statusEl.textContent = 'Nothing published for ' + position + ' Week ' + week + ' yet, and no earlier published week to start from — showing blank rows (or use "Copy from Season Long").';
+    }
+  }
 }
 
 // Copies the currently PUBLISHED Season Long Player Projections for the
