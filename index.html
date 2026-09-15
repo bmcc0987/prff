@@ -866,7 +866,8 @@ footer {
   background: none; border: none; color: #bbb; font-size: 18px; cursor: pointer; line-height: 1;
 }
 .admin-row-remove:hover { color: #d33; }
-.admin-actions { display: flex; gap: 12px; margin-bottom: 16px; }
+.admin-actions { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.admin-draft-status { font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #2E9E63; margin: -8px 0 14px; }
 .admin-sum-row { font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700; color: #333; margin-bottom: 24px; }
 .admin-sum-row span { color: #111; font-weight: 700; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; word-break: break-all; display: inline; }
 
@@ -2339,8 +2340,10 @@ footer {
         <button class="trade-add-btn" onclick="document.getElementById('admin-csv-import-file').click()">⬆ Import CSV</button>
         <input type="file" id="admin-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToAdminRows(event)">
         <button class="trade-add-btn" onclick="exportAdminRowsCSV()">⬇ Export CSV</button>
+        <button class="trade-add-btn" id="admin-save-draft-btn" onclick="saveDraftNow('weekly')" title="Saves your in-progress work in this browser so you can leave and come back to it later. This does NOT publish it live — use Publish for that.">💾 Save</button>
         <button class="trade-analyze-btn" onclick="publishAdminTable()">Publish</button>
       </div>
+      <div id="admin-draft-status" class="admin-draft-status" style="display:none;"></div>
       <div id="admin-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
       <div class="admin-sum-row">Sum: <span id="admin-prob-sum-value">0</span></div>
@@ -2393,8 +2396,10 @@ footer {
         <button class="trade-add-btn" onclick="document.getElementById('sl-csv-import-file').click()">⬆ Import CSV</button>
         <input type="file" id="sl-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToRankRows(event, 'seasonlong')">
         <button class="trade-add-btn" onclick="exportRankRowsCSV('seasonlong')">⬇ Export CSV</button>
+        <button class="trade-add-btn" id="sl-save-draft-btn" onclick="saveDraftNow('seasonlong')" title="Saves your in-progress work in this browser so you can leave and come back to it later. This does NOT publish it live — use Publish for that.">💾 Save</button>
         <button class="trade-analyze-btn" onclick="publishRankTable('seasonlong')">Publish</button>
       </div>
+      <div id="sl-draft-status" class="admin-draft-status" style="display:none;"></div>
       <div id="sl-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
 
       <div class="admin-sum-row">Sum: <span id="sl-prob-sum-value">0</span></div>
@@ -7361,6 +7366,7 @@ document.addEventListener('input', function (e) {
     updateRankProbSum('seasonlong');
     updateSelectedProbSum('sl-rows', 'sl-selected-sum-value');
     autosaveAdminDraft();
+    markDraftSaved('sl-draft-status');
     if (e.target.classList.contains('admin-notes-input')) {
       const tr = e.target.closest('tr');
       const player = tr.querySelector('input').value.trim();
@@ -8926,7 +8932,11 @@ function autoFillPositionRankings(position, week) {
 // haven't been published yet.
 async function smartLoadPositionRankings(position, week) {
   renderAdminMatchupsPanel(week);
-  if (restoreDraftForWeeklyPosition(position, week)) return;
+  hideDraftStatus('admin-draft-status');
+  if (restoreDraftForWeeklyPosition(position, week)) {
+    showDraftLoadedStatus('admin-draft-status');
+    return;
+  }
   const key = position + '-' + week;
   if (publishedRankings[key]) {
     loadAdminTable();
@@ -9018,7 +9028,11 @@ function autoFillSeasonLongRankings(position) {
 // Same idea as smartLoadPositionRankings: if this position has already been
 // published for Season Long, load that instead of overwriting it.
 async function smartLoadSeasonLongRankings(position) {
-  if (restoreDraftForPosition('seasonlong', position)) return;
+  hideDraftStatus('sl-draft-status');
+  if (restoreDraftForPosition('seasonlong', position)) {
+    showDraftLoadedStatus('sl-draft-status');
+    return;
+  }
   if (publishedSeasonLong[position]) {
     loadRankTable('seasonlong');
   } else {
@@ -9136,6 +9150,7 @@ document.addEventListener('input', function (e) {
     updateAdminProbSum();
     updateSelectedProbSum('admin-rows', 'admin-selected-sum-value');
     autosaveAdminDraft();
+    markDraftSaved('admin-draft-status');
     if (e.target.classList.contains('admin-notes-input')) {
       const tr = e.target.closest('tr');
       const player = tr.querySelector('input').value.trim();
@@ -9285,6 +9300,57 @@ function autosaveAdminDraft() {
   } catch (e) {
     console.warn('Could not autosave admin draft:', e);
   }
+}
+
+// Shows/updates a small "Draft saved" confirmation line under a table's
+// action buttons, with the time it happened. Called both from the explicit
+// Save button (saveDraftNow, below) and automatically as you type (see the
+// '#admin-rows'/'#sl-rows' input listeners), so admins get visible
+// confirmation their in-progress work is safe either way.
+function markDraftSaved(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const timeStr = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  el.textContent = 'Draft saved — ' + timeStr + '. Not published yet; pick up where you left off any time.';
+  el.style.display = 'block';
+}
+
+// Hides the draft-status line — called when switching to a different
+// position (or position+week) so a leftover "Draft saved" message from
+// whatever you were just looking at doesn't linger and get misread as
+// applying to the new, different table now on screen.
+function hideDraftStatus(elId) {
+  const el = document.getElementById(elId);
+  if (el) el.style.display = 'none';
+}
+
+// Shown instead of markDraftSaved's message specifically when a saved
+// draft was just loaded back onto the screen (as opposed to just saved) —
+// e.g. reopening a position you'd left mid-edit without publishing.
+function showDraftLoadedStatus(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = 'Showing your saved draft — not published yet. Keep editing (it keeps autosaving) or click Publish when it\'s ready to go live.';
+  el.style.display = 'block';
+}
+
+// The explicit "Save" button on Weekly and Season Long Player Projections.
+// This does NOT publish anything — it just makes sure whatever's currently
+// typed into the table is captured into this browser's saved draft right
+// now (rather than waiting for the next keystroke to trigger the same
+// autosave), and gives a clear on-screen confirmation so it doesn't feel
+// like leaving the page risks losing the work. Since the draft is per
+// position (and per position+week for Weekly), coming back to this exact
+// position/week later — even after closing the browser entirely — loads
+// this saved draft automatically, before ever falling back to published or
+// seed data (see smartLoadPositionRankings / smartLoadSeasonLongRankings).
+// Note this draft lives in THIS browser only (same as the autosave it's
+// built on) — it won't follow you to a different browser or computer;
+// Publish is still the only way to make rankings visible on the site or
+// available from another device.
+function saveDraftNow(mode) {
+  autosaveAdminDraft();
+  markDraftSaved(mode === 'weekly' ? 'admin-draft-status' : 'sl-draft-status');
 }
 
 // Restores whatever was last typed, if anything was saved. Called once
