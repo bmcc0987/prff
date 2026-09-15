@@ -2318,8 +2318,9 @@ footer {
           <input class="admin-input-small" type="number" id="ros-topn" min="1" max="50" value="12">
         </div>
         <button class="trade-add-btn" style="margin-top:20px;" onclick="loadRankTable('ros')">Load existing</button>
+        <button class="trade-add-btn" style="margin-top:20px;" onclick="copySeasonLongIntoROS()">Copy from Season Long</button>
       </div>
-      <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Rankings for the rest of the season, starting from this week. Re-publish each week to keep it current.</div>
+      <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Rankings for the rest of the season, starting from this week. Re-publish each week to keep it current. Use "Copy from Season Long" to pull in the published Season Long numbers as a starting point, then adjust and publish.</div>
 
       <datalist id="ros-player-list"></datalist>
       <table class="admin-table">
@@ -7098,6 +7099,32 @@ function loadRankTable(mode) {
     for (let i = 0; i < topN; i++) addRankRow(mode);
   }
   updateRankProbSum(mode);
+}
+
+// Copies the currently PUBLISHED Season Long Player Projections for the
+// selected position straight into the Rest of Season editing grid, so you
+// have a real starting point instead of a blank table — handy since ROS
+// probabilities usually start close to the season-long numbers early on.
+// This only fills in the on-screen ROS editor; nothing goes live until you
+// click Publish on the Rest of Season tab like normal. Only Player/Team/Prob
+// come across (Season Long's Notes column has no ROS equivalent).
+function copySeasonLongIntoROS() {
+  const position = document.getElementById('ros-position').value;
+  const source = publishedSeasonLong[position];
+  if (!source || !source.rows || source.rows.length === 0) {
+    alert('There\'s no published Season Long Player Projections for ' + position + ' yet, so there\'s nothing to copy. Publish those first, then copy them over here.');
+    return;
+  }
+  const tbody = document.getElementById('ros-rows');
+  if (tbody.children.length > 0) {
+    const ok = confirm('This will replace the ' + tbody.children.length + ' row(s) currently in this Rest of Season editor with the ' + source.rows.length + ' row(s) from the published Season Long ' + position + ' Projections. Continue?');
+    if (!ok) return;
+  }
+  tbody.innerHTML = '';
+  RANK_MODE.ros.rowCount = 0;
+  source.rows.forEach(r => addRankRow('ros', r.player, r.team, r.prob));
+  document.getElementById('ros-topn').value = source.topN || 12;
+  updateRankProbSum('ros');
 }
 
 function updateRankProbSum(mode) {
