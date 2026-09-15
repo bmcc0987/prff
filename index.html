@@ -7032,26 +7032,48 @@ function updatePubSelection(uid) {
   sumEl.textContent = equation + ' = ' + sumRounded;
 }
 
+// Small notice prepended above the "Live preview" whenever one or more
+// rows got left out of a publish because their Prob % was 0 (or blank,
+// which counts the same as 0) — so excluding them is visible in the
+// moment, not a silent surprise the next time someone looks for that
+// player and can't find them.
+function zeroProbExcludedNoticeHTML(count) {
+  if (!count) return '';
+  const plural = count === 1 ? 'player was' : 'players were';
+  return '<div style="color:#8a6d3b;background:#fcf3d9;border:1px solid #f0dca0;border-radius:6px;font-family:\'Lato\',sans-serif;font-size:13px;font-weight:700;padding:10px 14px;margin-bottom:12px;">' +
+    count + ' ' + plural + ' left out of this publish because their Prob % was 0% (or blank) — a 0% probability is treated the same as removing the player.</div>';
+}
+
 async function publishAdminTable() {
   const position = document.getElementById('admin-position').value;
   const week = document.getElementById('admin-week').value;
   const topN = parseInt(document.getElementById('admin-topn').value, 10) || 12;
   const key = position + '-' + week;
 
+  // A player with a 0% probability (or a blank Prob % field, which counts
+  // the same as 0) is excluded from publishing entirely, same treatment as
+  // a blank player name — per "I want to exclude the player if given a
+  // 0%," rather than the old behavior of publishing them live showing 0%.
   const rows = [];
+  let zeroProbExcludedCount = 0;
   document.querySelectorAll('#admin-rows tr').forEach(tr => {
     const inputs = tr.querySelectorAll('input');
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
     const prob = parseFloat(inputs[2].value);
     const notes = inputs[3] ? inputs[3].value.trim() : '';
-    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob, notes });
+    if (!player) return;
+    if (!(prob > 0)) { zeroProbExcludedCount++; return; }
+    rows.push({ player, team, prob, notes });
   });
 
   if (rows.length === 0) {
     const previewWrap = document.getElementById('admin-preview-wrap');
     const preview = document.getElementById('admin-preview');
-    preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Add at least one player before publishing.</div>';
+    const msg = zeroProbExcludedCount > 0
+      ? 'Every player currently in this table has a 0% (or blank) Prob % — nothing to publish. Give at least one player a probability above 0%.'
+      : 'Add at least one player with a probability above 0% before publishing.';
+    preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">' + msg + '</div>';
     previewWrap.style.display = 'block';
     return;
   }
@@ -7074,7 +7096,7 @@ async function publishAdminTable() {
     }
   }
 
-  preview.innerHTML = buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week);
+  preview.innerHTML = zeroProbExcludedNoticeHTML(zeroProbExcludedCount) + buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week);
   previewWrap.style.display = 'block';
 
   // The homepage ticker shows Weekly Player Projections (see renderTicker()
@@ -7372,20 +7394,28 @@ async function publishRankTable(mode) {
   const topN = parseInt(document.getElementById(cfg.topNId).value, 10) || 12;
   const key = rankModeKey(mode);
 
+  // Same 0%-excludes-the-player rule as Weekly (see publishAdminTable):
+  // a 0% or blank Prob % leaves the player out of the publish entirely.
   const rows = [];
+  let zeroProbExcludedCount = 0;
   document.querySelectorAll('#' + cfg.rowsId + ' tr').forEach(tr => {
     const inputs = tr.querySelectorAll('input');
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
     const prob = parseFloat(inputs[2].value);
     const notes = (mode === 'seasonlong' && inputs[3]) ? inputs[3].value.trim() : '';
-    if (player) rows.push({ player, team, prob: isNaN(prob) ? 0 : prob, notes });
+    if (!player) return;
+    if (!(prob > 0)) { zeroProbExcludedCount++; return; }
+    rows.push({ player, team, prob, notes });
   });
 
   if (rows.length === 0) {
     const previewWrap = document.getElementById(cfg.previewWrapId);
     const preview = document.getElementById(cfg.previewId);
-    preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Add at least one player before publishing.</div>';
+    const msg = zeroProbExcludedCount > 0
+      ? 'Every player currently in this table has a 0% (or blank) Prob % — nothing to publish. Give at least one player a probability above 0%.'
+      : 'Add at least one player with a probability above 0% before publishing.';
+    preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">' + msg + '</div>';
     previewWrap.style.display = 'block';
     return;
   }
@@ -7417,7 +7447,7 @@ async function publishRankTable(mode) {
   }
 
   const label = cfg.hasWeek ? ('Week ' + document.getElementById(cfg.weekId).value + ' (Rest of Season)') : 'Season Long';
-  preview.innerHTML = buildPublishedTableHTML(position, label, topN, rows);
+  preview.innerHTML = zeroProbExcludedNoticeHTML(zeroProbExcludedCount) + buildPublishedTableHTML(position, label, topN, rows);
   previewWrap.style.display = 'block';
   // The homepage ticker shows Weekly Player Projections now, not Season
   // Long or Rest of Season (see renderTicker()) — neither mode handled by
