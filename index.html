@@ -173,7 +173,7 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 }
 .hero-content {
   position: relative; z-index: 2; width: 100%;
-  text-align: center; padding: 60px 40px 44px; max-width: 900px; margin: 0 auto;
+  text-align: center; padding: 60px 40px 100px; max-width: 900px; margin: 0 auto;
 }
 .hero-win {
   font-family: 'Bebas Neue', sans-serif;
@@ -245,17 +245,27 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
    that used to be the only copy under "Process over Results". Left-aligned
    on purpose (overriding .hero-content's centered text) since paragraph
    copy this long reads better ragged-left than centered. */
-.philosophy { position: relative; z-index: 2; width: 100%; padding: 8px 40px 40px; }
+.philosophy { position: relative; z-index: 2; width: 100%; padding: 0 40px 8px; }
 .philosophy-inner { max-width: 720px; margin: 0 auto; text-align: left; }
 .philosophy-block { padding: 40px 0; border-top: 1px solid rgba(255,255,255,0.12); }
 .philosophy-block:first-child { border-top: none; padding-top: 8px; }
+.philosophy-block:last-child { padding-bottom: 24px; }
 .philosophy-eyebrow {
   font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 900; letter-spacing: 0.14em;
   text-transform: uppercase; color: #3DB87A; margin-bottom: 10px;
 }
-.philosophy-a {
+/* Note the extra specificity here (.hero .philosophy-a, not just
+   .philosophy-a): the generic ".hero p" rule further up also matches this
+   element (it's a <p> nested inside .hero) and was winning the cascade on
+   equal specificity, applying its centered, narrower (max-width:520px,
+   margin:0 auto) treatment meant for the hero tagline. That silently
+   indented these paragraphs to the right of their own "What..." eyebrow
+   above them instead of lining up flush left with it. Overriding max-width
+   and margin here explicitly keeps this paragraph left-aligned with its
+   eyebrow regardless of ".hero p". */
+.hero .philosophy-a {
   font-family: 'Lato', sans-serif; font-size: 16px; color: rgba(255,255,255,0.82);
-  line-height: 1.75; margin: 0;
+  line-height: 1.75; margin: 0; max-width: none;
 }
 
 /* The closing statement ("If we do things the way they've always been
@@ -1016,7 +1026,7 @@ footer {
   .nav-wordmark { font-size: 15px; }
 
   /* Homepage hero */
-  .hero-content { padding: 20px 20px 28px; }
+  .hero-content { padding: 20px 20px 64px; }
   .hero-win { font-size: 40px; }
   .hero-row2 { margin-bottom: 12px; flex-wrap: wrap; }
   .hero-process, .hero-results { font-size: 46px; }
@@ -1026,8 +1036,9 @@ footer {
   .scroll-arrow { display: none; }
 
   /* Homepage philosophy section + closing band + CTA band */
-  .philosophy { padding: 8px 20px 24px; }
+  .philosophy { padding: 0 20px 8px; }
   .philosophy-block { padding: 28px 0; }
+  .philosophy-block:last-child { padding-bottom: 16px; }
   .philosophy-close-band { padding: 32px 20px 8px; }
   .cta-band { padding: 4px 20px 40px; }
 
