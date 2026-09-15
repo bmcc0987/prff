@@ -982,8 +982,8 @@ footer {
 .admin-totals-ref-rows { padding: 6px 20px 14px; max-height: 400px; overflow-y: auto; }
 .admin-totals-ref-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
 .admin-totals-ref-row span:first-child { font-size: 13px; font-weight: 700; }
-.admin-totals-ref-row span:last-child { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.85); font-family: 'SFMono-Regular', Consolas, monospace; }
-.admin-totals-ref-row.admin-totals-ref-bye span:last-child { color: rgba(255,255,255,0.35); font-style: italic; font-family: 'Lato', sans-serif; }
+.admin-totals-ref-row span:last-child { font-size: 13px; font-weight: 700; font-family: 'SFMono-Regular', Consolas, monospace; }
+.admin-totals-ref-row.admin-totals-ref-bye span:last-child { font-family: 'Lato', sans-serif; }
 @media (max-width: 900px) {
   .admin-rankings-body { flex-direction: column; }
   .admin-matchups-panel-wrap { width: 100%; flex: 0 0 auto; position: static; }
@@ -8502,13 +8502,28 @@ function renderAdminTotalsRefPanel(week) {
     panel.innerHTML = header + '<div class="admin-matchups-empty">No Team Implied Totals published for Week ' + (week || '?') + ' yet. Publish them from the Weekly Team Implied Totals tab.</div>';
     return;
   }
+  // publishedTeamTotals rows store the FULL team name (e.g. "San Francisco
+  // 49ers"), but getWeeklyTeamTierColorMap is keyed by abbreviation — same
+  // conversion renderAdminMatchupsPanel's nameColorForTeam already does —
+  // so this has to go through NFL_TEAM_ABBR before the lookup, or every
+  // team silently misses its color. Team name AND total both get the same
+  // color per row (green for a top-12 implied total, red for bottom-12,
+  // white for the middle) — the exact scheme the public Team Implied
+  // Totals page uses for its team-name column — so it reads as one
+  // consistent signal per team, not two different color systems.
   const colorMap = getWeeklyTeamTierColorMap(week);
   const scored = data.rows.filter(r => typeof r.value === 'number').sort((a, b) => b.value - a.value);
   const byes = data.rows.filter(r => r.value === 'BYE');
-  const rowHTML = (r, isBye) =>
-    '<div class="admin-totals-ref-row' + (isBye ? ' admin-totals-ref-bye' : '') + '">' +
-    '<span' + (colorMap[r.team] ? ' style="color:' + colorMap[r.team] + ';"' : '') + '>' + r.team + '</span>' +
-    '<span>' + (isBye ? 'BYE' : r.value) + '</span></div>';
+  const rowHTML = (r, isBye) => {
+    // BYE rows get the same dimmed grays as the public page's bye rows
+    // (#8a8a8a team / #6b6b6b value) instead of a tier color, since
+    // there's no number to rank them by this week.
+    const teamColor = isBye ? '#8a8a8a' : (colorMap[NFL_TEAM_ABBR[r.team]] || '#fff');
+    const valueColor = isBye ? '#6b6b6b' : teamColor;
+    return '<div class="admin-totals-ref-row' + (isBye ? ' admin-totals-ref-bye' : '') + '">' +
+      '<span style="color:' + teamColor + ';">' + r.team + '</span>' +
+      '<span style="color:' + valueColor + ';">' + (isBye ? 'BYE' : r.value) + '</span></div>';
+  };
   const rowsHtml = scored.map(r => rowHTML(r, false)).join('') + byes.map(r => rowHTML(r, true)).join('');
   panel.innerHTML = header + '<div class="admin-totals-ref-rows">' + rowsHtml + '</div>';
 }
