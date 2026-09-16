@@ -10416,6 +10416,51 @@ function populateArticleLoadSelect() {
 // belongs in it.
 const ARTICLE_ROW_DEFAULT_ORDER = ['Superforecasting', 'Roster Construction - Waivers + Trade Candidates', 'Projections Accuracy'];
 
+// A row's identity IS whatever text is saved in an article's Row field —
+// so renaming a name in ARTICLE_ROW_DEFAULT_ORDER above only changes what's
+// SUGGESTED for a NEW row; it does nothing for articles that already have
+// the old text saved (they'd otherwise silently fall into an "unrecognized
+// name" row of their own, still showing the old header). Add an entry here
+// (old text -> new text) any time an existing row gets renamed, and
+// migrateArticleRowLabels() below will fix up every already-published or
+// drafted article the moment this file loads, so the header actually
+// changes everywhere the old name was already in use — not just for
+// articles published from now on.
+const ARTICLE_ROW_RENAMES = {
+  'Waivers': 'Roster Construction - Waivers + Trade Candidates',
+  'Projections': 'Projections Accuracy',
+};
+
+// Applies ARTICLE_ROW_RENAMES to every article already sitting in memory
+// (published and draft). The renaming itself is synchronous and immediate,
+// so it's already reflected by the time renderHomepageArticles() runs right
+// after loadAppState() — only the follow-up "save the corrected value back
+// to Supabase" part is async/best-effort (deliberately not awaited by
+// callers), so a slow or failed write can't delay the page or break
+// anything else; it just means that one article's fix might not have stuck
+// in the database yet and could need this migration to run again on a
+// later visit.
+async function migrateArticleRowLabels() {
+  const changed = [];
+  [publishedArticles, draftArticles].forEach(store => {
+    Object.values(store).forEach(a => {
+      const renamed = ARTICLE_ROW_RENAMES[a.rowLabel];
+      if (renamed) { a.rowLabel = renamed; changed.push(a); }
+    });
+  });
+  if (changed.length === 0) return;
+  saveAppStateLocally();
+  if (!supabaseClient) return;
+  for (const a of changed) {
+    try {
+      const res = await supabaseClient.from('articles').update({ row_label: a.rowLabel }).eq('id', a.id);
+      if (res.error) throw res.error;
+    } catch (e) {
+      console.warn('Could not persist the renamed Row for article "' + a.id + '" to the database — it will still look right in this browser, but may need this migration to run again elsewhere:', e);
+    }
+  }
+}
+
 function populateArticleRowOptions() {
   const datalist = document.getElementById('article-row-options');
   if (!datalist) return;
@@ -10837,6 +10882,7 @@ function loadAppStateLocally() {
     if (state.publishedMatchups) Object.assign(publishedMatchups, state.publishedMatchups);
     if (state.publishedRankings) Object.assign(publishedRankings, state.publishedRankings);
     if (state.publishedROS) Object.assign(publishedROS, state.publishedROS);
+    migrateArticleRowLabels(); // not awaited — see its own comment above
   } catch (e) {
     console.warn('Could not load previously published data:', e);
   }
@@ -10935,6 +10981,12 @@ async function loadAppState() {
       if (row.status === 'published') publishedArticles[row.id] = article;
       else draftArticles[row.id] = article;
     });
+    // Fixes up any article still carrying an old, since-renamed Row value
+    // (see ARTICLE_ROW_RENAMES/migrateArticleRowLabels above) — the rename
+    // itself happens synchronously right now, so renderHomepageArticles()
+    // right after loadAppState() already shows the corrected header; not
+    // awaited, since the Supabase write-back is a best-effort background fix.
+    migrateArticleRowLabels();
 
     // Keeps the LATEST published_at seen for a given key — since a publish
     // deletes-then-inserts all rows together, they'll normally all share
