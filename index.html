@@ -348,6 +348,35 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .article-headline { font-family: 'Lato', sans-serif; font-size: 14px; font-weight: 700; color: #111; line-height: 1.4; margin-bottom: 8px; }
 .article-meta { font-family: 'Lato', sans-serif; font-size: 12px; color: #bbb; }
 
+/* Article rows (homepage + Articles page) — each row is its own named,
+   horizontally-scrollable strip of article cards (e.g. "Superforecasting",
+   "Waivers", "Projections", or any other row name typed into an article's
+   Row field in Admin). Cards keep a fixed width instead of stretching to
+   fill a grid column, since they now sit in a scrolling strip rather than
+   a 3-column grid. See renderHomepageArticles()/groupArticlesIntoRows(). */
+.article-row-section { margin-bottom: 36px; }
+.article-row-section:last-child { margin-bottom: 0; }
+.article-row-header { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 800; color: #111; margin-bottom: 14px; }
+.article-row-scroll-wrap { display: flex; align-items: center; gap: 6px; }
+.article-row-scroll {
+  flex: 1 1 auto; min-width: 0; display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden;
+  padding: 2px 2px 10px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+}
+.article-row-scroll .article-card { flex: 0 0 260px; width: 260px; scroll-snap-align: start; }
+.article-row-arrow {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; border: 1px solid #dddbd6; background: #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: #333; font-size: 18px;
+  line-height: 1; transition: background 0.15s, border-color 0.15s; padding: 0;
+}
+.article-row-arrow:hover { background: #f5f4f1; border-color: #3DB87A; }
+/* Loading-skeleton version of the same layout, shown briefly before real
+   article data arrives — kept visually consistent with the real rows. */
+.article-rows-skeleton { display: flex; gap: 16px; overflow-x: hidden; }
+.article-rows-skeleton .article-card { flex: 0 0 260px; width: 260px; }
+@media (max-width: 600px) {
+  .article-row-scroll .article-card, .article-rows-skeleton .article-card { flex: 0 0 200px; width: 200px; }
+}
+
 /* ARTICLE READER PAGE */
 .article-reader-wrap { max-width: 700px; margin: 0 auto; padding: 40px 24px 60px; }
 .article-back-link { display: inline-block; margin-bottom: 24px; font-family: 'Lato', sans-serif; font-size: 13px; color: #999; text-decoration: none; }
@@ -1473,7 +1502,7 @@ footer {
       <a class="read-btn" href="#" id="featured-article-link">Read article →</a>
     </div>
   </div>
-    <div class="articles-grid articles-grid-dynamic"><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div></div>
+    <div class="article-rows-skeleton articles-grid-dynamic"><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div></div>
 </section>
 
 <div class="divider"></div>
@@ -1515,7 +1544,7 @@ footer {
         <a class="read-btn" href="#" id="featured-article-link-page">Read article →</a>
       </div>
     </div>
-        <div class="articles-grid articles-grid-dynamic"><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div></div>
+        <div class="article-rows-skeleton articles-grid-dynamic"><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div><div class="article-card article-skeleton"><div class="article-thumb skeleton-block"></div><div class="article-body"><div class="skeleton-line" style="width:40%;"></div><div class="skeleton-line" style="width:85%;height:16px;margin-top:8px;"></div><div class="skeleton-line" style="width:55%;margin-top:8px;"></div></div></div></div>
   </section>
 </div>
 
@@ -2504,6 +2533,11 @@ footer {
         <div class="admin-field">
           <label class="auth-label">Tag</label>
           <input class="auth-input" type="text" id="article-tag" placeholder="Weekly projections" style="width:220px;">
+        </div>
+        <div class="admin-field">
+          <label class="auth-label">Row <span class="trade-optional-tag">optional</span></label>
+          <input class="auth-input" type="text" id="article-row" list="article-row-options" placeholder="e.g. Superforecasting" style="width:220px;">
+          <datalist id="article-row-options"></datalist>
         </div>
         <div class="admin-field">
           <label class="auth-label">Access</label>
@@ -10187,6 +10221,14 @@ function buildArticleReaderHTML(article) {
 async function publishArticle() {
   const title = document.getElementById('article-title').value.trim();
   const errorEl = document.getElementById('article-editor-error');
+  // Reset any styling a previous call left behind (e.g. the amber "no Row
+  // set" notice below overrides these inline) so a plain validation error
+  // always shows in its normal red, not a leftover amber.
+  errorEl.style.color = '#c0392b';
+  errorEl.style.background = '';
+  errorEl.style.border = '';
+  errorEl.style.borderRadius = '';
+  errorEl.style.padding = '';
   if (!title) {
     errorEl.textContent = 'Add a title before publishing.';
     errorEl.style.display = 'block';
@@ -10194,6 +10236,13 @@ async function publishArticle() {
   }
   errorEl.style.display = 'none';
   const tag = document.getElementById('article-tag').value.trim() || 'Analysis';
+  // Row is what groups this article into one of the horizontally-scrolling
+  // rows on the homepage/Articles page (e.g. "Superforecasting", "Waivers",
+  // "Projections", or any other row name typed in here) — separate from
+  // Tag, which is just the small label shown on the card itself. Left
+  // blank, the article won't show up in any row (see groupArticlesIntoRows)
+  // until it's given one, so a heads-up is shown rather than publishing silently.
+  const rowLabel = document.getElementById('article-row').value.trim();
   const access = document.getElementById('article-access').value;
   const author = document.getElementById('article-author').value.trim() || 'Process/Results Staff';
   const image = document.getElementById('article-image').value.trim();
@@ -10214,7 +10263,7 @@ async function publishArticle() {
   if (featured) {
     Object.values(publishedArticles).forEach(a => { if (a.id !== id) a.featured = false; });
   }
-  publishedArticles[id] = { id, title, tag, access, author, image, body, dateLabel, displayOrder, featured };
+  publishedArticles[id] = { id, title, tag, rowLabel, access, author, image, body, dateLabel, displayOrder, featured };
   // Publishing a draft promotes it — it no longer lives in the draft list.
   if (editingType === 'draft' && draftArticles[id]) delete draftArticles[id];
   saveAppStateLocally();
@@ -10226,7 +10275,7 @@ async function publishArticle() {
         if (unfeatureRes.error) throw unfeatureRes.error;
       }
       const res = await supabaseClient.from('articles').upsert({
-        id, title, tag, access, author, image: image || null, body, date_label: dateLabel, status: 'published',
+        id, title, tag, row_label: rowLabel || null, access, author, image: image || null, body, date_label: dateLabel, status: 'published',
         display_order: displayOrder, featured
       });
       if (res.error) throw res.error;
@@ -10240,6 +10289,16 @@ async function publishArticle() {
 
   document.getElementById('article-editing-id').value = id;
   document.getElementById('article-editing-type').value = 'published';
+
+  if (!rowLabel) {
+    errorEl.style.color = '#8a6d3b';
+    errorEl.style.background = '#fcf3d9';
+    errorEl.style.border = '1px solid #f0dca0';
+    errorEl.style.borderRadius = '6px';
+    errorEl.style.padding = '10px 14px';
+    errorEl.textContent = 'Published — but this article has no Row set, so it won\'t appear in any row on the homepage or Articles page until you give it one.';
+    errorEl.style.display = 'block';
+  }
 
   renderHomepageArticles();
   populateArticleLoadSelect();
@@ -10256,6 +10315,13 @@ async function publishArticle() {
 async function saveArticleDraft() {
   const title = document.getElementById('article-title').value.trim();
   const errorEl = document.getElementById('article-editor-error');
+  // Same reset as publishArticle() — clears any amber "no Row set" styling
+  // left behind from a previous publish so this shows in normal red.
+  errorEl.style.color = '#c0392b';
+  errorEl.style.background = '';
+  errorEl.style.border = '';
+  errorEl.style.borderRadius = '';
+  errorEl.style.padding = '';
   if (!title) {
     errorEl.textContent = 'Add a title before saving.';
     errorEl.style.display = 'block';
@@ -10263,6 +10329,7 @@ async function saveArticleDraft() {
   }
   errorEl.style.display = 'none';
   const tag = document.getElementById('article-tag').value.trim() || 'Analysis';
+  const rowLabel = document.getElementById('article-row').value.trim();
   const access = document.getElementById('article-access').value;
   const author = document.getElementById('article-author').value.trim() || 'Process/Results Staff';
   const image = document.getElementById('article-image').value.trim();
@@ -10278,13 +10345,13 @@ async function saveArticleDraft() {
     ? draftArticles[existingId].dateLabel
     : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  draftArticles[id] = { id, title, tag, access, author, image, body, dateLabel };
+  draftArticles[id] = { id, title, tag, rowLabel, access, author, image, body, dateLabel };
   saveAppStateLocally();
 
   if (supabaseClient) {
     try {
       const res = await supabaseClient.from('articles').upsert({
-        id, title, tag, access, author, image: image || null, body, date_label: dateLabel, status: 'draft'
+        id, title, tag, row_label: rowLabel || null, access, author, image: image || null, body, date_label: dateLabel, status: 'draft'
       });
       if (res.error) throw res.error;
     } catch (e) {
@@ -10338,6 +10405,24 @@ function populateArticleLoadSelect() {
   }
 
   select.value = current;
+  populateArticleRowOptions();
+}
+
+// The default three rows always show as suggestions even before any
+// article has used them, plus whatever other row names are already in use
+// on published or draft articles — typing a name not in this list still
+// works fine (this is just autocomplete, not a locked-down list), which is
+// how a brand new row gets created: type its name here on the article that
+// belongs in it.
+const ARTICLE_ROW_DEFAULT_ORDER = ['Superforecasting', 'Waivers', 'Projections'];
+
+function populateArticleRowOptions() {
+  const datalist = document.getElementById('article-row-options');
+  if (!datalist) return;
+  const labels = new Set(ARTICLE_ROW_DEFAULT_ORDER);
+  Object.values(publishedArticles).forEach(a => { if (a.rowLabel) labels.add(a.rowLabel); });
+  Object.values(draftArticles).forEach(a => { if (a.rowLabel) labels.add(a.rowLabel); });
+  datalist.innerHTML = Array.from(labels).map(l => '<option value="' + l.replace(/"/g, '&quot;') + '">').join('');
 }
 
 function loadArticleIntoEditor() {
@@ -10345,6 +10430,7 @@ function loadArticleIntoEditor() {
   if (!raw) {
     document.getElementById('article-title').value = '';
     document.getElementById('article-tag').value = '';
+    document.getElementById('article-row').value = '';
     document.getElementById('article-access').value = 'Free';
     document.getElementById('article-author').value = 'Process/Results Staff';
     document.getElementById('article-image').value = '';
@@ -10363,6 +10449,7 @@ function loadArticleIntoEditor() {
   const a = isDraft ? draftArticles[id] : publishedArticles[id];
   document.getElementById('article-title').value = a.title;
   document.getElementById('article-tag').value = a.tag;
+  document.getElementById('article-row').value = a.rowLabel || '';
   document.getElementById('article-access').value = a.access;
   document.getElementById('article-author').value = a.author;
   document.getElementById('article-image').value = a.image;
@@ -10501,29 +10588,105 @@ function renderHomepageArticles() {
   if (grids.length === 0) return;
   if (ids.length === 0) {
     grids.forEach(grid => {
-      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;font-family:\'Lato\',sans-serif;color:#888;">No articles published yet — check back soon.</div>';
+      // Drop the loading-skeleton class (display:flex + overflow-x:hidden,
+      // meant only for the placeholder cards shown before data arrives) —
+      // left in place, it would force whatever real content replaces it
+      // into a single clipped horizontal row instead of stacking normally.
+      grid.className = 'articles-grid-dynamic';
+      grid.innerHTML = '<div style="text-align:center;padding:30px;font-family:\'Lato\',sans-serif;color:#888;">No articles published yet — check back soon.</div>';
     });
     return;
   }
 
   const gridIds = sortedIds.filter(id => id !== featuredId);
 
+  // Groups the (non-featured) articles into named, ordered rows by whatever
+  // Row name was typed into each one's Admin editor field. The three rows
+  // you asked for (Superforecasting/Waivers/Projections) always come first,
+  // in that order, whenever at least one article currently uses them; any
+  // other row name an article was given shows up after those, in the order
+  // it was first encountered walking the already-sorted (newest/display-
+  // order-first) article list. An article with no Row set is left out of
+  // every row entirely — by design, there's no automatic catch-all bucket,
+  // since you'd rather add a new named row yourself when one's needed.
+  function groupArticlesIntoRows(idsToGroup) {
+    const idsByLabel = {};
+    const firstSeenOrder = [];
+    idsToGroup.forEach(id => {
+      const label = (publishedArticles[id].rowLabel || '').trim();
+      if (!label) return;
+      if (!idsByLabel[label]) { idsByLabel[label] = []; firstSeenOrder.push(label); }
+      idsByLabel[label].push(id);
+    });
+    const orderedLabels = ARTICLE_ROW_DEFAULT_ORDER.filter(l => idsByLabel[l])
+      .concat(firstSeenOrder.filter(l => !ARTICLE_ROW_DEFAULT_ORDER.includes(l)));
+    return orderedLabels.map(label => ({ label: label, ids: idsByLabel[label] }));
+  }
+
+  function buildArticleCard(id) {
+    const a = publishedArticles[id];
+    const tagClass = a.access === 'Pro' ? 'gray' : '';
+    const lockHtml = (a.access === 'Pro' && !contentUnlocked()) ? '<div class="lock-overlay">🔒 Unlock with Pro</div>' : '';
+    const card = document.createElement('div');
+    card.className = 'article-card';
+    card.style.cursor = 'pointer';
+    card.onclick = function () { goToArticle(id); };
+    card.innerHTML =
+      '<div class="article-thumb"><img src="' + (a.image || 'hero-photo.png') + '" alt=""></div>' +
+      '<div class="article-body"><div class="article-tag ' + tagClass + '">' + a.tag + ' · ' + a.access + '</div>' +
+      '<div class="article-headline">' + a.title + '</div>' +
+      '<div class="article-meta">' + a.dateLabel + ' · ' + estimateReadMinutes(a.body) + ' min read</div>' + lockHtml + '</div>';
+    return card;
+  }
+
+  const rows = groupArticlesIntoRows(gridIds);
+
   grids.forEach(grid => {
+    // Same reset as the empty-state branch above — strip the loading-
+    // skeleton's flex-row/hidden-overflow styling now that real rows are
+    // about to replace it.
+    grid.className = 'articles-grid-dynamic';
     grid.innerHTML = '';
-    gridIds.forEach(id => {
-      const a = publishedArticles[id];
-      const tagClass = a.access === 'Pro' ? 'gray' : '';
-      const lockHtml = (a.access === 'Pro' && !contentUnlocked()) ? '<div class="lock-overlay">🔒 Unlock with Pro</div>' : '';
-      const card = document.createElement('div');
-      card.className = 'article-card';
-      card.style.cursor = 'pointer';
-      card.onclick = function () { goToArticle(id); };
-      card.innerHTML =
-        '<div class="article-thumb"><img src="' + (a.image || 'hero-photo.png') + '" alt=""></div>' +
-        '<div class="article-body"><div class="article-tag ' + tagClass + '">' + a.tag + ' · ' + a.access + '</div>' +
-        '<div class="article-headline">' + a.title + '</div>' +
-        '<div class="article-meta">' + a.dateLabel + ' · ' + estimateReadMinutes(a.body) + ' min read</div>' + lockHtml + '</div>';
-      grid.appendChild(card);
+    if (rows.length === 0) {
+      grid.innerHTML = '<div style="text-align:center;padding:30px;font-family:\'Lato\',sans-serif;color:#888;">No articles have been placed in a row yet — set an article\'s Row in Admin to have it show up here.</div>';
+      return;
+    }
+    rows.forEach(row => {
+      const section = document.createElement('div');
+      section.className = 'article-row-section';
+
+      const header = document.createElement('div');
+      header.className = 'article-row-header';
+      header.textContent = row.label;
+      section.appendChild(header);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'article-row-scroll-wrap';
+
+      const leftBtn = document.createElement('button');
+      leftBtn.type = 'button';
+      leftBtn.className = 'article-row-arrow';
+      leftBtn.setAttribute('aria-label', 'Scroll ' + row.label + ' left');
+      leftBtn.textContent = '‹';
+
+      const scroller = document.createElement('div');
+      scroller.className = 'article-row-scroll';
+      row.ids.forEach(id => scroller.appendChild(buildArticleCard(id)));
+
+      const rightBtn = document.createElement('button');
+      rightBtn.type = 'button';
+      rightBtn.className = 'article-row-arrow';
+      rightBtn.setAttribute('aria-label', 'Scroll ' + row.label + ' right');
+      rightBtn.textContent = '›';
+
+      leftBtn.onclick = function () { scroller.scrollBy({ left: -560, behavior: 'smooth' }); };
+      rightBtn.onclick = function () { scroller.scrollBy({ left: 560, behavior: 'smooth' }); };
+
+      wrap.appendChild(leftBtn);
+      wrap.appendChild(scroller);
+      wrap.appendChild(rightBtn);
+      section.appendChild(wrap);
+      grid.appendChild(section);
     });
   });
 }
@@ -10768,7 +10931,7 @@ async function loadAppState() {
     if (artRes.error) throw artRes.error;
 
     (artRes.data || []).forEach(row => {
-      const article = { id: row.id, title: row.title, tag: row.tag, access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
+      const article = { id: row.id, title: row.title, tag: row.tag, rowLabel: row.row_label || '', access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
       if (row.status === 'published') publishedArticles[row.id] = article;
       else draftArticles[row.id] = article;
     });
