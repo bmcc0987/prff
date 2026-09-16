@@ -885,6 +885,19 @@ body.auth-gate-open nav.nav { z-index: 9998; }
 .trade-result-verdict { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: white; margin-bottom: 4px; }
 .trade-result-sub { font-family: 'Lato', sans-serif; font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 20px; }
 .trade-result-players { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+/* Start/Sit's "TEAM A 100.0% / TEAM B 0.0%" big-number row. Each side is
+   an explicit flexible column (min-width:0 lets the big percentage and
+   the "Outscored ... in N of M weeks" sentence actually shrink/wrap
+   instead of forcing the row wider than its white card) — on a narrow
+   phone this was overflowing past the card's right edge into the black
+   background around it. */
+.startsit-bignums-row { display: flex; gap: 44px; }
+.startsit-bignums-col { flex: 1 1 0; min-width: 0; }
+.startsit-big-pct { font-size: 32px; font-weight: 900; line-height: 1.15; overflow-wrap: break-word; }
+@media (max-width: 480px) {
+  .startsit-bignums-row { gap: 20px; }
+  .startsit-big-pct { font-size: 26px; }
+}
 .trade-newroster-divider { border-top: 1px solid rgba(255,255,255,0.1); margin: 28px 0 20px; }
 .trade-newroster-heading { font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #999; margin-bottom: 14px; }
 .trade-roster-pos-tag {
@@ -1188,6 +1201,7 @@ footer {
   .pub-select-sidebar { width: 100%; border-left: none; border-top: 2px solid #111; }
 
   /* Trade Analyzer — stack two-team builder to one column */
+  .trade-main-col { padding: 24px 16px; }
   .trade-cols { grid-template-columns: 1fr; gap: 20px; }
   .trade-result-players { grid-template-columns: 1fr; gap: 16px; }
   .trade-col { padding: 18px; }
@@ -2208,15 +2222,15 @@ footer {
         </div>
       </div>
       <div style="background:white; border-radius:12px; padding:24px 26px;">
-      <div id="startsit-bignums" style="display:none; gap:44px; margin-bottom:22px;">
-        <div>
+      <div id="startsit-bignums" class="startsit-bignums-row" style="display:none; margin-bottom:22px;">
+        <div class="startsit-bignums-col">
           <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="startsit-big-labelA"></div>
-          <div style="font-size:32px; font-weight:900; line-height:1.15;" id="startsit-big-pctA"></div>
+          <div class="startsit-big-pct" id="startsit-big-pctA"></div>
           <div style="font-size:12px; color:#888;" id="startsit-big-subA"></div>
         </div>
-        <div>
+        <div class="startsit-bignums-col">
           <div style="font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.03em; font-weight:700;" id="startsit-big-labelB"></div>
-          <div style="font-size:32px; font-weight:900; line-height:1.15;" id="startsit-big-pctB"></div>
+          <div class="startsit-big-pct" id="startsit-big-pctB"></div>
           <div style="font-size:12px; color:#888;" id="startsit-big-subB"></div>
         </div>
       </div>
