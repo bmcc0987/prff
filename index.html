@@ -1358,10 +1358,10 @@ footer {
 <div id="auth-gate-blur"></div>
 <div id="auth-gate-modal">
   <div class="auth-gate-box">
-    <div class="auth-gate-title">🔒 Create a Free Account to Continue</div>
-    <div class="auth-gate-sub">This feature is free with an account until 9/15/26 — create one or sign in to keep going. Upgrade to Pro to access all features of the site all season long!</div>
+    <div class="auth-gate-title">🔒 Create a Pro Account to Continue</div>
+    <div class="auth-gate-sub">Upgrade to Pro to access all features of the site all season long! Pro account starts at $4 per week, $10 per month, or $20 for the whole season!</div>
     <div class="locked-actions">
-      <a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,'signup')">Create Free Account</a>
+      <a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,'signup')">Create Pro Account</a>
       <a class="locked-signin-link" href="#" onclick="hideAuthGate(); showPage(event,'signin')">Sign In</a>
     </div>
   </div>
@@ -2765,9 +2765,9 @@ let pendingGateArticleId = null;
 
 const AUTH_GATE_CONTENT = {
   signin: {
-    title: '🔒 Create a Free Account to Continue',
-    sub: 'This feature is free with an account until 9/15/26 — create one or sign in to keep going. Upgrade to Pro to access all features of the site all season long!',
-    buttonsHTML: '<a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,\'signup\')">Create Free Account</a>' +
+    title: '🔒 Create a Pro Account to Continue',
+    sub: 'Upgrade to Pro to access all features of the site all season long! Pro account starts at $4 per week, $10 per month, or $20 for the whole season!',
+    buttonsHTML: '<a class="btn-pro" href="#" onclick="hideAuthGate(); showPage(event,\'signup\')">Create Pro Account</a>' +
                  '<a class="locked-signin-link" href="#" onclick="hideAuthGate(); showPage(event,\'signin\')">Sign In</a>',
   },
   upgrade: {
