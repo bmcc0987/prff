@@ -32,8 +32,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&family=Bebas+Neue&family=Playfair+Display:ital,wght@1,400&family=Oswald:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
+/* Guards against the whole page picking up a few pixels of side-scroll on
+   phones — the main culprit found was the closed "Saved Lineups" slide-in
+   panel on the Analyzer page (position:fixed + translateX to hide it off
+   the right edge still counts toward the page's scrollable width in some
+   browsers even though nothing is visually there). This doesn't affect any
+   of the site's intentional horizontal scrollers (article rows, admin
+   tabs, published tables) — those each scroll inside their own container,
+   not the page itself. */
+body { font-family: 'Lato', sans-serif; background: #f2f1ee; overflow-x: hidden; }
 
 /* NAV */
 .nav {
@@ -638,9 +646,16 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; }
 .trade-panel-open-btn {
   background: #111; color: #fff; border: none; border-radius: 100px;
   padding: 10px 18px; font-family: 'Lato', sans-serif; font-size: 12.5px; font-weight: 700;
-  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0; margin-left: auto;
 }
 .trade-panel-open-btn:hover { background: #2E9E63; }
+/* Numbers Mode toggle + its hint text + the "Saved Lineups" button, above
+   the two team columns. On a narrow phone these three don't fit on one
+   line — the Saved Lineups button (pushed right via margin-left:auto
+   above) would otherwise get squeezed off the edge of the screen and
+   cause the whole page to scroll horizontally. Wrapping lets the button
+   drop to its own line instead. */
+.trade-toolbar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .trade-side-panel {
   position: fixed; top: 0; right: 0; bottom: 0; height: 100vh;
   width: 360px; max-width: 88vw;
@@ -2093,10 +2108,10 @@ footer {
     <datalist id="player-list-FLEX"></datalist>
     <datalist id="rostered-players-A"></datalist>
     <datalist id="rostered-players-B"></datalist>
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+    <div class="trade-toolbar-row">
       <button type="button" id="numbers-mode-toggle" class="trade-add-btn" style="width:auto; white-space:nowrap;" onclick="toggleNumbersMode()">Numbers Mode: Off</button>
       <span style="font-family:'Lato',sans-serif; font-size:12px; color:#888;" id="numbers-mode-hint">Type shorthand like QB6, RB5, WR1, TE7.</span>
-      <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" style="margin-left:auto;" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">Saved Lineups 📁 <span id="trade-panel-toggle-count"></span></button>
+      <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">Saved Lineups 📁 <span id="trade-panel-toggle-count"></span></button>
     </div>
     <div class="trade-cols">
       <div class="trade-col">
