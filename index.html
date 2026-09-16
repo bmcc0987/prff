@@ -10414,7 +10414,7 @@ function populateArticleLoadSelect() {
 // works fine (this is just autocomplete, not a locked-down list), which is
 // how a brand new row gets created: type its name here on the article that
 // belongs in it.
-const ARTICLE_ROW_DEFAULT_ORDER = ['Superforecasting', 'Waivers', 'Projections'];
+const ARTICLE_ROW_DEFAULT_ORDER = ['Superforecasting', 'Roster Construction - Waivers + Trade Candidates', 'Projections Accuracy'];
 
 function populateArticleRowOptions() {
   const datalist = document.getElementById('article-row-options');
@@ -10602,7 +10602,7 @@ function renderHomepageArticles() {
 
   // Groups the (non-featured) articles into named, ordered rows by whatever
   // Row name was typed into each one's Admin editor field. The three rows
-  // you asked for (Superforecasting/Waivers/Projections) always come first,
+  // you asked for (see ARTICLE_ROW_DEFAULT_ORDER) always come first,
   // in that order, whenever at least one article currently uses them; any
   // other row name an article was given shows up after those, in the order
   // it was first encountered walking the already-sorted (newest/display-
