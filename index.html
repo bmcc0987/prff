@@ -3461,7 +3461,7 @@ function renderProjectionsPage() {
       const section = document.createElement('div');
       section.innerHTML = (i === 0 ? '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' : '') +
         lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
-        buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows);
+        buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows, "exportROSPositionCSV('" + position + "','" + week + "')");
       container.appendChild(section);
     });
     return;
@@ -3501,7 +3501,7 @@ function renderProjectionsPage() {
     emptyState.style.display = 'none';
     const section = document.createElement('div');
     section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.teamTotals[selectedWeek]) +
-      buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows, null, publishedMatchups[selectedWeek]);
+      buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows, 'exportWeeklyImpliedTotalsForWeekCSV', publishedMatchups[selectedWeek]);
     container.appendChild(section);
     return;
   }
@@ -3528,7 +3528,7 @@ function renderProjectionsPage() {
     const section = document.createElement('div');
     section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
       lastUpdatedBlurbHTML(publishedTimestamps.weekly[key]) +
-      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows, null, selectedWeek);
+      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows, 'exportWeeklyPositionCSV', selectedWeek);
     container.appendChild(section);
   }
 }
@@ -6932,7 +6932,13 @@ function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, 
 
   let html = '<div class="pub-table-wrap">';
   if (exportFnName) {
-    html += '<button type="button" class="export-csv-btn" onclick="' + exportFnName + '()">Export as CSV</button>';
+    // exportFnName is usually a bare function name ('exportSeasonLongPositionCSV'),
+    // but Rest of Season passes a full call with its own args (e.g.
+    // "exportROSPositionCSV('QB','5')") since several weeks can be showing
+    // for one position at once and there's no single "current week" to read
+    // from a dropdown. Only append the invoking () when it isn't already there.
+    const exportCall = exportFnName.indexOf('(') !== -1 ? exportFnName : exportFnName + '()';
+    html += '<button type="button" class="export-csv-btn" onclick="' + exportCall + '">Export as CSV</button>';
   }
   html += '<div class="pub-title">' + position + ' Probabilities to Finish in the Top 12 – ' + weekLabel + '</div>';
   if (useSeasonLong) {
@@ -7577,6 +7583,52 @@ function exportWeeklyProjectionsCSV() {
     });
   });
   downloadCSV('weekly-player-projections.csv', ['Position', 'Week', 'Player', 'Team', 'Probability (%)'], data);
+}
+
+// Single-week export used by the "Export as CSV" button on the Weekly Team
+// Implied Totals tab of the public Projections page — exports just the week
+// currently selected in that page's own dropdown, not every published week
+// (the bulk multi-week export above, exportWeeklyImpliedTotalsCSV(), stays
+// admin-only in the Export tool).
+function exportWeeklyImpliedTotalsForWeekCSV() {
+  if (!requireDownloadAccess()) return;
+  const weekSelect = document.getElementById('proj-totals-week-select');
+  const week = weekSelect ? weekSelect.value : null;
+  const data = publishedTeamTotals[week];
+  if (!data || !data.rows || data.rows.length === 0) return;
+  const rows = data.rows.map(r => [r.team, r.value]);
+  downloadCSV('weekly-implied-totals-week-' + week + '.csv', ['Team', 'Implied Total'], rows);
+}
+
+// Single position+week export used by the "Export as CSV" button on the
+// Weekly Player Projections tab of the public Projections page — exports
+// just whichever position/week combo is currently showing there (the bulk
+// all-positions/all-weeks export above, exportWeeklyProjectionsCSV(), stays
+// admin-only in the Export tool).
+function exportWeeklyPositionCSV() {
+  if (!requireDownloadAccess()) return;
+  const pos = activeWeeklyPosition;
+  const weekSelect = document.getElementById('proj-weekly-week-select');
+  const week = weekSelect ? weekSelect.value : null;
+  const data = publishedRankings[pos + '-' + week];
+  if (!data || !data.rows || data.rows.length === 0) return;
+  const rows = data.rows.map(r => [r.player, r.team, r.prob + '%']);
+  downloadCSV('weekly-' + pos.toLowerCase() + '-week-' + week + '-projections.csv', ['Player', 'Team', 'Probability (%)'], rows);
+}
+
+// Single position+week export used by the "Export as CSV" button on each
+// Rest of Season Player Projections section. Unlike Weekly/Season Long,
+// Rest of Season has no single dropdown-selected "current" week — a
+// position tab can show several published "as of Week N" sections at once —
+// so each section's button is wired with its own week baked in (see
+// buildPublishedTableHTML's exportFnName handling), e.g.
+// exportROSPositionCSV('QB','5'), rather than reading a shared dropdown.
+function exportROSPositionCSV(position, week) {
+  if (!requireDownloadAccess()) return;
+  const data = publishedROS[position + '-' + week];
+  if (!data || !data.rows || data.rows.length === 0) return;
+  const rows = data.rows.map(r => [r.player, r.team, r.prob + '%']);
+  downloadCSV('ros-' + position.toLowerCase() + '-week-' + week + '-projections.csv', ['Player', 'Team', 'Probability (%)'], rows);
 }
 
 let loadedUsersData = [];
@@ -8676,7 +8728,8 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
 
   html += '<div class="totals-pub-outer' + (hasMatchups ? ' totals-pub-outer-wide' : '') + '">';
   if (exportFnName) {
-    html += '<div class="totals-pub-exportrow"><button type="button" class="export-csv-btn-inline" onclick="' + exportFnName + '()">Export as CSV</button></div>';
+    const exportCall = exportFnName.indexOf('(') !== -1 ? exportFnName : exportFnName + '()';
+    html += '<div class="totals-pub-exportrow"><button type="button" class="export-csv-btn-inline" onclick="' + exportCall + '">Export as CSV</button></div>';
   }
   const logoHTML =
     '<svg width="26" height="26" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">' +
