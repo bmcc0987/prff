@@ -3621,10 +3621,11 @@ function renderProjectionsPage() {
     rosKeys.forEach((key, i) => {
       const [position, week] = key.split('-');
       const data = publishedROS[key];
+      const movementDeltas = getROSMovementForWeek(position, week, data.rows);
       const section = document.createElement('div');
       section.innerHTML = (i === 0 ? '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' : '') +
         lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
-        buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows, "exportROSPositionCSV('" + position + "','" + week + "')");
+        buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows, "exportROSPositionCSV('" + position + "','" + week + "')", undefined, movementDeltas);
       container.appendChild(section);
     });
     return;
@@ -7152,6 +7153,73 @@ function computeDisplayRanks(rows, getProb) {
   return ranks;
 }
 
+// Rest of Season movement indicator: for each row in `rows` (a Rest of
+// Season position/week's published rows), figures out how many spots that
+// player's rank moved compared to whichever ranking counts as "before"
+// this week — the most recently published EARLIER Rest of Season week for
+// this same position, if one's been published, otherwise that position's
+// Season Long projections (this is what covers the very first Rest of
+// Season week ever published for a position, which has no earlier Rest of
+// Season week to compare against yet).
+// Returns one entry per row in `rows.filter(r => r.player)` (i.e. aligned
+// the same way buildPublishedTableHTML's own `validRows` is), where each
+// entry is either a number or null:
+//   - a positive number means the player's rank number went DOWN, i.e.
+//     they IMPROVED (e.g. WR22 -> WR12 is +10) — shown as a green up
+//     triangle;
+//   - a negative number means their rank number went UP, i.e. they
+//     DECLINED (e.g. WR12 -> WR22 is -10) — shown as a red down triangle;
+//   - null means there's nothing to compare against for that specific
+//     player (their first time ever being ranked at this position, or
+//     no earlier Rest of Season week or Season Long data exists at all
+//     for this position yet) — no badge is shown for them.
+// Uses findTiedRank (the same competition-ranking, ties-share-a-number
+// logic used everywhere else a player's rank gets resolved, e.g.
+// resolvePlayerRank in the Trade/Team Analyzer) on both sides, sorting
+// each side by probability first rather than trusting incoming row order,
+// so this stays correct even if that ever changes.
+function getROSMovementForWeek(position, week, rows) {
+  const validRows = rows.filter(r => r.player);
+
+  const priorWeeks = Object.keys(publishedROS)
+    .filter(key => key.startsWith(position + '-'))
+    .map(key => parseInt(key.split('-')[1], 10))
+    .filter(w => !isNaN(w) && w < parseInt(week, 10));
+
+  let priorRows = null;
+  if (priorWeeks.length > 0) {
+    priorRows = publishedROS[position + '-' + Math.max(...priorWeeks)].rows;
+  } else if (publishedSeasonLong[position]) {
+    priorRows = publishedSeasonLong[position].rows;
+  }
+  if (!priorRows) return validRows.map(() => null);
+
+  const sortedCurrent = validRows.slice().sort((a, b) => b.prob - a.prob);
+  const sortedPrior = priorRows.filter(r => r.player).slice().sort((a, b) => b.prob - a.prob);
+
+  return validRows.map(r => {
+    const currentRank = findTiedRank(sortedCurrent, r.player);
+    const priorRank = findTiedRank(sortedPrior, r.player);
+    if (currentRank === -1 || priorRank === -1) return null;
+    return priorRank - currentRank;
+  });
+}
+
+// Renders the little green-up/red-down movement badge next to a player's
+// name in a Rest of Season table — see getROSMovementForWeek above for
+// what `delta` means. Returns '' (nothing) when there's no prior data for
+// this player, or when their rank genuinely didn't move at all.
+function buildRankMoveBadgeHTML(delta) {
+  if (delta === null || delta === undefined || delta === 0) return '';
+  const up = delta > 0;
+  const color = up ? '#3DB87A' : '#c0392b';
+  const arrow = up ? '▲' : '▼';
+  const sign = up ? '+' : '−';
+  return ' <span style="color:' + color + '; font-weight:800; font-size:12px; white-space:nowrap;" ' +
+    'title="' + (up ? 'Up ' : 'Down ') + Math.abs(delta) + ' spot' + (Math.abs(delta) === 1 ? '' : 's') +
+    ' since the last Rest of Season update">' + arrow + ' ' + sign + Math.abs(delta) + '</span>';
+}
+
 // `teamTierWeek` controls the Team-column highlighting: pass `true` (or
 // the string 'seasonlong') for season-long Top 12/Bottom 12 tiers, or a
 // specific week (number or string) to use THAT week's Team Implied Totals
@@ -7159,7 +7227,7 @@ function computeDisplayRanks(rows, getProb) {
 // the same week's Team Implied Totals card, the same fix already applied
 // to the Admin editor's Team column. Omit it entirely for no highlighting
 // (used by Rest of Season, which isn't tied to a single week's tiers).
-function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, teamTierWeek) {
+function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, teamTierWeek, movementDeltas) {
   const uid = 'pubtbl-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const useSeasonLong = teamTierWeek === true || teamTierWeek === 'seasonlong';
   const useWeekly = !useSeasonLong && teamTierWeek !== undefined && teamTierWeek !== null && teamTierWeek !== '';
@@ -7194,9 +7262,10 @@ function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, 
   validRows.forEach((r, i) => {
     const tierColor = teamTierColor[r.team];
     const teamStyle = tierColor ? ' style="color:' + tierColor + ';font-weight:700;"' : '';
+    const moveBadge = movementDeltas ? buildRankMoveBadgeHTML(movementDeltas[i]) : '';
     html += '<tr>' +
       '<td>' + displayRanks[i] + '</td>' +
-      '<td>' + r.player + '</td>' +
+      '<td>' + r.player + moveBadge + '</td>' +
       '<td' + teamStyle + '>' + (r.team || '') + '</td>' +
       '<td class="pub-prob-cell pub-prob-selectable" data-name="' + r.player + '" data-prob="' + r.prob + '" ' +
       'style="background:' + probToColor(r.prob) + ';" ' +
