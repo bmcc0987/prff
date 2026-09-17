@@ -1024,7 +1024,7 @@ footer {
 .pub-select-reset-hint a { color: #3DB87A; font-weight: 700; text-decoration: none; }
 .pub-select-reset-hint a:hover { text-decoration: underline; }
 .pub-title { font-family: 'Lato', sans-serif; font-size: 18px; font-weight: 900; color: #111; padding: 12px 20px 10px; border-bottom: 2px solid #111; text-align: center; }
-.pub-table-scroll { }
+.pub-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .pub-table { width: 100%; border-collapse: collapse; }
 .pub-table th {
   text-align: left; padding: 7px 20px; background: #d9d9d9; color: #111;
@@ -1037,6 +1037,11 @@ footer {
   padding: 5px 20px; font-family: 'Lato', sans-serif; font-size: 13px; color: #111;
   border-bottom: 1px solid #ddd;
 }
+/* Keep the player name (and, on Rest of Season tables, the movement
+   triangle/number next to it) from wrapping onto a second line on
+   narrow/mobile screens. If a row gets too wide to fit, the table scrolls
+   horizontally (.pub-table-scroll, above) instead of wrapping the name. */
+.pub-table td:nth-child(2) { white-space: nowrap; }
 .pub-table tr:nth-child(even) td { background: #f2f2f2; }
 .pub-prob-cell { font-weight: 700; }
 /* Rest of Season only (see buildRankMoveBadgeHTML) — a fixed nudge to the
@@ -6953,8 +6958,13 @@ function getTeamTierColorMap() {
     .filter(r => typeof r.value === 'number')
     .slice()
     .sort((a, b) => b.value - a.value);
+  // Teams tied on implied total share the same rank (competition ranking —
+  // same computeDisplayRanks logic used for player probability ranks), so a
+  // team tied for 12th is treated as rank 12 (top tier), not bumped down to
+  // 13th just because of list order.
+  const ranks = computeDisplayRanks(sorted, r => r.value);
   sorted.forEach((r, i) => {
-    const rank = i + 1;
+    const rank = ranks[i];
     const abbr = NFL_TEAM_ABBR[r.team] || r.team; // totals store full names; player/admin rows store abbreviations
     if (rank <= 12) map[abbr] = '#3DB87A';
     else if (rank >= 21) map[abbr] = '#c0392b';
@@ -7100,9 +7110,10 @@ async function downloadCheatSheetPDF() {
 
   if (publishedSeasonLongTotals && publishedSeasonLongTotals.rows && publishedSeasonLongTotals.rows.length > 0) {
     const totalsSorted = publishedSeasonLongTotals.rows.slice().sort((a, b) => b.value - a.value);
+    const totalsRanks = computeDisplayRanks(totalsSorted, r => r.value);
     const totalsBody = totalsSorted.map((r, i) => {
       const abbr = NFL_TEAM_ABBR[r.team] || r.team;
-      return [String(i + 1), r.team, abbr, r.value];
+      return [String(totalsRanks[i]), r.team, abbr, r.value];
     });
     doc.autoTable({
       startY: y,
@@ -9084,8 +9095,9 @@ function renderROSTotalsRefPanel(week) {
   const rows = Object.keys(sumByTeam)
     .map(team => ({ team, value: Math.round(sumByTeam[team] * 100) / 100 })) // trim float noise from repeated addition
     .sort((a, b) => b.value - a.value);
+  const cumulativeRanks = computeDisplayRanks(rows, r => r.value);
   const rowHTML = (r, i) => {
-    const rank = i + 1;
+    const rank = cumulativeRanks[i];
     const color = rank <= 12 ? '#3DB87A' : (rank <= 20 ? '#fff' : '#c0392b');
     return '<div class="admin-totals-ref-row">' +
       '<span style="color:' + color + ';">' + r.team + '</span>' +
@@ -9130,8 +9142,14 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   // top 12 green, next 8 neutral (default white), bottom 12+ red. Rank is
   // this list's own position, so it works identically for the matchups
   // column, which shares the same 32-team pool.
+  // Teams tied on implied total share the same rank number (standard
+  // "1-2-2-4" competition ranking — the same computeDisplayRanks logic used
+  // for every player probability table on the site), so two teams tied at
+  // 24.0 both show "12" instead of "12"/"13", and both get whichever tier
+  // color that rank earns.
+  const displayRanks = computeDisplayRanks(scored, r => r.value);
   const rankByTeam = {};
-  scored.forEach((r, i) => { rankByTeam[r.team] = i + 1; });
+  scored.forEach((r, i) => { rankByTeam[r.team] = displayRanks[i]; });
   function nameColorForRank(rank) {
     if (rank <= 12) return '#3DB87A';
     if (rank <= 20) return null; // default white — no override needed
@@ -9179,10 +9197,10 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
   scored.forEach((r, i) => {
     const t = ((r.value - minVal) / range) * 100;
     const color = scaleColor(t);
-    const nameColor = nameColorForRank(i + 1);
+    const nameColor = nameColorForRank(displayRanks[i]);
     const barPct = (r.value / maxVal) * 100;
     html += '<div class="totals-pub-row">' +
-      '<div class="totals-pub-rank">' + (i + 1) + '</div>' +
+      '<div class="totals-pub-rank">' + displayRanks[i] + '</div>' +
       '<div class="totals-pub-team"' + (nameColor ? ' style="color:' + nameColor + ';"' : '') + '>' + r.team + '</div>' +
       '<div class="totals-pub-bar-track"><div class="totals-pub-bar-fill" style="width:' + barPct + '%;background:' + color + ';"></div></div>' +
       '<div class="totals-pub-value" style="color:' + color + ';">' + r.value + '</div>' +
@@ -9439,9 +9457,13 @@ function buildTeamTierMap(week) {
   if (!data) return null;
   const scored = data.rows.filter(r => typeof r.value === 'number').sort((a, b) => b.value - a.value);
   const byes = data.rows.filter(r => r.value === 'BYE');
+  // Ties share a rank (competition ranking, same as everywhere else on the
+  // site) so a team tied for 12th counts as top tier, not bumped to mid
+  // just because of list order.
+  const ranks = computeDisplayRanks(scored, r => r.value);
   const tierByAbbr = {};
   scored.forEach((r, i) => {
-    const rank = i + 1;
+    const rank = ranks[i];
     const abbr = NFL_TEAM_ABBR[r.team];
     if (!abbr) return;
     tierByAbbr[abbr] = rank <= 12 ? 'top' : (rank <= 20 ? 'mid' : 'bottom');
@@ -9641,9 +9663,10 @@ function restoreDraftForWeeklyPosition(position, week) {
 function buildSeasonLongTeamTierMap() {
   if (!publishedSeasonLongTotals) return null;
   const scored = publishedSeasonLongTotals.rows.slice().sort((a, b) => b.value - a.value);
+  const ranks = computeDisplayRanks(scored, r => r.value);
   const tierByAbbr = {};
   scored.forEach((r, i) => {
-    const rank = i + 1;
+    const rank = ranks[i];
     const abbr = NFL_TEAM_ABBR[r.team];
     if (!abbr) return;
     tierByAbbr[abbr] = rank <= 12 ? 'top' : (rank <= 20 ? 'mid' : 'bottom');
@@ -11813,9 +11836,14 @@ function buildCheatSheetDataFromLive() {
   let top12 = [], bottom12 = [];
   if (publishedSeasonLongTotals && publishedSeasonLongTotals.rows && publishedSeasonLongTotals.rows.length > 0) {
     const sorted = publishedSeasonLongTotals.rows.slice().sort((a, b) => b.value - a.value);
+    // Tie-aware: a team tied for 12th (or 21st) is included in the same
+    // bucket as its tied counterpart, rather than one of them getting cut
+    // off purely because of list order (same ranking used on the public
+    // Team Implied Totals page).
+    const ranks = computeDisplayRanks(sorted, r => r.value);
     const abbrs = sorted.map(r => NFL_TEAM_ABBR[r.team] || r.team);
-    top12 = abbrs.slice(0, 12);
-    bottom12 = abbrs.slice(20, 32);
+    top12 = abbrs.filter((_, i) => ranks[i] <= 12);
+    bottom12 = abbrs.filter((_, i) => ranks[i] >= 21);
   }
 
   let updated = 'recently';
