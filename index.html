@@ -1039,6 +1039,12 @@ footer {
 }
 .pub-table tr:nth-child(even) td { background: #f2f2f2; }
 .pub-prob-cell { font-weight: 700; }
+/* Rest of Season only (see buildRankMoveBadgeHTML) — a fixed nudge to the
+   right so the green/red movement badge isn't glued right against the
+   player's name, without pushing it all the way to the far edge of the
+   Player column (that was tried and was too far). Adjust this one value
+   to move the badge closer to or further from the name. */
+.pub-rank-move-badge { margin-left: 22px; }
 
 /* ADMIN TABS */
 .admin-tabs { display: flex; gap: 4px; margin: 20px 0 24px; border-bottom: 1px solid #e2e0da; }
@@ -6001,9 +6007,8 @@ async function runFullRosterComparison(nameA, nameB, rosterAGroups, rosterBGroup
   const winsForWinner = fracA >= 0.5 ? compare.winsA : (compare.totalSeasons - compare.winsA);
 
   document.getElementById('trade-history-note').textContent =
-    'Ranks pulled from: ' + Array.from(sourcesUsed).join(', ') + ' projections. ' +
-    'Compares each team\'s full starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings — ' +
-    'across all 11 seasons on file (2015-2025).';
+    'Compares each team\'s full starting lineup using Rest of Season projections. Each player is designated a number according to projections (WR7, QB12, RB24, etc). ' +
+    'The tool analyzes across the past 11 seasons (2015-2025) how often those players outscored others.';
   document.getElementById('trade-history-section').style.display = 'block';
 
   document.getElementById('trade-verdict').textContent =
@@ -6592,9 +6597,8 @@ async function analyzeTrade() {
     document.getElementById('trade-history-statB').style.display = 'none';
 
     document.getElementById('trade-history-note').textContent =
-      'Ranks pulled from: ' + Array.from(historyResult.sourcesUsed).join(', ') + ' projections. ' +
-      'Compares each team\'s full post-trade starting lineup — using Rest of Season totals (current week onward) for any position with published ROS rankings — ' +
-      'across all 11 seasons on file (2015-2025).';
+      'Compares each team\'s full post-trade starting lineup using Rest of Season projections. Each player is designated a number according to projections (WR7, QB12, RB24, etc). ' +
+      'The tool analyzes across the past 11 seasons (2015-2025) how often those players outscored others.';
     historySection.style.display = 'block';
     document.getElementById('trade-verdict-sub').style.display = 'none';
 
@@ -7215,7 +7219,7 @@ function buildRankMoveBadgeHTML(delta) {
   const color = up ? '#3DB87A' : '#c0392b';
   const arrow = up ? '▲' : '▼';
   const sign = up ? '+' : '−';
-  return ' <span style="color:' + color + '; font-weight:800; font-size:12px; white-space:nowrap;" ' +
+  return ' <span class="pub-rank-move-badge" style="color:' + color + '; font-weight:800; font-size:12px; white-space:nowrap;" ' +
     'title="' + (up ? 'Up ' : 'Down ') + Math.abs(delta) + ' spot' + (Math.abs(delta) === 1 ? '' : 's') +
     ' since the last Rest of Season update">' + arrow + ' ' + sign + Math.abs(delta) + '</span>';
 }
@@ -7262,6 +7266,13 @@ function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, 
   validRows.forEach((r, i) => {
     const tierColor = teamTierColor[r.team];
     const teamStyle = tierColor ? ' style="color:' + tierColor + ';font-weight:700;"' : '';
+    // Only Rest of Season rows ever get a non-empty badge — Weekly/Season
+    // Long tables never pass movementDeltas, so buildRankMoveBadgeHTML is
+    // never even called for them and their Player cells render exactly as
+    // before. The badge's own CSS (.pub-rank-move-badge) gives it a fixed
+    // margin-left nudge away from the name, rather than the badge being
+    // glued right against it (tried a full-right-edge-of-column
+    // alignment first — that was too far, per feedback).
     const moveBadge = movementDeltas ? buildRankMoveBadgeHTML(movementDeltas[i]) : '';
     html += '<tr>' +
       '<td>' + displayRanks[i] + '</td>' +
