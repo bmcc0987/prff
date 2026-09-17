@@ -2763,6 +2763,8 @@ Use the toolbar above to add bold, italic, links, photos, YouTube videos, and su
         <button class="trade-analyze-btn" onclick="exportUsersCSV()">Export as CSV (spreadsheet)</button>
         <button class="trade-analyze-btn" onclick="sendWeek1ReminderEmail()">Email Week 1 Reminder to Free Users</button>
         <button class="trade-analyze-btn" onclick="sendWeek1ReminderToSelectedUsers()">Email Week 1 Reminder to Selected</button>
+        <button class="trade-analyze-btn" onclick="sendPaywallNoticeEmail()">Email Paywall Notice to Free Users</button>
+        <button class="trade-analyze-btn" onclick="sendPaywallNoticeToSelectedUsers()">Email Paywall Notice to Selected</button>
       </div>
       <div id="users-list-status" style="font-family:'Lato',sans-serif; font-size:14px; color:#888; margin-bottom:10px;">Click Refresh to load.</div>
       <div style="overflow-x:auto;">
@@ -4600,8 +4602,53 @@ document.addEventListener('visibilitychange', () => {
 // resolvePlayerRank's `preferWeekly` for the one place that differs).
 // Falls back to null (displayed as "Unranked") if nothing's published for
 // that player yet.
+// Searches every published table for a row matching this exact player
+// name — Rest of Season, then Season Long, then Weekly (the same source
+// order resolvePlayerRank checks by default) — and returns { pos, team,
+// value } if found, or null if this name isn't published anywhere. `value`
+// here is the row's own published probability, not a real depth-chart
+// slot — just a reasonable stand-in so a newly-published, highly-projected
+// player isn't treated as the worst player at their position when picking
+// starters (see computeOptimalLineup) the way a hardcoded 0 would be.
+function findPublishedPlayerInfo(name) {
+  for (const key of Object.keys(publishedROS)) {
+    const row = publishedROS[key].rows.find(r => r.player === name);
+    if (row) return { pos: key.split('-')[0], team: row.team, value: row.prob };
+  }
+  for (const pos of Object.keys(publishedSeasonLong)) {
+    const row = publishedSeasonLong[pos].rows.find(r => r.player === name);
+    if (row) return { pos, team: row.team, value: row.prob };
+  }
+  for (const key of Object.keys(publishedRankings)) {
+    const row = publishedRankings[key].rows.find(r => r.player === name);
+    if (row) return { pos: key.split('-')[0], team: row.team, value: row.prob };
+  }
+  return null;
+}
+
+// The single place that decides whether a typed player name is usable at
+// all, anywhere in the Trade/Team Analyzer and Start/Sit Tool.
+// playerValues (built from the hand-maintained POSITION_ROSTERS above) is
+// only a snapshot of the 2026 season rosters as they looked whenever that
+// list was last edited — rosters change constantly through a season
+// (waiver claims, call-ups, injuries creating new starters), and that list
+// only updates when someone edits POSITION_ROSTERS by hand. Without this
+// fallback, a player an admin actually published real projections for —
+// in Rest of Season, Weekly, or Season Long — could be silently unusable
+// here just because they weren't (or aren't yet) on the hardcoded list,
+// even though real projection data for them already exists and is ready
+// to use. This checks playerValues first (unchanged — keeps the existing
+// depth-chart-order "value" for FLEX/lineup tiebreaking on the
+// hardcoded-roster path), and only falls back to searching published data
+// if that misses, so publishing real projections for someone is now
+// enough on its own to make them usable everywhere, with no separate
+// roster-list maintenance required.
+function getKnownPlayerInfo(name) {
+  return playerValues[name] || findPublishedPlayerInfo(name);
+}
+
 function getPositionalFinish(name) {
-  const entry = playerValues[name];
+  const entry = getKnownPlayerInfo(name);
   if (!entry) return null;
   const week = getCurrentTradeWeek();
   const resolved = resolvePlayerRank(name, entry.pos, week);
@@ -4617,40 +4664,66 @@ let rosterSlotCounts = {
   B: { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 }
 };
 
-function populatePlayerDatalist() {
-  const list = document.getElementById('player-list');
-  if (!list || list.children.length) return;
-  Object.keys(playerValues).sort().forEach(name => {
+// Adds any of `names` that aren't already an <option> in `listEl` — safe
+// to call repeatedly on the same datalist without creating duplicates.
+function ensurePlayerDatalistOptions(listEl, names) {
+  if (!listEl) return;
+  const existing = new Set(Array.from(listEl.options).map(o => o.value));
+  names.forEach(name => {
+    if (existing.has(name)) return;
     const opt = document.createElement('option');
     opt.value = name;
-    list.appendChild(opt);
+    listEl.appendChild(opt);
+    existing.add(name);
   });
+}
+
+function populatePlayerDatalist() {
+  const list = document.getElementById('player-list');
+  if (!list) return;
+
+  // Union of the hardcoded roster (playerValues) and anything actually
+  // published that isn't already in it — see getKnownPlayerInfo's comment
+  // above for why this union exists. Rebuilt every call (cheap — a few
+  // hundred names) and diffed against each datalist's current <option>s
+  // (via ensurePlayerDatalistOptions) rather than the old one-time
+  // "already populated, skip" guard, since new names can become known at
+  // any point during the season as an admin publishes new projections.
+  // showPage('trade') calls this (via refreshTradeGate()) every time the
+  // Trade/Analyzer page is opened, so a name published since the last
+  // visit shows up the next time someone opens the page — no realtime
+  // plumbing needed for this to stay current in practice.
+  const allNames = {};
+  Object.keys(playerValues).forEach(name => { allNames[name] = playerValues[name]; });
+  [publishedROS, publishedRankings].forEach(store => {
+    Object.keys(store).forEach(key => {
+      const pos = key.split('-')[0];
+      store[key].rows.forEach(row => {
+        if (!allNames[row.player]) allNames[row.player] = { pos, team: row.team, value: row.prob };
+      });
+    });
+  });
+  Object.keys(publishedSeasonLong).forEach(pos => {
+    publishedSeasonLong[pos].rows.forEach(row => {
+      if (!allNames[row.player]) allNames[row.player] = { pos, team: row.team, value: row.prob };
+    });
+  });
+
+  const sortedAll = Object.keys(allNames).sort();
+  ensurePlayerDatalistOptions(list, sortedAll);
 
   // Position-filtered datalists, so a QB slot only suggests QBs, etc.
   const byPos = { QB: [], WR: [], RB: [], TE: [] };
-  Object.keys(playerValues).sort().forEach(name => {
-    const pos = playerValues[name].pos;
+  sortedAll.forEach(name => {
+    const pos = allNames[name].pos;
     if (byPos[pos]) byPos[pos].push(name);
   });
   ['QB', 'WR', 'RB', 'TE'].forEach(pos => {
-    const posList = document.getElementById('player-list-' + pos);
-    if (!posList || posList.children.length) return;
-    byPos[pos].forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      posList.appendChild(opt);
-    });
+    ensurePlayerDatalistOptions(document.getElementById('player-list-' + pos), byPos[pos]);
   });
 
   // FLEX suggests RB/WR/TE combined.
-  const flexList = document.getElementById('player-list-FLEX');
-  if (flexList && !flexList.children.length) {
-    byPos.RB.concat(byPos.WR, byPos.TE).sort().forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      flexList.appendChild(opt);
-    });
-  }
+  ensurePlayerDatalistOptions(document.getElementById('player-list-FLEX'), byPos.RB.concat(byPos.WR, byPos.TE).sort());
 }
 
 function addPlayerRow(side, type) {
@@ -5486,8 +5559,9 @@ function toPlayerObjects(names) {
       // analyzeTrade, which numbers-mode entries never actually reach).
       return { name: parsed.label, pos: parsed.pos, rank: parsed.rank, value: 0, numbersLabel: parsed.label };
     }
-    if (!playerValues[raw]) return null;
-    return { name: raw, pos: playerValues[raw].pos, value: playerValues[raw].value, numbersLabel: null };
+    const info = getKnownPlayerInfo(raw);
+    if (!info) return null;
+    return { name: raw, pos: info.pos, value: info.value, numbersLabel: null };
   }).filter(Boolean);
 }
 
@@ -5575,8 +5649,9 @@ function playersByGroupFromRoster(side) {
         result[groupKey].push({ name: parsed.label, pos: parsed.pos, rank: parsed.rank, value: 0, group: groupKey, numbersLabel: parsed.label });
         return;
       }
-      if (!playerValues[raw]) return; // unrecognized name — skip rather than crash
-      result[groupKey].push({ name: raw, pos: playerValues[raw].pos, value: playerValues[raw].value, group: groupKey, numbersLabel: null });
+      const info = getKnownPlayerInfo(raw);
+      if (!info) return; // unrecognized name (not on the roster list AND not published anywhere) — skip rather than crash
+      result[groupKey].push({ name: raw, pos: info.pos, value: info.value, group: groupKey, numbersLabel: null });
     });
   });
   return result;
@@ -7954,6 +8029,109 @@ async function sendWeek1ReminderToSelectedUsers() {
     return;
   }
   await postWeek1ReminderBatches(recipients, statusEl, 'selected user(s)');
+}
+
+// One-off, admin-triggered mass email to every free-tier account holder,
+// telling them the free-access period has now ended (the September 15
+// PAYWALL_CUTOFF has already passed) and that an active paid subscription
+// is now required to keep using the site's features, with a link to
+// /upgrade. This is a deliberate follow-up to the Week 1 reminder above —
+// that one warned free access was ending soon; this one is for once it
+// already has.
+//
+// Structured identically to postWeek1ReminderBatches/sendWeek1ReminderEmail
+// above (same batching-in-40s approach, same !isPro filter sourced from
+// loadedUsersData, same confirm-before-sending safety check) but posts to
+// its own separate Edge Function (send-paywall-notice-email) with its own
+// separate email content, kept as a fully separate function rather than
+// sharing code with the Week 1 path so that the already-tested Week 1
+// flow can't be affected by this addition.
+async function postPaywallNoticeBatches(recipients, statusEl, recipientLabel) {
+  const BATCH_SIZE = 40;
+  const batches = [];
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    batches.push(recipients.slice(i, i + BATCH_SIZE));
+  }
+
+  let sentTotal = 0;
+  const failedTotal = [];
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData.session.access_token;
+
+    for (let i = 0; i < batches.length; i++) {
+      statusEl.textContent = 'Sending batch ' + (i + 1) + ' of ' + batches.length + ' (' + sentTotal + ' sent so far)…';
+      statusEl.style.color = '#888';
+      const res = await fetch(SUPABASE_URL + '/functions/v1/send-paywall-notice-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken,
+        },
+        body: JSON.stringify({ recipients: batches[i] }),
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      sentTotal += result.sent;
+      if (result.failed && result.failed.length) failedTotal.push(...result.failed);
+    }
+    statusEl.textContent = 'Sent to ' + sentTotal + ' of ' + recipients.length + ' ' + recipientLabel + '.' +
+      (failedTotal.length ? ' ' + failedTotal.length + ' failed — see browser console for details.' : '');
+    statusEl.style.color = failedTotal.length ? '#c0392b' : '#3DB87A';
+    if (failedTotal.length) console.warn('Paywall notice email failures:', failedTotal);
+  } catch (e) {
+    statusEl.textContent = 'Stopped after sending ' + sentTotal + ' of ' + recipients.length + ' — error: ' + e.message;
+    statusEl.style.color = '#c0392b';
+  }
+}
+
+async function sendPaywallNoticeEmail() {
+  const statusEl = document.getElementById('users-list-status');
+  if (!currentUser || !currentUser.isAdmin || !supabaseClient) return;
+  if (loadedUsersData.length === 0) {
+    alert('Click Refresh first to load the user list.');
+    return;
+  }
+  const recipients = loadedUsersData
+    .filter(u => !u.isPro)
+    .map(u => ({ email: u.email, firstName: u.firstName }));
+  if (recipients.length === 0) {
+    alert('No free-tier users to email — everyone in the loaded list is already Pro.');
+    return;
+  }
+  if (!confirm('Send the "free access has ended, subscribe to keep using PRFFBall" email to ' + recipients.length + ' free-tier user(s)? This cannot be undone.')) {
+    return;
+  }
+  await postPaywallNoticeBatches(recipients, statusEl, 'free-tier users');
+}
+
+// "Email Paywall Notice to Selected" — same email, same endpoint, but the
+// recipient list comes from whichever checkboxes are ticked in the table
+// instead of the automatic !isPro filter. This intentionally does NOT
+// exclude Pro users — checking a box is an explicit, individual choice by
+// the admin, so it overrides the usual free-tier-only rule on purpose
+// (e.g. for a one-off resend to someone specific, Pro or not).
+async function sendPaywallNoticeToSelectedUsers() {
+  const statusEl = document.getElementById('users-list-status');
+  if (!currentUser || !currentUser.isAdmin || !supabaseClient) return;
+  if (loadedUsersData.length === 0) {
+    alert('Click Refresh first to load the user list.');
+    return;
+  }
+  const checked = Array.from(document.querySelectorAll('#users-list-rows .user-select-checkbox:checked'));
+  if (checked.length === 0) {
+    alert('Check the box next to at least one account first.');
+    return;
+  }
+  const recipients = checked
+    .map(cb => loadedUsersData[Number(cb.dataset.idx)])
+    .filter(Boolean)
+    .map(u => ({ email: u.email, firstName: u.firstName }));
+  const names = recipients.map(r => r.firstName || r.email).join(', ');
+  if (!confirm('Send the paywall notice email to ' + recipients.length + ' selected account(s) — ' + names + '? This cannot be undone.')) {
+    return;
+  }
+  await postPaywallNoticeBatches(recipients, statusEl, 'selected user(s)');
 }
 
 function exportUsersCSV() {
