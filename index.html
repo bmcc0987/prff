@@ -1137,6 +1137,16 @@ footer {
 .totals-pub-value { width: 56px; flex-shrink: 0; text-align: right; font-size: 15px; font-weight: 800; }
 .totals-pub-bye .totals-pub-value { color: #6b6b6b; }
 .totals-pub-bye .totals-pub-team { color: #8a8a8a; }
+/* Weekly Team Implied Totals movement badge (see getTeamTotalsMovementForWeek
+   / buildTeamMoveBadgeHTML) — a fixed-width column of its own between the
+   team name and the bar, rather than appended inside .totals-pub-team,
+   because that div clips overflow with an ellipsis and would just cut the
+   badge off. Fixed width (rather than sizing to content) keeps every row's
+   bar starting at the same x-position whether or not that row has a badge;
+   overflow stays visible so an unusually large two-digit delta is never
+   hard-clipped, just allowed to slightly overlap the bar next to it. */
+.totals-pub-move { width: 48px; flex-shrink: 0; margin-right: 6px; overflow: visible; }
+.totals-pub-move-badge { font-weight: 800; font-size: 12px; white-space: nowrap; }
 /* ============================================================
    MOBILE NAV (hamburger + slide-down menu)
    ============================================================ */
@@ -1207,6 +1217,8 @@ footer {
   .pub-title { font-size: 17px; }
   .totals-pub-title { font-size: 19px; }
   .totals-pub-team { width: 110px; font-size: 13px; }
+  .totals-pub-move { width: 34px; margin-right: 4px; }
+  .totals-pub-move-badge { font-size: 10px; }
   .totals-pub-bar-track { min-width: 40px; }
   .pub-table-flex { flex-direction: column; }
   .pub-select-sidebar { width: 100%; border-left: none; border-top: 2px solid #111; }
@@ -3675,8 +3687,9 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
+    const totalsMovement = getTeamTotalsMovementForWeek(selectedWeek, data.rows);
     section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.teamTotals[selectedWeek]) +
-      buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows, 'exportWeeklyImpliedTotalsForWeekCSV', publishedMatchups[selectedWeek]);
+      buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows, 'exportWeeklyImpliedTotalsForWeekCSV', publishedMatchups[selectedWeek], totalsMovement);
     container.appendChild(section);
     return;
   }
@@ -3701,9 +3714,10 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
+    const weeklyMovement = getWeeklyMovementForWeek(activeWeeklyPosition, selectedWeek, data.rows);
     section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
       lastUpdatedBlurbHTML(publishedTimestamps.weekly[key]) +
-      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows, 'exportWeeklyPositionCSV', selectedWeek);
+      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek, data.topN, data.rows, 'exportWeeklyPositionCSV', selectedWeek, weeklyMovement, "this week's first publish");
     container.appendChild(section);
   }
 }
@@ -6652,6 +6666,16 @@ async function analyzeTrade() {
 // refresh. A live site would save these to the database (e.g. Supabase) so
 // they persist and can actually be read by the public Projections page.
 const publishedRankings = {}; // key "QB-4" -> { topN, rows: [{player, team, prob}] }
+// key "QB-4" -> { rows: [{player, team, prob}] } — a frozen copy of whatever
+// was in publishedRankings the very FIRST time this position/week was ever
+// published. Every later republish of the same position/week overwrites
+// publishedRankings[key] as usual, but this snapshot is written once and
+// never touched again (see the "isFirstPublishThisWeek" guard in
+// publishAdminTable) — it's what getWeeklyMovementForWeek compares the
+// current rows against, so the Weekly Player Projections triangle/number
+// badges always measure movement from this week's original publish, not
+// from whichever version came immediately before the current one.
+const openingWeeklyRankings = {};
 let adminRowCount = 0;
 
 // Fetched once per admin session — RLS on player_notes means this only
@@ -7221,18 +7245,113 @@ function getROSMovementForWeek(position, week, rows) {
 }
 
 // Renders the little green-up/red-down movement badge next to a player's
-// name in a Rest of Season table — see getROSMovementForWeek above for
-// what `delta` means. Returns '' (nothing) when there's no prior data for
-// this player, or when their rank genuinely didn't move at all.
-function buildRankMoveBadgeHTML(delta) {
+// (or team's) name — see getROSMovementForWeek above for what `delta`
+// means. Returns '' (nothing) when there's no prior data to compare
+// against, or when the rank genuinely didn't move at all. `sinceLabel` is
+// the trailing phrase in the tooltip describing what's being compared
+// against — defaults to the original Rest of Season wording so every
+// existing call site (which never passed a second argument) keeps showing
+// exactly the same tooltip it always has; callers comparing against a
+// week's opening snapshot (see getWeeklyMovementForWeek and
+// getTeamTotalsMovementForWeek) pass their own label instead.
+function buildRankMoveBadgeHTML(delta, sinceLabel) {
   if (delta === null || delta === undefined || delta === 0) return '';
+  const label = sinceLabel || 'the last Rest of Season update';
   const up = delta > 0;
   const color = up ? '#3DB87A' : '#c0392b';
   const arrow = up ? '▲' : '▼';
   const sign = up ? '+' : '−';
   return ' <span class="pub-rank-move-badge" style="color:' + color + '; font-weight:800; font-size:12px; white-space:nowrap;" ' +
     'title="' + (up ? 'Up ' : 'Down ') + Math.abs(delta) + ' spot' + (Math.abs(delta) === 1 ? '' : 's') +
-    ' since the last Rest of Season update">' + arrow + ' ' + sign + Math.abs(delta) + '</span>';
+    ' since ' + label + '">' + arrow + ' ' + sign + Math.abs(delta) + '</span>';
+}
+
+// Weekly Player Projections movement indicator: for each row in `rows` (a
+// Weekly Player Projections position/week's published rows), figures out
+// how many spots that player's rank moved compared to the very FIRST time
+// this exact position/week was ever published (its "opening" snapshot —
+// see openingWeeklyRankings above), no matter how many times it's been
+// republished since. This is a deliberately different comparison rule than
+// getROSMovementForWeek's "compare to the most recent earlier week": per
+// "The changes will reflect the change from the first time the totals are
+// published on the week," every later republish within the same week keeps
+// comparing back to that one original opening snapshot, not to whichever
+// version was published immediately before it — e.g. a player who opens at
+// #12, gets republished to #9 (badge: green +3), then republished again to
+// #10 still shows green +2 (measured against the original #12, not the
+// intermediate #9).
+// Returns one entry per row in `rows.filter(r => r.player)`, aligned the
+// same way buildPublishedTableHTML's own `validRows` is (see
+// getROSMovementForWeek's comment for what each entry means: positive =
+// improved/green up triangle, negative = declined/red down triangle, null =
+// nothing to compare, e.g. no opening snapshot exists yet for this
+// position/week, or this specific player wasn't in it).
+function getWeeklyMovementForWeek(position, week, rows) {
+  const validRows = rows.filter(r => r.player);
+  const opening = openingWeeklyRankings[position + '-' + week];
+  if (!opening) return validRows.map(() => null);
+
+  const sortedCurrent = validRows.slice().sort((a, b) => b.prob - a.prob);
+  const sortedOpening = opening.rows.filter(r => r.player).slice().sort((a, b) => b.prob - a.prob);
+
+  return validRows.map(r => {
+    const currentRank = findTiedRank(sortedCurrent, r.player);
+    const openingRank = findTiedRank(sortedOpening, r.player);
+    if (currentRank === -1 || openingRank === -1) return null;
+    return openingRank - currentRank;
+  });
+}
+
+// Weekly Team Implied Totals movement indicator: same "compare to this
+// week's opening snapshot" rule as getWeeklyMovementForWeek above, but for
+// team implied totals instead of player rankings (see openingTeamTotals).
+// Returns a plain object keyed by team name — not an array aligned to
+// `rows` — because buildPublishedTotalsHTML always re-sorts its own rows by
+// value before rendering rather than trusting incoming order, so a
+// team-name lookup is the only alignment-safe way to hand deltas back to
+// it. A team with no entry in the returned object (rather than an explicit
+// null) means there's nothing to compare — no opening snapshot exists yet
+// for this week, or this team wasn't part of it (e.g. it was on a BYE at
+// the time of the opening publish).
+function getTeamTotalsMovementForWeek(week, rows) {
+  const opening = openingTeamTotals[week];
+  if (!opening) return {};
+
+  const currentScored = rows.filter(r => typeof r.value === 'number').sort((a, b) => b.value - a.value);
+  const openingScored = opening.rows.filter(r => typeof r.value === 'number').sort((a, b) => b.value - a.value);
+  const currentRanks = computeDisplayRanks(currentScored, r => r.value);
+  const openingRanks = computeDisplayRanks(openingScored, r => r.value);
+
+  const openingRankByTeam = {};
+  openingScored.forEach((r, i) => { openingRankByTeam[r.team] = openingRanks[i]; });
+
+  const deltas = {};
+  currentScored.forEach((r, i) => {
+    const openingRank = openingRankByTeam[r.team];
+    if (openingRank === undefined) return; // wasn't in the opening snapshot — nothing to compare
+    deltas[r.team] = openingRank - currentRanks[i];
+  });
+  return deltas;
+}
+
+// Renders the Weekly Team Implied Totals movement badge — see
+// getTeamTotalsMovementForWeek for what `delta` means. This is a separate
+// function from buildRankMoveBadgeHTML (rather than reusing it) because it
+// renders into its own dedicated flex column (.totals-pub-move, see that
+// CSS rule's comment) instead of sitting inline right after a name, so it
+// doesn't want that function's baked-in leading space and margin-left
+// nudge — those were sized for the Rest of Season table's very different
+// layout. Returns '' when there's nothing to show, same as
+// buildRankMoveBadgeHTML.
+function buildTeamMoveBadgeHTML(delta) {
+  if (delta === null || delta === undefined || delta === 0) return '';
+  const up = delta > 0;
+  const color = up ? '#3DB87A' : '#c0392b';
+  const arrow = up ? '▲' : '▼';
+  const sign = up ? '+' : '−';
+  return '<span class="totals-pub-move-badge" style="color:' + color + ';" ' +
+    'title="' + (up ? 'Up ' : 'Down ') + Math.abs(delta) + ' spot' + (Math.abs(delta) === 1 ? '' : 's') +
+    ' since this week\'s first publish">' + arrow + ' ' + sign + Math.abs(delta) + '</span>';
 }
 
 // `teamTierWeek` controls the Team-column highlighting: pass `true` (or
@@ -7242,7 +7361,7 @@ function buildRankMoveBadgeHTML(delta) {
 // the same week's Team Implied Totals card, the same fix already applied
 // to the Admin editor's Team column. Omit it entirely for no highlighting
 // (used by Rest of Season, which isn't tied to a single week's tiers).
-function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, teamTierWeek, movementDeltas) {
+function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, teamTierWeek, movementDeltas, movementSinceLabel) {
   const uid = 'pubtbl-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const useSeasonLong = teamTierWeek === true || teamTierWeek === 'seasonlong';
   const useWeekly = !useSeasonLong && teamTierWeek !== undefined && teamTierWeek !== null && teamTierWeek !== '';
@@ -7284,7 +7403,7 @@ function buildPublishedTableHTML(position, weekLabel, topN, rows, exportFnName, 
     // margin-left nudge away from the name, rather than the badge being
     // glued right against it (tried a full-right-edge-of-column
     // alignment first — that was too far, per feedback).
-    const moveBadge = movementDeltas ? buildRankMoveBadgeHTML(movementDeltas[i]) : '';
+    const moveBadge = movementDeltas ? buildRankMoveBadgeHTML(movementDeltas[i], movementSinceLabel) : '';
     html += '<tr>' +
       '<td>' + displayRanks[i] + '</td>' +
       '<td>' + r.player + moveBadge + '</td>' +
@@ -7413,6 +7532,18 @@ async function publishAdminTable() {
 
   publishedRankings[key] = { topN, rows };
   publishedTimestamps.weekly[key] = new Date().toISOString();
+
+  // Save this position/week's "opening" snapshot the first time it's ever
+  // published (see openingWeeklyRankings and getWeeklyMovementForWeek) —
+  // every later republish of this same position/week keeps its movement
+  // badges anchored to this original version, not to whichever version was
+  // published immediately before it. Only set once per key: a position/week
+  // that already has an opening snapshot (from earlier this session, or
+  // loaded from Supabase on page load) is left untouched.
+  const isFirstPublishThisWeek = !openingWeeklyRankings[key];
+  if (isFirstPublishThisWeek) {
+    openingWeeklyRankings[key] = { rows: rows.map(r => ({ player: r.player, team: r.team, prob: r.prob })) };
+  }
   saveAppStateLocally();
   const previewWrap = document.getElementById('admin-preview-wrap');
   const preview = document.getElementById('admin-preview');
@@ -7421,6 +7552,22 @@ async function publishAdminTable() {
       await supabaseReplaceRows('weekly_rankings', { pos: position, week: Number(week) },
         rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN })));
       await publishNotesForRows('weekly', position, Number(week), rows);
+      // Opening-snapshot table: written once per position/week and never
+      // touched again after that, unlike the delete-then-replace pattern
+      // above. An upsert with ignoreDuplicates is what makes this
+      // race-safe (e.g. two admin tabs publishing the same brand-new
+      // position/week around the same moment) without a separate
+      // "does a row already exist" check first — whichever publish's rows
+      // land first wins, and every later one is silently a no-op for rows
+      // that already exist. Requires the opening_weekly_rankings table
+      // (see CHANGELOG for the exact SQL) — if that table doesn't exist yet,
+      // this just logs a warning and the rest of the publish still succeeds.
+      if (isFirstPublishThisWeek) {
+        const { error: openErr } = await supabaseClient.from('opening_weekly_rankings')
+          .upsert(rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN })),
+            { onConflict: 'pos,week,player', ignoreDuplicates: true });
+        if (openErr) console.warn('Could not save the opening snapshot for ' + key + ' (movement badges may be off until this succeeds):', openErr);
+      }
     } catch (e) {
       console.error('Supabase publish failed:', e);
       preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Saved locally, but publishing to the database failed: ' + (e.message || e) + '</div>';
@@ -7429,7 +7576,8 @@ async function publishAdminTable() {
     }
   }
 
-  preview.innerHTML = zeroProbExcludedNoticeHTML(zeroProbExcludedCount) + buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week);
+  preview.innerHTML = zeroProbExcludedNoticeHTML(zeroProbExcludedCount) +
+    buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week, getWeeklyMovementForWeek(position, week, rows), "this week's first publish");
   previewWrap.style.display = 'block';
 
   // The homepage ticker shows Weekly Player Projections (see renderTicker()
@@ -8752,6 +8900,15 @@ Object.keys(POSITION_ROSTERS).forEach(pos => {
 });
 
 const publishedTeamTotals = {}; // key "week" -> { rows: [{team, value}] } — value is a number or "BYE"
+// key "week" -> { rows: [{team, value}] } — a frozen copy of whatever was in
+// publishedTeamTotals the very FIRST time this week's Team Implied Totals
+// was ever published. Same idea as openingWeeklyRankings above, just for
+// team totals instead of player rankings: written once (see the
+// "isFirstPublishThisWeek" guard in publishAdminTotalsTable), never
+// overwritten by later republishes, and used by getTeamTotalsMovementForWeek
+// to anchor the Weekly Team Implied Totals triangle/number badges to this
+// week's original publish.
+const openingTeamTotals = {};
 let publishedMatchups = {}; // key "week" -> [{teamA, teamB, gameTotal, spreadA, spreadB, totalA, totalB}, ...]
 
 // ==================== MATCHUP BUILDER (admin) ====================
@@ -9130,7 +9287,7 @@ function renderAdminMatchupsPanel(week) {
 // Renders the full Team Implied Totals card. When matchupsForWeek is
 // passed (non-empty), the card gets a second, right-hand column showing
 // real game pairings — merged into the SAME card, not a separate box.
-function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek) {
+function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek, movementByTeam) {
   const scored = rows.filter(r => typeof r.value === 'number').sort((a, b) => b.value - a.value);
   const byes = rows.filter(r => r.value === 'BYE');
   const maxVal = scored.length ? scored[0].value : 1;
@@ -9199,9 +9356,16 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek)
     const color = scaleColor(t);
     const nameColor = nameColorForRank(displayRanks[i]);
     const barPct = (r.value / maxVal) * 100;
+    // Only Weekly Team Implied Totals ever passes movementByTeam — Season
+    // Long Team Totals never does, so buildTeamMoveBadgeHTML is never even
+    // called for it and its rows render exactly as before (no
+    // .totals-pub-move column at all, since the string concatenated in is
+    // simply '' when movementByTeam itself is falsy).
+    const moveBadge = movementByTeam ? buildTeamMoveBadgeHTML(movementByTeam[r.team]) : '';
     html += '<div class="totals-pub-row">' +
       '<div class="totals-pub-rank">' + displayRanks[i] + '</div>' +
       '<div class="totals-pub-team"' + (nameColor ? ' style="color:' + nameColor + ';"' : '') + '>' + r.team + '</div>' +
+      (movementByTeam ? '<div class="totals-pub-move">' + moveBadge + '</div>' : '') +
       '<div class="totals-pub-bar-track"><div class="totals-pub-bar-fill" style="width:' + barPct + '%;background:' + color + ';"></div></div>' +
       '<div class="totals-pub-value" style="color:' + color + ';">' + r.value + '</div>' +
       '</div>';
@@ -9257,6 +9421,18 @@ async function publishAdminTotalsTable() {
   publishedTimestamps.teamTotals[week] = new Date().toISOString();
   const matchupRows = collectMatchupsForPublish();
   publishedMatchups[week] = matchupRows;
+
+  // Save this week's "opening" snapshot the first time Team Implied Totals
+  // is ever published for it (see openingTeamTotals and
+  // getTeamTotalsMovementForWeek) — every later republish of the same week
+  // keeps its movement badges anchored to this original version, not to
+  // whichever version was published immediately before it. Only set once
+  // per week: a week that already has an opening snapshot (from earlier
+  // this session, or loaded from Supabase on page load) is left untouched.
+  const isFirstPublishThisWeek = !openingTeamTotals[week];
+  if (isFirstPublishThisWeek) {
+    openingTeamTotals[week] = { rows: rows.map(r => ({ team: r.team, value: r.value })) };
+  }
   saveAppStateLocally();
   const previewWrap = document.getElementById('admintotals-preview-wrap');
   const preview = document.getElementById('admintotals-preview');
@@ -9272,6 +9448,21 @@ async function publishAdminTotalsTable() {
           week: Number(week), matchup_index: m.matchupIndex, team_a: m.teamA, team_b: m.teamB,
           game_total: m.gameTotal, spread_a: m.spreadA, spread_b: m.spreadB, total_a: m.totalA, total_b: m.totalB,
         })));
+      // Opening-snapshot table: written once per week and never touched
+      // again after that, unlike the delete-then-replace pattern above. An
+      // upsert with ignoreDuplicates makes this race-safe without a
+      // separate "does a row already exist" check — whichever publish's
+      // rows land first wins, and any later one is silently a no-op for
+      // rows that already exist. Requires the opening_team_totals table
+      // (see CHANGELOG for the exact SQL) — if that table doesn't exist
+      // yet, this just logs a warning and the rest of the publish still
+      // succeeds.
+      if (isFirstPublishThisWeek) {
+        const { error: openErr } = await supabaseClient.from('opening_team_totals')
+          .upsert(rows.map(r => ({ week: Number(week), team: r.team, value: r.value === 'BYE' ? null : r.value })),
+            { onConflict: 'week,team', ignoreDuplicates: true });
+        if (openErr) console.warn('Could not save the opening snapshot for Week ' + week + ' (movement badges may be off until this succeeds):', openErr);
+      }
     } catch (e) {
       console.error('Supabase publish failed:', e);
       preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Saved locally, but publishing to the database failed: ' + (e.message || e) + '</div>';
@@ -9280,7 +9471,7 @@ async function publishAdminTotalsTable() {
     }
   }
 
-  preview.innerHTML = buildPublishedTotalsHTML('Week ' + week, rows, null, matchupRows);
+  preview.innerHTML = buildPublishedTotalsHTML('Week ' + week, rows, null, matchupRows, getTeamTotalsMovementForWeek(week, rows));
   previewWrap.style.display = 'block';
 
   // Jump to Position rankings for this week. IMPORTANT: use
@@ -11345,6 +11536,8 @@ function saveAppStateLocally() {
       publishedMatchups,
       publishedRankings,
       publishedROS,
+      openingTeamTotals,
+      openingWeeklyRankings,
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -11365,6 +11558,8 @@ function loadAppStateLocally() {
     if (state.publishedMatchups) Object.assign(publishedMatchups, state.publishedMatchups);
     if (state.publishedRankings) Object.assign(publishedRankings, state.publishedRankings);
     if (state.publishedROS) Object.assign(publishedROS, state.publishedROS);
+    if (state.openingTeamTotals) Object.assign(openingTeamTotals, state.openingTeamTotals);
+    if (state.openingWeeklyRankings) Object.assign(openingWeeklyRankings, state.openingWeeklyRankings);
     migrateArticleRowLabels(); // not awaited — see its own comment above
   } catch (e) {
     console.warn('Could not load previously published data:', e);
@@ -11448,7 +11643,7 @@ async function loadAppState() {
     return;
   }
   try {
-    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes] = await Promise.all([
+    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes] = await Promise.all([
       supabaseClient.from('articles').select('*'),
       supabaseClient.from('season_long_rankings').select('*'),
       supabaseClient.from('season_long_totals').select('*'),
@@ -11456,6 +11651,16 @@ async function loadAppState() {
       supabaseClient.from('ros_rankings').select('*'),
       supabaseClient.from('weekly_team_totals').select('*'),
       supabaseClient.from('weekly_matchups').select('*'),
+      // These two tables back the Weekly Team Implied Totals / Weekly Player
+      // Projections movement badges (see openingTeamTotals,
+      // openingWeeklyRankings). If they haven't been created yet (see
+      // CHANGELOG for the exact SQL), Supabase just returns an error on
+      // these two queries — same as any other missing table — rather than
+      // rejecting the whole Promise.all, so the rest of the site's data
+      // still loads normally; the two blocks below already guard on
+      // `.error` before touching their results.
+      supabaseClient.from('opening_weekly_rankings').select('*'),
+      supabaseClient.from('opening_team_totals').select('*'),
     ]);
     if (artRes.error) throw artRes.error;
 
@@ -11533,6 +11738,25 @@ async function loadAppState() {
         });
       });
       Object.assign(publishedMatchups, byWeekMatchups);
+    }
+
+    if (!openWkRankRes.error) {
+      const byKey = {};
+      (openWkRankRes.data || []).forEach(row => {
+        const key = row.pos + '-' + row.week;
+        if (!byKey[key]) byKey[key] = { rows: [] };
+        byKey[key].rows.push({ player: row.player, team: row.team, prob: Number(row.prob) });
+      });
+      Object.assign(openingWeeklyRankings, byKey);
+    }
+
+    if (!openTotRes.error) {
+      const byWeek = {};
+      (openTotRes.data || []).forEach(row => {
+        if (!byWeek[row.week]) byWeek[row.week] = { rows: [] };
+        byWeek[row.week].rows.push({ team: row.team, value: row.value === null ? 'BYE' : Number(row.value) });
+      });
+      Object.assign(openingTeamTotals, byWeek);
     }
 
     // Keep the local cache warm too, so a later offline visit still has
