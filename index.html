@@ -5944,6 +5944,30 @@ function getCurrentTradeWeek() {
   return 1;
 }
 
+// Start/Sit Decision's own "current week" — always the most recently
+// published Weekly Player Projections week, full stop, regardless of
+// what's been published for Rest of Season. This is deliberately
+// different from getCurrentTradeWeek() above (which prefers the most
+// recent Rest of Season week, since Analyze Trade/Analyze Teams are
+// season-long value questions): Start/Sit is a literal "this week"
+// question about that week's Weekly Player Projections specifically, so
+// it needs to find "this week" by looking at Weekly data, not Rest of
+// Season data. Before this existed, Start/Sit used getCurrentTradeWeek()
+// too — which meant publishing a new week's Weekly Player Projections
+// before Rest of Season was updated for that same week (a completely
+// normal order to do them in) left Start/Sit still resolving players
+// against the OLDER week, because that older week was still the most
+// recent one with Rest of Season data. This function ignores Rest of
+// Season entirely and just answers "what's the highest week number
+// anyone has published Weekly Player Projections for."
+function getCurrentWeeklyWeek() {
+  const weeklyWeeks = Object.keys(publishedRankings)
+    .map(key => parseInt(key.split('-')[1], 10))
+    .filter(n => !isNaN(n));
+  if (weeklyWeeks.length > 0) return Math.max(...weeklyWeeks);
+  return 1;
+}
+
 // Direct "compare two full rosters" mode — used when both offer boxes are
 // left empty but both teams' rosters are filled in. No trade actually
 // happens here, so this skips the Receives columns and new-roster display
@@ -6257,7 +6281,14 @@ async function runStartSitDecision() {
     return;
   }
 
-  const week = getCurrentTradeWeek();
+  // getCurrentWeeklyWeek() here, NOT getCurrentTradeWeek() — Start/Sit needs
+  // "the current week" to mean "the most recent week someone published
+  // Weekly Player Projections for," not "the most recent week someone
+  // published Rest of Season for" (see getCurrentWeeklyWeek's own comment
+  // for why using the wrong one silently stranded Start/Sit on an older
+  // week whenever Weekly got published for a new week before Rest of
+  // Season did).
+  const week = getCurrentWeeklyWeek();
   // preferWeekly: true — Start/Sit Decision is a literal "this week"
   // question, so it should use that week's live Weekly Player Projections
   // rank ahead of Rest of Season/Season Long when one's published (unlike
