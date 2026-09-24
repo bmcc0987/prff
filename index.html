@@ -3499,6 +3499,14 @@ function refreshProjectionsGate() {
       document.getElementById('proj-totals-week-row').style.display = 'flex';
       populateTotalsWeekSelect();
     }
+    // Rebuilding the Weekly Player Projections week dropdown here too (not
+    // just from switchProjTab/switchWeeklyPosition below) means simply
+    // returning to an already-open Projections page — without switching
+    // tabs or position first — still picks up a week that was published
+    // just now, in this same browser tab, without needing a full page
+    // reload. See populateWeeklyProjWeekSelect's own comment for the
+    // matching fix on the Totals side.
+    if (activeProjTab === 'weekly') populateWeeklyProjWeekSelect();
     renderProjectionsPage();
   }
 
@@ -3546,10 +3554,22 @@ function switchProjTab(tab, opts) {
 }
 
 // Fills the Week dropdown (1-18) shown on the Weekly Team Implied Totals tab,
-// defaulting to the most recently published week.
+// defaulting to the most recently published week. Rebuilt (not just built
+// once) every time this is called — it used to have a "select.children.length
+// ? return : build" guard that made it a permanent no-op after the very
+// first time it ran in a browser tab's session, which meant publishing a
+// brand-new week's Team Implied Totals after that point never showed up in
+// this dropdown (and never got auto-selected) until the whole page was
+// reloaded from scratch. Rebuilding every time — matching how
+// populateWeeklyProjWeekSelect already worked for Weekly Player Projections
+// — means a newly published week appears and gets auto-selected the next
+// time you land on or return to this tab, no reload required. This only
+// runs from refreshProjectionsGate/switchProjTab (i.e. actually
+// (re)entering this tab), never from the dropdown's own onchange, so
+// picking an older week yourself isn't immediately overwritten by this.
 function populateTotalsWeekSelect() {
   const select = document.getElementById('proj-totals-week-select');
-  if (select.children.length) return; // only build once
+  select.innerHTML = '';
   for (let w = 1; w <= 18; w++) {
     const opt = document.createElement('option');
     opt.value = w;
@@ -7527,6 +7547,26 @@ function zeroProbExcludedNoticeHTML(count) {
     count + ' ' + plural + ' left out of this publish because their Prob % was 0% (or blank) — a 0% probability is treated the same as removing the player.</div>';
 }
 
+// Shown at the top of a publish's preview whenever supabaseClient itself is
+// missing at the moment Publish is clicked (e.g. the database connection
+// never loaded, or the admin's sign-in session had quietly lapsed) — this is
+// DIFFERENT from the red "publishing to the database failed" error shown in
+// each publish function's catch block. That red error means a connection
+// existed and Supabase actively rejected the write. This amber warning means
+// no attempt to reach the database was made at all, so the code fell through
+// silently to a local-only save — which, before this warning existed, looked
+// identical on screen to a real, successful publish (the same preview table
+// renders either way), even though nobody else — not another visitor, not
+// another device, not even this same browser after a refresh — would ever
+// see it. Without this, that failure mode was silent and indistinguishable
+// from success.
+function dbNotConnectedWarningHTML() {
+  return '<div style="color:#8a5a00;background:#fff3cd;border:1px solid #ffe69c;border-radius:6px;font-family:\'Lato\',sans-serif;font-size:13px;font-weight:700;padding:10px 14px;margin-bottom:12px;">' +
+    '⚠️ Not saved to the shared database — this browser isn\'t currently connected (you may have been signed out). ' +
+    'The preview below only updated what you see on THIS screen right now. Other visitors, other devices, and even ' +
+    'this same page after a refresh will NOT show this until you reload the page, sign back in, and publish again.</div>';
+}
+
 async function publishAdminTable() {
   const position = document.getElementById('admin-position').value;
   const week = document.getElementById('admin-week').value;
@@ -7607,7 +7647,13 @@ async function publishAdminTable() {
     }
   }
 
-  preview.innerHTML = zeroProbExcludedNoticeHTML(zeroProbExcludedCount) +
+  // Clear this position/week's leftover saved draft (if any) and swap the
+  // "not published yet" banner for a real "Published" confirmation — see
+  // clearAdminDraftEntry/showJustPublishedStatus for why this matters.
+  clearAdminDraftEntry('weekly', key);
+  showJustPublishedStatus('admin-draft-status');
+
+  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount) +
     buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week, getWeeklyMovementForWeek(position, week, rows), "this week's first publish");
   previewWrap.style.display = 'block';
 
@@ -7960,8 +8006,16 @@ async function publishRankTable(mode) {
     }
   }
 
+  // Same fix as Weekly Player Projections: clear this leftover saved draft
+  // and swap the "not published yet" banner for a real "Published"
+  // confirmation, instead of leaving a stale draft-loaded message in place
+  // that looks like a warning even after a fully successful publish.
+  if (mode === 'seasonlong') clearAdminDraftEntry('seasonlong', position);
+  else clearAdminDraftEntry('ros', key);
+  showJustPublishedStatus(mode === 'seasonlong' ? 'sl-draft-status' : 'ros-draft-status');
+
   const label = cfg.hasWeek ? ('Week ' + document.getElementById(cfg.weekId).value + ' (Rest of Season)') : 'Season Long';
-  preview.innerHTML = zeroProbExcludedNoticeHTML(zeroProbExcludedCount) + buildPublishedTableHTML(position, label, topN, rows);
+  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount) + buildPublishedTableHTML(position, label, topN, rows);
   previewWrap.style.display = 'block';
   // The homepage ticker shows Weekly Player Projections now, not Season
   // Long or Rest of Season (see renderTicker()) — neither mode handled by
@@ -9502,7 +9556,7 @@ async function publishAdminTotalsTable() {
     }
   }
 
-  preview.innerHTML = buildPublishedTotalsHTML('Week ' + week, rows, null, matchupRows, getTeamTotalsMovementForWeek(week, rows));
+  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + buildPublishedTotalsHTML('Week ' + week, rows, null, matchupRows, getTeamTotalsMovementForWeek(week, rows));
   previewWrap.style.display = 'block';
 
   // Jump to Position rankings for this week. IMPORTANT: use
@@ -9652,7 +9706,7 @@ async function publishAdminSLTotalsTable() {
     }
   }
 
-  preview.innerHTML = buildPublishedTotalsHTML('Season Long', rows);
+  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + buildPublishedTotalsHTML('Season Long', rows);
   previewWrap.style.display = 'block';
 
   // Jump to Season Long Player Projections. switchAdminTool already handles
@@ -10259,6 +10313,46 @@ function showDraftLoadedStatus(elId) {
   const el = document.getElementById(elId);
   if (!el) return;
   el.textContent = 'Showing your saved draft — not published yet. Keep editing (it keeps autosaving) or click Publish when it\'s ready to go live.';
+  el.style.display = 'block';
+}
+
+// Removes one position(+week)'s saved draft after it's been successfully
+// published, so this exact editor doesn't keep reloading a stale "not
+// published yet" draft every time you come back to it — see
+// showJustPublishedStatus below for why this matters. 'section' is
+// 'weekly' | 'seasonlong' | 'ros', matching the top-level keys autosaveAdminDraft
+// writes under; 'key' is the position (Season Long) or position+'-'+week
+// (Weekly, Rest of Season).
+function clearAdminDraftEntry(section, key) {
+  try {
+    const raw = localStorage.getItem(ADMIN_DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (section === 'weekly' && draft.weekly && draft.weekly.byKey) delete draft.weekly.byKey[key];
+    if (section === 'seasonlong' && draft.seasonlong && draft.seasonlong.byPosition) delete draft.seasonlong.byPosition[key];
+    if (section === 'ros' && draft.ros && draft.ros.byKey) delete draft.ros.byKey[key];
+    localStorage.setItem(ADMIN_DRAFT_KEY, JSON.stringify(draft));
+  } catch (e) {
+    console.warn('Could not clear the saved draft after publishing (harmless — it just means this editor may show a stale "not published yet" message next time you open it):', e);
+  }
+}
+
+// Confirms an actual, successful Publish click — deliberately distinct
+// wording from markDraftSaved's "Draft saved... Not published yet" message.
+// Before this existed, publishing didn't touch admin-draft-status/
+// sl-draft-status/ros-draft-status at all, so if you'd left that exact
+// position (+week) with unsaved-but-autosaved edits earlier, reopening it
+// later would show "Showing your saved draft — not published yet" from
+// showDraftLoadedStatus above EVEN AFTER a publish that fully succeeded —
+// there was nothing wrong with the publish itself, but the leftover message
+// looked exactly like a warning that it hadn't gone live. Pairs with
+// clearAdminDraftEntry, which removes the stale draft so it doesn't get
+// reloaded and shown again the next time this position/week is opened.
+function showJustPublishedStatus(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const timeStr = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  el.textContent = 'Published — ' + timeStr + '. This is now live.';
   el.style.display = 'block';
 }
 
