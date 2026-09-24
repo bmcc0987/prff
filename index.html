@@ -2082,6 +2082,11 @@ footer {
     <select class="admin-select" id="proj-weekly-week-select" onchange="renderProjectionsPage()" style="width:80px; padding:6px 10px;"></select>
   </div>
 
+  <div id="proj-ros-week-row" class="proj-subtabs" style="display:none; align-items:center; gap:10px;">
+    <span style="font-family:'Lato',sans-serif; font-size:13px; font-weight:700; color:#555;">Week</span>
+    <select class="admin-select" id="proj-ros-week-select" onchange="renderProjectionsPage()" style="width:80px; padding:6px 10px;"></select>
+  </div>
+
   <div id="proj-locked" class="proj-locked" style="display:none;">
     <div class="proj-locked-title">🔒 Sign in to view projections</div>
     <div class="proj-locked-sub">Create a free account to see this week's full player projections.</div>
@@ -3507,6 +3512,8 @@ function refreshProjectionsGate() {
     // reload. See populateWeeklyProjWeekSelect's own comment for the
     // matching fix on the Totals side.
     if (activeProjTab === 'weekly') populateWeeklyProjWeekSelect();
+    // Same fix, same reasoning, for Rest of Season's own week dropdown.
+    if (activeProjTab === 'ros') populateROSWeekSelect();
     renderProjectionsPage();
   }
 
@@ -3534,8 +3541,10 @@ function switchProjTab(tab, opts) {
   document.getElementById('proj-weekly-subtabs').style.display = (tab === 'weekly' || tab === 'season' || tab === 'ros') ? 'flex' : 'none';
   document.getElementById('proj-totals-week-row').style.display = (tab === 'totals') ? 'flex' : 'none';
   document.getElementById('proj-weekly-week-row').style.display = (tab === 'weekly') ? 'flex' : 'none';
+  document.getElementById('proj-ros-week-row').style.display = (tab === 'ros') ? 'flex' : 'none';
   if (tab === 'totals') populateTotalsWeekSelect();
   if (tab === 'weekly') populateWeeklyProjWeekSelect();
+  if (tab === 'ros') populateROSWeekSelect();
 
   document.getElementById('proj-content-wrap').style.display = (tab === 'cheatsheet') ? 'none' : 'block';
   document.getElementById('proj-cheatsheet-wrap').style.display = (tab === 'cheatsheet') ? 'block' : 'none';
@@ -3600,12 +3609,43 @@ function populateWeeklyProjWeekSelect() {
   if (publishedWeeks.length > 0) select.value = Math.max(...publishedWeeks);
 }
 
+// Same idea as populateWeeklyProjWeekSelect above, for Rest of Season.
+// Originally, Rest of Season had no week dropdown at all — it just stacked
+// EVERY published week for the active position, one full table after
+// another, on a single page. That technically meant no published week was
+// ever hidden, but it meant there was no dropdown to jump straight to a
+// specific week either, and it only gets longer as more weeks get
+// published (by Week 17, that's 17 stacked tables to scroll through). Since
+// that's confusing next to Weekly Player Projections' and Weekly Team
+// Implied Totals' dropdowns, Rest of Season now works exactly the same way:
+// one dropdown, one week's table at a time, defaulting to the latest
+// published week for the current position. Rebuilt every time (not built
+// once), matching the "no refresh needed" fix already applied to the other
+// two week dropdowns.
+function populateROSWeekSelect() {
+  const select = document.getElementById('proj-ros-week-select');
+  if (!select) return;
+  select.innerHTML = '';
+  for (let w = 1; w <= 18; w++) {
+    const opt = document.createElement('option');
+    opt.value = w;
+    opt.textContent = w;
+    select.appendChild(opt);
+  }
+  const publishedWeeks = Object.keys(publishedROS)
+    .filter(key => key.startsWith(activeWeeklyPosition + '-'))
+    .map(key => parseInt(key.split('-')[1], 10))
+    .filter(n => !isNaN(n));
+  if (publishedWeeks.length > 0) select.value = Math.max(...publishedWeeks);
+}
+
 function switchWeeklyPosition(pos) {
   activeWeeklyPosition = pos;
   ['QB', 'WR', 'RB', 'TE'].forEach(p => {
     document.getElementById('proj-subtab-' + p).classList.toggle('active', p === pos);
   });
   if (activeProjTab === 'weekly') populateWeeklyProjWeekSelect();
+  if (activeProjTab === 'ros') populateROSWeekSelect();
   renderProjectionsPage();
 }
 
@@ -3660,17 +3700,29 @@ function renderProjectionsPage() {
       emptyState.style.display = 'block';
       return;
     }
+    // Same one-week-at-a-time dropdown as Weekly Player Projections and
+    // Weekly Team Implied Totals (see populateROSWeekSelect's comment) —
+    // this used to stack every published week for the position on one long
+    // page instead. Earlier published weeks aren't lost: they're still in
+    // publishedROS and still selectable from the dropdown, all the way back
+    // to Week 1, exactly like the other two Weekly pages already worked.
+    const weekSelect = document.getElementById('proj-ros-week-select');
+    const selectedWeek = weekSelect.value;
+    const key = activeWeeklyPosition + '-' + selectedWeek;
+    const data = publishedROS[key];
+    if (!data) {
+      emptyState.querySelector('.proj-locked-title').textContent = 'Nothing published for ' + activeWeeklyPosition + ', Week ' + selectedWeek + ' (Rest of Season)';
+      emptyState.querySelector('.proj-locked-sub').textContent = 'Try a different week from the dropdown above.';
+      emptyState.style.display = 'block';
+      return;
+    }
     emptyState.style.display = 'none';
-    rosKeys.forEach((key, i) => {
-      const [position, week] = key.split('-');
-      const data = publishedROS[key];
-      const movementDeltas = getROSMovementForWeek(position, week, data.rows);
-      const section = document.createElement('div');
-      section.innerHTML = (i === 0 ? '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' : '') +
-        lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
-        buildPublishedTableHTML(position, 'Week ' + week + ' (Rest of Season)', data.topN, data.rows, "exportROSPositionCSV('" + position + "','" + week + "')", undefined, movementDeltas);
-      container.appendChild(section);
-    });
+    const movementDeltas = getROSMovementForWeek(activeWeeklyPosition, selectedWeek, data.rows);
+    const section = document.createElement('div');
+    section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
+      lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
+      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek + ' (Rest of Season)', data.topN, data.rows, "exportROSPositionCSV('" + activeWeeklyPosition + "','" + selectedWeek + "')", undefined, movementDeltas);
+    container.appendChild(section);
     return;
   }
 
