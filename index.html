@@ -3663,6 +3663,21 @@ function formatLastUpdated(isoString) {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// Shown just above the table on the Rest of Season Player Projections page
+// so visitors know what the ▲/▼ movement badges are actually measuring —
+// every week's badge compares back to the ORIGINAL, pre-Week 1 Season Long
+// Player Projections (see openingSeasonLong / getROSMovementForWeek), not
+// the previous week's Rest of Season numbers. Only shown when there's
+// actually a movement note to give (i.e. an opening snapshot exists for
+// this position) — matches buildRankMoveBadgeHTML's own "no badge without a
+// baseline" behavior, so this note and the badges it explains always agree
+// on whether there's anything to compare against yet.
+function rosMovementNoteHTML(position) {
+  if (!openingSeasonLong[position]) return '';
+  return '<div style="font-family:\'Lato\',sans-serif;font-size:12px;font-style:italic;color:#888;text-align:center;margin:0 0 10px;">' +
+    'Player movement (▲/▼) reflects change since the original Season Long Player Projections, published before Week 1 — not since the previous week.</div>';
+}
+
 function lastUpdatedBlurbHTML(isoString) {
   const formatted = formatLastUpdated(isoString);
   if (!formatted) return '';
@@ -3721,7 +3736,8 @@ function renderProjectionsPage() {
     const section = document.createElement('div');
     section.innerHTML = '<h3 class="proj-question-heading">What is the probability that each player will finish in the top 12?</h3>' +
       lastUpdatedBlurbHTML(publishedTimestamps.ros[key]) +
-      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek + ' (Rest of Season)', data.topN, data.rows, "exportROSPositionCSV('" + activeWeeklyPosition + "','" + selectedWeek + "')", undefined, movementDeltas);
+      rosMovementNoteHTML(activeWeeklyPosition) +
+      buildPublishedTableHTML(activeWeeklyPosition, 'Week ' + selectedWeek + ' (Rest of Season)', data.topN, data.rows, "exportROSPositionCSV('" + activeWeeklyPosition + "','" + selectedWeek + "')", undefined, movementDeltas, 'the original Season Long Player Projections (published before Week 1)');
     container.appendChild(section);
     return;
   }
@@ -7297,12 +7313,18 @@ function computeDisplayRanks(rows, getProb) {
 
 // Rest of Season movement indicator: for each row in `rows` (a Rest of
 // Season position/week's published rows), figures out how many spots that
-// player's rank moved compared to whichever ranking counts as "before"
-// this week — the most recently published EARLIER Rest of Season week for
-// this same position, if one's been published, otherwise that position's
-// Season Long projections (this is what covers the very first Rest of
-// Season week ever published for a position, which has no earlier Rest of
-// Season week to compare against yet).
+// player's rank moved compared to the ORIGINAL, pre-Week 1 Season Long
+// Player Projections for this position (see openingSeasonLong above) — NOT
+// the previous Rest of Season week. Every Rest of Season week for a
+// position (Week 1, Week 2, Week 3, ... all the way through Week 17)
+// compares back to that same fixed original, so a player's badge always
+// tells you how far they've moved from where the season started, not just
+// since last week. (This used to compare each week against the most
+// recently published EARLIER Rest of Season week instead, falling back to
+// Season Long only for a position's very first Rest of Season week — that
+// was changed to always anchor on the original Season Long baseline
+// instead, per an explicit request to make every week's comparison
+// consistent.)
 // Returns one entry per row in `rows.filter(r => r.player)` (i.e. aligned
 // the same way buildPublishedTableHTML's own `validRows` is), where each
 // entry is either a number or null:
@@ -7312,38 +7334,30 @@ function computeDisplayRanks(rows, getProb) {
 //   - a negative number means their rank number went UP, i.e. they
 //     DECLINED (e.g. WR12 -> WR22 is -10) — shown as a red down triangle;
 //   - null means there's nothing to compare against for that specific
-//     player (their first time ever being ranked at this position, or
-//     no earlier Rest of Season week or Season Long data exists at all
-//     for this position yet) — no badge is shown for them.
+//     player (their first time ever being ranked at this position, or no
+//     original Season Long baseline has been recorded yet for this
+//     position at all) — no badge is shown for them.
 // Uses findTiedRank (the same competition-ranking, ties-share-a-number
 // logic used everywhere else a player's rank gets resolved, e.g.
 // resolvePlayerRank in the Trade/Team Analyzer) on both sides, sorting
 // each side by probability first rather than trusting incoming row order,
-// so this stays correct even if that ever changes.
+// so this stays correct even if that ever changes. `week` is no longer
+// used in the comparison itself (every week compares to the same fixed
+// baseline now) but is kept as a parameter since callers already pass it.
 function getROSMovementForWeek(position, week, rows) {
   const validRows = rows.filter(r => r.player);
 
-  const priorWeeks = Object.keys(publishedROS)
-    .filter(key => key.startsWith(position + '-'))
-    .map(key => parseInt(key.split('-')[1], 10))
-    .filter(w => !isNaN(w) && w < parseInt(week, 10));
-
-  let priorRows = null;
-  if (priorWeeks.length > 0) {
-    priorRows = publishedROS[position + '-' + Math.max(...priorWeeks)].rows;
-  } else if (publishedSeasonLong[position]) {
-    priorRows = publishedSeasonLong[position].rows;
-  }
-  if (!priorRows) return validRows.map(() => null);
+  const opening = openingSeasonLong[position];
+  if (!opening) return validRows.map(() => null);
 
   const sortedCurrent = validRows.slice().sort((a, b) => b.prob - a.prob);
-  const sortedPrior = priorRows.filter(r => r.player).slice().sort((a, b) => b.prob - a.prob);
+  const sortedOpening = opening.rows.filter(r => r.player).slice().sort((a, b) => b.prob - a.prob);
 
   return validRows.map(r => {
     const currentRank = findTiedRank(sortedCurrent, r.player);
-    const priorRank = findTiedRank(sortedPrior, r.player);
-    if (currentRank === -1 || priorRank === -1) return null;
-    return priorRank - currentRank;
+    const openingRank = findTiedRank(sortedOpening, r.player);
+    if (currentRank === -1 || openingRank === -1) return null;
+    return openingRank - currentRank;
   });
 }
 
@@ -7724,6 +7738,19 @@ async function publishAdminTable() {
 const publishedSeasonLong = {"QB":{"topN":12,"rows":[{"player":"Lamar Jackson","team":"BAL","prob":72.0},{"player":"Josh Allen","team":"BUF","prob":70.0},{"player":"Dak Prescott","team":"DAL","prob":69.0},{"player":"Joe Burrow","team":"CIN","prob":65.0},{"player":"Matthew Stafford","team":"LAR","prob":64.0},{"player":"Jayden Daniels","team":"WAS","prob":52.0},{"player":"Justin Herbert","team":"LAC","prob":51.0},{"player":"Drake Maye","team":"NE","prob":48.0},{"player":"Patrick Mahomes","team":"KC","prob":46.0},{"player":"Trevor Lawrence","team":"JAX","prob":46.0},{"player":"Brock Purdy","team":"SF","prob":45.0},{"player":"Tyler Shough","team":"NO","prob":43.0},{"player":"Caleb Williams","team":"CHI","prob":43.0},{"player":"Bo Nix","team":"DEN","prob":42.0},{"player":"Daniel Jones","team":"IND","prob":42.0},{"player":"Jalen Hurts","team":"PHI","prob":41.0},{"player":"Jared Goff","team":"DET","prob":41.0},{"player":"Jaxson Dart","team":"NYG","prob":37.0},{"player":"Jordan Love","team":"GB","prob":35.0},{"player":"Sam Darnold","team":"SEA","prob":30.0},{"player":"Baker Mayfield","team":"TB","prob":29.0},{"player":"C.J. Stroud","team":"HOU","prob":24.0},{"player":"Kyler Murray","team":"MIN","prob":24.0},{"player":"Jacoby Brissett","team":"ARI","prob":20.0},{"player":"Bryce Young","team":"CAR","prob":18.0},{"player":"Kirk Cousins","team":"LV","prob":17.0},{"player":"Geno Smith","team":"NYJ","prob":15.0},{"player":"Aaron Rodgers","team":"PIT","prob":14.0},{"player":"Cam Ward","team":"TEN","prob":14.0},{"player":"Michael Penix Jr.","team":"ATL","prob":13.0},{"player":"Deshaun Watson","team":"CLE","prob":12.0},{"player":"Malik Willis","team":"MIA","prob":12.0}]},"WR":{"topN":12,"rows":[{"player":"Puka Nacua","team":"LAR","prob":68.0},{"player":"Ja'Marr Chase","team":"CIN","prob":65.0},{"player":"Amon-Ra St. Brown","team":"DET","prob":64.0},{"player":"Jaxon Smith-Njigba","team":"SEA","prob":54.0},{"player":"CeeDee Lamb","team":"DAL","prob":47.0},{"player":"Rashee Rice","team":"KC","prob":43.0},{"player":"Zay Flowers","team":"BAL","prob":39.0},{"player":"George Pickens","team":"DAL","prob":37.0},{"player":"Nico Collins","team":"HOU","prob":36.0},{"player":"AJ Brown","team":"NE","prob":36.0},{"player":"Chris Olave","team":"NO","prob":34.0},{"player":"Drake London","team":"ATL","prob":32.0},{"player":"Garrett Wilson","team":"NYJ","prob":29.0},{"player":"Malik Nabers","team":"NYG","prob":27.0},{"player":"Justin Jefferson","team":"MIN","prob":26.0},{"player":"DeVonta Smith","team":"PHI","prob":25.0},{"player":"Parker Washington","team":"JAX","prob":24.0},{"player":"Davante Adams","team":"LAR","prob":23.0},{"player":"Ladd McConkey","team":"LAC","prob":22.0},{"player":"Jaylen Waddle","team":"DEN","prob":20.0},{"player":"Jameson Williams","team":"DET","prob":20.0},{"player":"Luther Burden","team":"CHI","prob":19.0},{"player":"Tetairoa McMillan","team":"CAR","prob":18.0},{"player":"Marvin Harrison Jr.","team":"ARI","prob":16.0},{"player":"Josh Downs","team":"IND","prob":16.0},{"player":"Tee Higgins","team":"CIN","prob":15.0},{"player":"Terry McLaurin","team":"WAS","prob":15.0},{"player":"Mike Evans","team":"SF","prob":14.0},{"player":"DJ Moore","team":"BUF","prob":13.0},{"player":"Brian Thomas Jr.","team":"JAX","prob":13.0},{"player":"Jayden Reed","team":"GB","prob":12.0},{"player":"Rome Odunze","team":"CHI","prob":12.0},{"player":"Christian Watson","team":"GB","prob":12.0},{"player":"Matthew Golden","team":"GB","prob":12.0},{"player":"Chris Godwin Jr.","team":"TB","prob":11.0},{"player":"Michael Wilson","team":"ARI","prob":10.0},{"player":"Quentin Johnston","team":"LAC","prob":10.0},{"player":"Emeka Egbuka","team":"TB","prob":10.0},{"player":"Stefon Diggs","team":"WAS","prob":10.0},{"player":"Jordyn Tyson","team":"NO","prob":9.0},{"player":"Makai Lemon","team":"PHI","prob":9.0},{"player":"Michael Pittman","team":"PIT","prob":9.0},{"player":"Alec Pierce","team":"IND","prob":8.0},{"player":"Xavier Worthy","team":"KC","prob":8.0},{"player":"Jalen Coker","team":"CAR","prob":7.0},{"player":"Jakobi Meyers","team":"JAX","prob":7.0},{"player":"DK Metcalf","team":"PIT","prob":7.0},{"player":"Malik Washington","team":"MIA","prob":6.0},{"player":"Khalil Shakir","team":"BUF","prob":5.0},{"player":"Ryan Flournoy","team":"DAL","prob":5.0},{"player":"Courtland Sutton","team":"DEN","prob":5.0},{"player":"Travis Hunter","team":"JAX","prob":5.0},{"player":"Romeo Doubs","team":"NE","prob":5.0},{"player":"Rashid Shaheed","team":"SEA","prob":5.0},{"player":"Calvin Ridley","team":"TEN","prob":5.0},{"player":"Dontayvion Wicks","team":"PHI","prob":4.0},{"player":"Wan'Dale Robinson","team":"TEN","prob":4.0},{"player":"Carnell Tate","team":"TEN","prob":4.0},{"player":"KC Concepcion","team":"CLE","prob":3.0},{"player":"Jerry Jeudy","team":"CLE","prob":3.0},{"player":"Jauan Jennings","team":"MIN","prob":3.0},{"player":"Ricky Pearsall","team":"SF","prob":3.0},{"player":"Jalen McMillan","team":"TB","prob":3.0},{"player":"Elic Ayomanor","team":"TEN","prob":3.0},{"player":"Rashod Bateman","team":"BAL","prob":2.0},{"player":"Tre Harris","team":"LAC","prob":2.0},{"player":"Tre Tucker","team":"LV","prob":2.0},{"player":"Jordan Addison","team":"MIN","prob":2.0},{"player":"Demario Douglas","team":"NE","prob":2.0},{"player":"Germie Bernard","team":"PIT","prob":2.0},{"player":"Caleb Douglas","team":"MIA","prob":2.0},{"player":"Tank Dell","team":"HOU","prob":2.0},{"player":"Jayden Higgins","team":"HOU","prob":2.0},{"player":"Kendrick Bourne","team":"ARI","prob":1.0},{"player":"Olamide Zaccheaus","team":"ATL","prob":1.0},{"player":"Jahan Dotson","team":"ATL","prob":1.0},{"player":"Devontez Walker","team":"BAL","prob":1.0},{"player":"Josh Palmer","team":"BUF","prob":1.0},{"player":"Xavier Legette","team":"CAR","prob":1.0},{"player":"Khalif Raymond","team":"CHI","prob":1.0},{"player":"Andrei Iosivas","team":"CIN","prob":1.0},{"player":"Denzel Boston","team":"CLE","prob":1.0},{"player":"Troy Franklin","team":"DEN","prob":1.0},{"player":"Isaac TeSlaa","team":"DET","prob":1.0},{"player":"Nick Westbrook-Ikhine","team":"IND","prob":1.0},{"player":"Tyquan Thornton","team":"KC","prob":1.0},{"player":"Jordan Whittington","team":"LAR","prob":1.0},{"player":"Jack Bech","team":"LV","prob":1.0},{"player":"Jalen Nailor","team":"LV","prob":1.0},{"player":"Dont'e Thornton","team":"LV","prob":1.0},{"player":"Tutu Atwell","team":"MIA","prob":1.0},{"player":"Jalen Tolbert","team":"MIA","prob":1.0},{"player":"Kyle Williams","team":"NE","prob":1.0},{"player":"Mack Hollins","team":"NE","prob":1.0},{"player":"Devaughn Vele","team":"NO","prob":1.0},{"player":"Darnell Mooney","team":"NYG","prob":1.0},{"player":"Darius Slayton","team":"NYG","prob":1.0},{"player":"Juju Smith-Schuster","team":"NYG","prob":1.0},{"player":"Odell Beckham Jr","team":"NYG","prob":1.0},{"player":"Calvin Austin III","team":"NYG","prob":1.0},{"player":"Adonai Mitchell","team":"NYJ","prob":1.0},{"player":"Omar Cooper Jr.","team":"NYJ","prob":1.0},{"player":"Cooper Kupp","team":"SEA","prob":1.0},{"player":"Tory Horton","team":"SEA","prob":1.0},{"player":"Christian Kirk","team":"SF","prob":1.0},{"player":"Ted Hurst III","team":"TB","prob":1.0},{"player":"Chimere Dike","team":"TEN","prob":1.0},{"player":"Antonio Williams","team":"WAS","prob":1.0},{"player":"Treylon Burks","team":"WAS","prob":1.0}]},"RB":{"topN":12,"rows":[{"player":"Jonathan Taylor","team":"IND","prob":65.0},{"player":"Christian McCaffrey","team":"SF","prob":64.0},{"player":"Jahmyr Gibbs","team":"DET","prob":59.0},{"player":"Bijan Robinson","team":"ATL","prob":57.0},{"player":"Ashton Jeanty","team":"LV","prob":56.0},{"player":"De'Von Achane","team":"MIA","prob":55.0},{"player":"Derrick Henry","team":"BAL","prob":54.0},{"player":"James Cook","team":"BUF","prob":52.0},{"player":"Saquon Barkley","team":"PHI","prob":42.0},{"player":"Chase Brown","team":"CIN","prob":37.0},{"player":"Kenneth Walker III","team":"KC","prob":37.0},{"player":"Kyren Williams","team":"LAR","prob":33.0},{"player":"Josh Jacobs","team":"GB","prob":32.0},{"player":"Javonte Williams","team":"DAL","prob":29.0},{"player":"Jeremiyah Love","team":"ARI","prob":27.0},{"player":"David Montgomery","team":"HOU","prob":26.0},{"player":"Omarion Hampton","team":"LAC","prob":25.0},{"player":"D'Andre Swift","team":"CHI","prob":25.0},{"player":"Breece Hall","team":"NYJ","prob":24.0},{"player":"Cam Skattebo","team":"NYG","prob":23.0},{"player":"Travis Etienne","team":"NO","prob":22.0},{"player":"Bucky Irving","team":"TB","prob":20.0},{"player":"Quinshon Judkins","team":"CLE","prob":19.0},{"player":"TreVeyon Henderson","team":"NE","prob":19.0},{"player":"Rhamondre Stevenson","team":"NE","prob":18.0},{"player":"Bhayshul Tuten","team":"JAX","prob":17.0},{"player":"Jadarian Price","team":"SEA","prob":15.0},{"player":"Zach Charbonnet","team":"SEA","prob":15.0},{"player":"Blake Corum","team":"LAR","prob":14.0},{"player":"Chris Rodriguez Jr.","team":"JAX","prob":14.0},{"player":"Jaylen Warren","team":"PIT","prob":14.0},{"player":"Rico Dowdle","team":"PIT","prob":14.0},{"player":"Tyler Allgeier","team":"ARI","prob":13.0},{"player":"Chuba Hubbard","team":"CAR","prob":12.0},{"player":"Tony Pollard","team":"TEN","prob":12.0},{"player":"Tyjae Spears","team":"TEN","prob":12.0},{"player":"J.K. Dobbins","team":"DEN","prob":12.0},{"player":"Kenneth Gainwell","team":"TB","prob":12.0},{"player":"Rachaad White","team":"WAS","prob":12.0},{"player":"RJ Harvey","team":"DEN","prob":12.0},{"player":"Keaton Mitchell","team":"LAC","prob":12.0},{"player":"Alvin Kamara","team":"NO","prob":10.0},{"player":"Aaron Jones","team":"MIN","prob":10.0},{"player":"Jordan Mason","team":"MIN","prob":10.0},{"player":"Jonathan Brooks","team":"CAR","prob":10.0},{"player":"Jacory Croskey-Merritt","team":"WAS","prob":9.0},{"player":"Kimani Vidal","team":"LAC","prob":7.0},{"player":"Woody Marks","team":"HOU","prob":5.0},{"player":"Isiah Pacheco","team":"DET","prob":5.0},{"player":"Kyle Monangai","team":"CHI","prob":3.0},{"player":"Tyron Tracy Jr.","team":"NYG","prob":3.0},{"player":"Tank Bigsby","team":"PHI","prob":2.0},{"player":"Jordan James","team":"SF","prob":2.0},{"player":"Kaelon Black","team":"SF","prob":2.0},{"player":"Braelon Allen","team":"NYJ","prob":2.0},{"player":"Brashard Smith","team":"KC","prob":1.0},{"player":"Justice Hill","team":"BAL","prob":1.0},{"player":"Ty Johnson","team":"BUF","prob":1.0},{"player":"Samaje Perine","team":"CIN","prob":1.0},{"player":"Malik Davis","team":"DAL","prob":1.0},{"player":"Chris Brooks","team":"GB","prob":1.0},{"player":"Marshawn Lloyd","team":"GB","prob":1.0},{"player":"Brian Robinson","team":"ATL","prob":1.0},{"player":"Dylan Sampson","team":"CLE","prob":1.0},{"player":"Mike Washington Jr.","team":"LV","prob":1.0},{"player":"Jaylen Wright","team":"MIA","prob":1.0},{"player":"Kaleb Johnson","team":"PIT","prob":1.0},{"player":"DJ Giddens","team":"IND","prob":1.0},{"player":"LeQuint Allen Jr.","team":"JAX","prob":1.0},{"player":"Sean Tucker","team":"TB","prob":1.0}]},"TE":{"topN":12,"rows":[{"player":"Brock Bowers","team":"LV","prob":69.0},{"player":"Trey McBride","team":"ARI","prob":66.0},{"player":"Colston Loveland","team":"CHI","prob":63.0},{"player":"Tucker Kraft","team":"GB","prob":60.0},{"player":"Tyler Warren","team":"IND","prob":55.0},{"player":"Kyle Pitts","team":"ATL","prob":52.0},{"player":"Jake Ferguson","team":"DAL","prob":42.0},{"player":"Harold Fannin Jr.","team":"CLE","prob":34.0},{"player":"George Kittle","team":"SF","prob":32.0},{"player":"Sam LaPorta","team":"DET","prob":32.0},{"player":"Isaiah Likely","team":"NYG","prob":32.0},{"player":"Travis Kelce","team":"KC","prob":31.0},{"player":"Juwan Johnson","team":"NO","prob":29.0},{"player":"Chig Okonkwo","team":"WAS","prob":27.0},{"player":"Dallas Goedert","team":"PHI","prob":26.0},{"player":"Dalton Kincaid","team":"BUF","prob":26.0},{"player":"T.J. Hockenson","team":"MIN","prob":25.0},{"player":"Mark Andrews","team":"BAL","prob":25.0},{"player":"Terrance Ferguson","team":"LAR","prob":25.0},{"player":"Oronde Gadsden II","team":"LAC","prob":25.0},{"player":"Hunter Henry","team":"NE","prob":25.0},{"player":"Dalton Schultz","team":"HOU","prob":24.0},{"player":"Brenton Strange","team":"JAX","prob":22.0},{"player":"David Njoku","team":"LAC","prob":20.0},{"player":"Greg Dulcich","team":"MIA","prob":18.0},{"player":"Dawson Knox","team":"BUF","prob":17.0},{"player":"Tyler Higbee","team":"LAR","prob":15.0},{"player":"Mike Gesicki","team":"CIN","prob":15.0},{"player":"Colby Parkinson","team":"LAR","prob":12.0},{"player":"Evan Engram","team":"DEN","prob":12.0},{"player":"Luke Musgrave","team":"GB","prob":10.0},{"player":"Noah Gray","team":"KC","prob":10.0},{"player":"AJ Barner","team":"SEA","prob":10.0},{"player":"Eric Saubert","team":"SEA","prob":10.0},{"player":"Elijah Arroyo","team":"SEA","prob":10.0},{"player":"Mo Alie-Cox","team":"IND","prob":10.0},{"player":"Tommy Tremble","team":"CAR","prob":10.0},{"player":"Ja'Tavion Sanders","team":"CAR","prob":10.0},{"player":"Theo Johnson","team":"NYG","prob":10.0},{"player":"Mason Taylor","team":"NYJ","prob":10.0},{"player":"Durham Smythe","team":"BAL","prob":5.0},{"player":"Cole Kmet","team":"CHI","prob":5.0},{"player":"Drew Sample","team":"CIN","prob":5.0},{"player":"Luke Schoonmaker","team":"DAL","prob":5.0},{"player":"Brock Wright","team":"DET","prob":5.0},{"player":"Jake Tonges","team":"SF","prob":5.0},{"player":"Foster Moreau","team":"HOU","prob":5.0},{"player":"Charlie Kolar","team":"LAC","prob":5.0},{"player":"Josh Oliver","team":"MIN","prob":5.0},{"player":"Julian Hill","team":"NE","prob":5.0},{"player":"Cade Otton","team":"TB","prob":5.0},{"player":"Payne Durham","team":"TB","prob":5.0},{"player":"John Bates","team":"WAS","prob":5.0},{"player":"Tip Reiman","team":"ARI","prob":5.0},{"player":"Austin Hooper","team":"ATL","prob":5.0},{"player":"Blake Whiteheart","team":"CLE","prob":5.0},{"player":"Adam Trautman","team":"DEN","prob":5.0},{"player":"Michael Mayer","team":"LV","prob":5.0},{"player":"Will Kacmarek","team":"MIA","prob":5.0},{"player":"Noah Fant","team":"NO","prob":5.0},{"player":"Kenyon Sadiq","team":"NYJ","prob":5.0},{"player":"Darnell Washington","team":"PIT","prob":5.0},{"player":"Pat Freiermuth","team":"PIT","prob":5.0},{"player":"Gunnar Helm","team":"TEN","prob":5.0},{"player":"Daniel Bellinger","team":"TEN","prob":5.0}]}};
 const publishedROS = {};        // key "QB-5" (position-week) -> { topN, rows }
 
+// key position -> { rows: [{player, team, prob}] } — a frozen copy of
+// Season Long Player Projections, captured once and never touched again,
+// used as the permanent baseline for Rest of Season's movement badges (see
+// getROSMovementForWeek below). Populated two ways: (1) the very first time
+// Season Long Player Projections is ever published for a position through
+// this Admin tool going forward (see the isFirstPublishThisPosition check in
+// publishRankTable), and (2) as a one-time backfill in loadAppState() for a
+// position that already has Season Long data (like the baked-in seed data
+// above) from before this concept existed — whatever it shows the first
+// time this code runs is treated as "the original, pre-Week 1" version and
+// locked in permanently from that point on.
+const openingSeasonLong = {};
+
 const RANK_MODE = {
   seasonlong: {
     rowsId: 'sl-rows', datalistId: 'sl-player-list', posId: 'sl-position',
@@ -8035,6 +8062,20 @@ async function publishRankTable(mode) {
   cfg.store[key] = { topN, rows };
   if (mode === 'seasonlong') publishedTimestamps.seasonLong[position] = new Date().toISOString();
   else publishedTimestamps.ros[key] = new Date().toISOString();
+
+  // Season Long's own "opening" snapshot: written once per position and
+  // never touched again after that, exactly like the opening-snapshot
+  // tables for Weekly/Totals — see openingSeasonLong above and
+  // getROSMovementForWeek below. A position that already has Season Long
+  // data from before this feature existed already got its opening snapshot
+  // backfilled in loadAppState(), so this only actually fires the very
+  // first time a BRAND NEW position (one that's never had Season Long
+  // published at all, ever) gets published for the first time.
+  const isFirstPublishThisPosition = mode === 'seasonlong' && !openingSeasonLong[position];
+  if (isFirstPublishThisPosition) {
+    openingSeasonLong[position] = { rows: rows.map(r => ({ player: r.player, team: r.team, prob: r.prob })) };
+  }
+
   saveAppStateLocally();
   const previewWrap = document.getElementById(cfg.previewWrapId);
   const preview = document.getElementById(cfg.previewId);
@@ -8049,6 +8090,12 @@ async function publishRankTable(mode) {
         await supabaseReplaceRows('season_long_rankings', { pos: position },
           rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
         await publishNotesForRows(mode, position, null, rows);
+        if (isFirstPublishThisPosition) {
+          const { error: openErr } = await supabaseClient.from('opening_season_long_rankings')
+            .upsert(rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN })),
+              { onConflict: 'pos,player', ignoreDuplicates: true });
+          if (openErr) console.warn('Could not save the opening Season Long snapshot for ' + position + ' (Rest of Season movement badges for this position may be off until this succeeds):', openErr);
+        }
       }
     } catch (e) {
       console.error('Supabase publish failed:', e);
@@ -8067,7 +8114,15 @@ async function publishRankTable(mode) {
   showJustPublishedStatus(mode === 'seasonlong' ? 'sl-draft-status' : 'ros-draft-status');
 
   const label = cfg.hasWeek ? ('Week ' + document.getElementById(cfg.weekId).value + ' (Rest of Season)') : 'Season Long';
-  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount) + buildPublishedTableHTML(position, label, topN, rows);
+  // Rest of Season's admin "Live preview" shows the same movement badges the
+  // public page will, so what you see here really is "exactly what
+  // publishes" — Season Long has no movement badges at all (it IS the
+  // baseline those badges compare against), so this only applies when
+  // mode === 'ros'.
+  const rosPreviewMovement = mode === 'ros' ? getROSMovementForWeek(position, document.getElementById(cfg.weekId).value, rows) : undefined;
+  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount) +
+    (mode === 'ros' ? rosMovementNoteHTML(position) : '') +
+    buildPublishedTableHTML(position, label, topN, rows, null, undefined, rosPreviewMovement, 'the original Season Long Player Projections (published before Week 1)');
   previewWrap.style.display = 'block';
   // The homepage ticker shows Weekly Player Projections now, not Season
   // Long or Rest of Season (see renderTicker()) — neither mode handled by
@@ -11715,6 +11770,7 @@ function saveAppStateLocally() {
       publishedROS,
       openingTeamTotals,
       openingWeeklyRankings,
+      openingSeasonLong,
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -11737,6 +11793,7 @@ function loadAppStateLocally() {
     if (state.publishedROS) Object.assign(publishedROS, state.publishedROS);
     if (state.openingTeamTotals) Object.assign(openingTeamTotals, state.openingTeamTotals);
     if (state.openingWeeklyRankings) Object.assign(openingWeeklyRankings, state.openingWeeklyRankings);
+    if (state.openingSeasonLong) Object.assign(openingSeasonLong, state.openingSeasonLong);
     migrateArticleRowLabels(); // not awaited — see its own comment above
   } catch (e) {
     console.warn('Could not load previously published data:', e);
@@ -11820,7 +11877,7 @@ async function loadAppState() {
     return;
   }
   try {
-    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes] = await Promise.all([
+    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes] = await Promise.all([
       supabaseClient.from('articles').select('*'),
       supabaseClient.from('season_long_rankings').select('*'),
       supabaseClient.from('season_long_totals').select('*'),
@@ -11838,6 +11895,11 @@ async function loadAppState() {
       // `.error` before touching their results.
       supabaseClient.from('opening_weekly_rankings').select('*'),
       supabaseClient.from('opening_team_totals').select('*'),
+      // Backs Rest of Season's movement badges, which compare every week
+      // against the ORIGINAL (pre-Week 1) Season Long Player Projections —
+      // see openingSeasonLong and getROSMovementForWeek. Same missing-table
+      // safety net as the two tables above.
+      supabaseClient.from('opening_season_long_rankings').select('*'),
     ]);
     if (artRes.error) throw artRes.error;
 
@@ -11935,6 +11997,41 @@ async function loadAppState() {
       });
       Object.assign(openingTeamTotals, byWeek);
     }
+
+    if (!openSLRankRes.error) {
+      const byPos = {};
+      (openSLRankRes.data || []).forEach(row => {
+        if (!byPos[row.pos]) byPos[row.pos] = { rows: [] };
+        byPos[row.pos].rows.push({ player: row.player, team: row.team, prob: Number(row.prob) });
+      });
+      Object.assign(openingSeasonLong, byPos);
+    }
+
+    // Backfill: Season Long Player Projections already has real data for
+    // every position (the baked-in seed data on the site, or whatever an
+    // admin has published since) from before this "original, pre-Week 1"
+    // baseline concept for Rest of Season's movement badges existed, so
+    // there's no recorded opening snapshot for it yet. Whatever Season Long
+    // shows the first time this runs is treated as that permanent original
+    // and saved once — never touched again after that, same as every other
+    // opening-snapshot table. Not awaited, and failures are just logged: for
+    // a signed-in admin this quietly succeeds and locks in the baseline
+    // going forward; for anyone else, Row Level Security correctly refuses
+    // the write (same as any other visitor trying to write anywhere on this
+    // site), which is fine — it simply tries again the next time an admin's
+    // browser loads the page, until it succeeds once.
+    Object.keys(publishedSeasonLong).forEach(pos => {
+      if (openingSeasonLong[pos]) return;
+      const data = publishedSeasonLong[pos];
+      if (!data || !data.rows || data.rows.length === 0) return;
+      openingSeasonLong[pos] = { rows: data.rows.map(r => ({ player: r.player, team: r.team, prob: r.prob })) };
+      supabaseClient.from('opening_season_long_rankings')
+        .upsert(data.rows.map(r => ({ pos, player: r.player, team: r.team, prob: r.prob, top_n: data.topN })),
+          { onConflict: 'pos,player', ignoreDuplicates: true })
+        .then(({ error }) => {
+          if (error) console.warn('Could not backfill the opening Season Long snapshot for ' + pos + ' (harmless unless you\'re signed in as admin and this keeps happening on every page load):', error);
+        });
+    });
 
     // Keep the local cache warm too, so a later offline visit still has
     // something to fall back to.
