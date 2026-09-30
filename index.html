@@ -358,8 +358,9 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; overflow-x: hidden;
 
 /* Article rows (homepage + Articles page) — each row is its own named,
    horizontally-scrollable strip of article cards (e.g. "Superforecasting",
-   "Waivers", "Projections", or any other row name typed into an article's
-   Row field in Admin). Cards keep a fixed width instead of stretching to
+   "Waiver Wire", "Trade Candidates", "Projections Accuracy", or any other
+   row name typed into an article's Row field in Admin). Cards keep a fixed
+   width instead of stretching to
    fill a grid column, since they now sit in a scrolling strip rather than
    a 3-column grid. See renderHomepageArticles()/groupArticlesIntoRows(). */
 .article-row-section { margin-bottom: 36px; }
@@ -2679,6 +2680,13 @@ footer {
       <input type="hidden" id="article-editing-id" value="">
       <input type="hidden" id="article-editing-type" value="">
 
+      <div id="article-order-panel" style="margin-bottom:20px; padding:14px 16px; background:#f7f6f2; border:1px solid #e2e0da; border-radius:10px;">
+        <div style="font-family:'Lato',sans-serif; font-weight:800; font-size:14px; color:#333; margin-bottom:4px;">Row order</div>
+        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Use the arrows to set the order articles appear in within each row on the site. This only changes where an article sits in its row — it never touches the article's content, its Free/Pro setting, or its URL.</div>
+        <div id="article-order-rows"></div>
+        <div id="article-order-status" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; font-weight:700; margin-top:8px;"></div>
+      </div>
+
       <div class="admin-field" style="margin-bottom:16px;">
         <label class="auth-label">Title</label>
         <input class="auth-input" type="text" id="article-title" placeholder="Week 5 RB rankings: who gets the workload?">
@@ -2693,6 +2701,7 @@ footer {
           <label class="auth-label">Row <span class="trade-optional-tag">optional</span></label>
           <input class="auth-input" type="text" id="article-row" list="article-row-options" placeholder="e.g. Superforecasting" style="width:220px;">
           <datalist id="article-row-options"></datalist>
+          <div style="font-family:'Lato',sans-serif; font-size:11px; color:#999; margin-top:4px; max-width:220px;">The 4 rows on the site: Superforecasting, Waiver Wire, Trade Candidates, Projections Accuracy. Type a different name to start a new row.</div>
         </div>
         <div class="admin-field">
           <label class="auth-label">Access</label>
@@ -5903,6 +5912,46 @@ function findTiedRank(sortedRows, name) {
   return rank + 1;
 }
 
+// The deepest rank WEEKLY_RANK_CUTLINE has EVER tracked for a position,
+// across every season — e.g. if some season's data only goes down to RB40,
+// this returns 40 even if other seasons go deeper. A rank beyond this can
+// never find a matching historical week in ANY season, so this is used to
+// give a precise, honest explanation instead of the generic "no overlapping
+// weeks found" when that's the reason a Start/Sit comparison comes back
+// empty. Computed once and cached, since the underlying data is static.
+let _maxWeeklyRankCoverageCache = {};
+function maxWeeklyRankCoverage(pos) {
+  if (_maxWeeklyRankCoverageCache[pos] !== undefined) return _maxWeeklyRankCoverageCache[pos];
+  let max = 0;
+  const posData = WEEKLY_RANK_CUTLINE[pos];
+  if (posData) {
+    Object.keys(posData).forEach(season => {
+      Object.keys(posData[season]).forEach(wk => {
+        max = Math.max(max, posData[season][wk].length);
+      });
+    });
+  }
+  _maxWeeklyRankCoverageCache[pos] = max;
+  return max;
+}
+
+// Checks a list of {name, pos, rank} entries (a Start/Sit lineup's resolved
+// starters) for anyone whose CURRENT rank is deeper than any historical week
+// this site tracks for their position — e.g. a bench-tier WR currently
+// resolving to WR55 when the historical data (see maxWeeklyRankCoverage)
+// only ever goes to WR40. A single such player guarantees
+// computeStartSitHistory finds zero overlapping weeks for the ENTIRE lineup
+// comparison (it requires every starter on both sides to have valid data in
+// the same week), which otherwise shows up as the confusing, unspecific "No
+// overlapping historical weeks found for these ranks." Returns an array of
+// { name, pos, rank, maxTracked } for each offending starter, so the actual
+// culprit(s) can be named instead of leaving the person guessing.
+function findStartersBeyondWeeklyHistory(named) {
+  return named
+    .map(p => ({ ...p, maxTracked: maxWeeklyRankCoverage(p.pos) }))
+    .filter(p => p.rank > p.maxTracked);
+}
+
 // Start/Sit Decision: literal historical rank-cutline comparison, per the
 // user's verified methodology — NOT a career-wide bootstrap. For each real
 // week since 2015, "RB18" means whoever's score THAT WEEK ranked 18th among
@@ -6409,8 +6458,24 @@ async function runStartSitDecision() {
   out.style.display = 'block';
 
   if (!result) {
-    document.getElementById('startsit-title').textContent = 'No overlapping historical weeks found for these ranks.';
-    document.getElementById('startsit-sub').textContent = '';
+    // Almost always caused by one specific starter's CURRENT rank being
+    // deeper than any historical week this site tracks for their position
+    // (e.g. a bench-tier WR at WR55 when the historical weekly data only
+    // goes to WR40) — one such player guarantees zero overlapping weeks for
+    // the WHOLE lineup comparison, since every starter on both sides needs
+    // valid data in the same week. Naming the actual culprit(s) here instead
+    // of a generic message is the fix for "Start/Sit isn't working" reports
+    // that trace back to this — see findStartersBeyondWeeklyHistory's own
+    // comment for the full explanation.
+    const outOfRange = findStartersBeyondWeeklyHistory(namedA.concat(namedB));
+    if (outOfRange.length > 0) {
+      const names = outOfRange.map(p => p.name + ' (currently ' + p.pos + p.rank + ', but historical data for ' + p.pos + ' only goes to ' + p.pos + p.maxTracked + ')').join('; ');
+      document.getElementById('startsit-title').textContent = 'Can’t run this comparison — one or more starters are ranked deeper than this site’s historical data covers.';
+      document.getElementById('startsit-sub').textContent = names;
+    } else {
+      document.getElementById('startsit-title').textContent = 'No overlapping historical weeks found for these ranks.';
+      document.getElementById('startsit-sub').textContent = '';
+    }
     document.getElementById('startsit-table-body').innerHTML = '';
     document.getElementById('startsit-avgline').textContent = '';
     document.getElementById('startsit-year-body').innerHTML = '';
@@ -11070,8 +11135,9 @@ async function publishArticle() {
   errorEl.style.display = 'none';
   const tag = document.getElementById('article-tag').value.trim() || 'Analysis';
   // Row is what groups this article into one of the horizontally-scrolling
-  // rows on the homepage/Articles page (e.g. "Superforecasting", "Waivers",
-  // "Projections", or any other row name typed in here) — separate from
+  // rows on the homepage/Articles page (e.g. "Superforecasting", "Waiver
+  // Wire", "Trade Candidates", "Projections Accuracy", or any other row
+  // name typed in here) — separate from
   // Tag, which is just the small label shown on the card itself. Left
   // blank, the article won't show up in any row (see groupArticlesIntoRows)
   // until it's given one, so a heads-up is shown rather than publishing silently.
@@ -11239,15 +11305,16 @@ function populateArticleLoadSelect() {
 
   select.value = current;
   populateArticleRowOptions();
+  renderArticleOrderPanel();
 }
 
-// The default three rows always show as suggestions even before any
+// The default four rows always show as suggestions even before any
 // article has used them, plus whatever other row names are already in use
 // on published or draft articles — typing a name not in this list still
 // works fine (this is just autocomplete, not a locked-down list), which is
 // how a brand new row gets created: type its name here on the article that
 // belongs in it.
-const ARTICLE_ROW_DEFAULT_ORDER = ['Superforecasting', 'Roster Construction - Waivers + Trade Candidates', 'Projections Accuracy'];
+const ARTICLE_ROW_DEFAULT_ORDER = ['Superforecasting', 'Waiver Wire', 'Trade Candidates', 'Projections Accuracy'];
 
 // A row's identity IS whatever text is saved in an article's Row field —
 // so renaming a name in ARTICLE_ROW_DEFAULT_ORDER above only changes what's
@@ -11262,6 +11329,17 @@ const ARTICLE_ROW_DEFAULT_ORDER = ['Superforecasting', 'Roster Construction - Wa
 const ARTICLE_ROW_RENAMES = {
   'Waivers': 'Roster Construction - Waivers + Trade Candidates',
   'Projections': 'Projections Accuracy',
+  // The single combined "Waivers + Trade Candidates" row was split back
+  // into two separate rows (Waiver Wire, Trade Candidates) so each has its
+  // own header and its own order. There's no way to know, automatically,
+  // which of the combined row's existing articles are actually about
+  // trades rather than waivers — so this migration defaults every one of
+  // them into Waiver Wire (the more common case, and the row's original
+  // name before Trade Candidates was folded into it) rather than guessing.
+  // Move any article that's really about trade candidates into the new
+  // Trade Candidates row yourself, from that article's Row field in Admin,
+  // whenever you get to it — nothing else needs to happen for that move.
+  'Roster Construction - Waivers + Trade Candidates': 'Waiver Wire',
 };
 
 // Applies ARTICLE_ROW_RENAMES to every article already sitting in memory
@@ -11301,6 +11379,134 @@ function populateArticleRowOptions() {
   Object.values(publishedArticles).forEach(a => { if (a.rowLabel) labels.add(a.rowLabel); });
   Object.values(draftArticles).forEach(a => { if (a.rowLabel) labels.add(a.rowLabel); });
   datalist.innerHTML = Array.from(labels).map(l => '<option value="' + l.replace(/"/g, '&quot;') + '">').join('');
+}
+
+// Builds the "Row order" management panel in Admin: one section per
+// canonical row (see ARTICLE_ROW_DEFAULT_ORDER — this intentionally only
+// covers those 4, not any one-off custom row name an article might be
+// given), each listing its published articles in their current order with
+// Up/Down arrows to reposition them. This reads the exact same order
+// sortedArticleIds()/groupArticlesIntoRows() use to build the live site's
+// rows, so what's shown here always matches what's actually on the page.
+function renderArticleOrderPanel() {
+  const container = document.getElementById('article-order-rows');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const sortedIds = sortedArticleIds();
+
+  ARTICLE_ROW_DEFAULT_ORDER.forEach(rowLabel => {
+    const idsInRow = sortedIds.filter(id => (publishedArticles[id].rowLabel || '').trim() === rowLabel);
+
+    const section = document.createElement('div');
+    section.style.marginBottom = '14px';
+
+    const heading = document.createElement('div');
+    heading.style.cssText = "font-family:'Lato',sans-serif;font-weight:700;font-size:13px;color:#3DB87A;margin-bottom:6px;";
+    heading.textContent = rowLabel;
+    section.appendChild(heading);
+
+    if (idsInRow.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.cssText = "font-family:'Lato',sans-serif;font-size:12px;color:#999;font-style:italic;";
+      empty.textContent = 'No published articles in this row yet.';
+      section.appendChild(empty);
+      container.appendChild(section);
+      return;
+    }
+
+    idsInRow.forEach((id, idx) => {
+      const a = publishedArticles[id];
+      const row = document.createElement('div');
+      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff;border:1px solid #e2e0da;border-radius:6px;margin-bottom:4px;";
+
+      const title = document.createElement('div');
+      title.style.cssText = "flex:1;min-width:0;font-family:'Lato',sans-serif;font-size:13px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+      title.textContent = a.title + (a.access === 'Pro' ? '  ·  Pro' : '');
+      row.appendChild(title);
+
+      const upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.textContent = '▲';
+      upBtn.title = 'Move up';
+      upBtn.disabled = idx === 0;
+      upBtn.style.cssText = 'width:28px;height:26px;border-radius:5px;border:1px solid #ccc;flex-shrink:0;font-size:11px;' + (idx === 0 ? 'background:#eee;cursor:default;color:#bbb;' : 'background:#fff;cursor:pointer;');
+      upBtn.onclick = function () { moveArticleInRow(rowLabel, id, -1); };
+      row.appendChild(upBtn);
+
+      const downBtn = document.createElement('button');
+      downBtn.type = 'button';
+      downBtn.textContent = '▼';
+      downBtn.title = 'Move down';
+      downBtn.disabled = idx === idsInRow.length - 1;
+      downBtn.style.cssText = 'width:28px;height:26px;border-radius:5px;border:1px solid #ccc;flex-shrink:0;font-size:11px;' + (idx === idsInRow.length - 1 ? 'background:#eee;cursor:default;color:#bbb;' : 'background:#fff;cursor:pointer;');
+      downBtn.onclick = function () { moveArticleInRow(rowLabel, id, 1); };
+      row.appendChild(downBtn);
+
+      section.appendChild(row);
+    });
+
+    container.appendChild(section);
+  });
+}
+
+// Moves one article up or down within its row by swapping it with its
+// neighbor, then renumbers every article in that row 1, 2, 3... so the
+// underlying Display Order values stay small and unambiguous (rather than
+// swapping two possibly-equal-or-unset numbers, which could leave the row
+// only half-ordered). This is a narrow, standalone action: it only ever
+// writes each affected article's displayOrder, using a targeted database
+// update rather than the full publish flow — so reordering can never touch
+// an article's id, title, body, or Free/Pro access, and can never turn
+// into "publishing a brand new article" the way editing through a stale
+// hidden field once could.
+async function moveArticleInRow(rowLabel, id, direction) {
+  const sortedIds = sortedArticleIds();
+  const idsInRow = sortedIds.filter(aid => (publishedArticles[aid].rowLabel || '').trim() === rowLabel);
+  const idx = idsInRow.indexOf(id);
+  const swapWith = idx + direction;
+  if (idx === -1 || swapWith < 0 || swapWith >= idsInRow.length) return;
+
+  const reordered = idsInRow.slice();
+  const tmp = reordered[idx];
+  reordered[idx] = reordered[swapWith];
+  reordered[swapWith] = tmp;
+
+  const updates = [];
+  reordered.forEach((aid, i) => {
+    const newOrder = i + 1;
+    if (publishedArticles[aid].displayOrder !== newOrder) {
+      publishedArticles[aid].displayOrder = newOrder;
+      updates.push({ id: aid, displayOrder: newOrder });
+    }
+  });
+  saveAppStateLocally();
+  renderArticleOrderPanel();
+  renderHomepageArticles();
+
+  // Keep the "Display order" field in the editor below in sync, in case
+  // the article that just moved is the one currently loaded there.
+  const editingId = document.getElementById('article-editing-id').value;
+  const editedEntry = updates.find(u => u.id === editingId);
+  if (editedEntry) document.getElementById('article-display-order').value = editedEntry.displayOrder;
+
+  const statusEl = document.getElementById('article-order-status');
+  if (supabaseClient && updates.length > 0) {
+    try {
+      for (const u of updates) {
+        const res = await supabaseClient.from('articles').update({ display_order: u.displayOrder }).eq('id', u.id);
+        if (res.error) throw res.error;
+      }
+    } catch (e) {
+      console.error('Could not save the new row order to the database:', e);
+      if (statusEl) {
+        statusEl.textContent = 'Reordered here, but saving the new order to the database failed: ' + (e.message || e);
+        statusEl.style.display = 'block';
+      }
+      return;
+    }
+  }
+  if (statusEl) statusEl.style.display = 'none';
 }
 
 function loadArticleIntoEditor() {
