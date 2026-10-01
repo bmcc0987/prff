@@ -378,18 +378,20 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; overflow-x: hidden;
   line-height: 1; transition: background 0.15s, border-color 0.15s; padding: 0;
 }
 .article-row-arrow:hover { background: #f5f4f1; border-color: #3DB87A; }
-/* Admin's "Row order" panel — drag-and-drop reordering within a row (see
-   renderArticleOrderPanel()/applyRowOrder() in the JS). The dragged item
-   fades out in place; a green top/bottom border on whichever item the
-   cursor is over shows exactly where it'll land on drop. Dragging is
-   scoped to one row at a time — dropping is only ever allowed onto another
-   item already in that same row, never across rows. */
+/* Admin's "Row order" panel — drag-and-drop reordering and re-categorizing
+   (see renderArticleOrderPanel()/applyRowOrder()/applyRowMove() in the JS).
+   The dragged item fades out in place; a green top/bottom border on
+   whichever item the cursor is over shows exactly where it'll land on
+   drop. Dropping onto an item in a different row moves the article into
+   that row (updating its Row field, not just its position); dropping onto
+   an empty row's dashed placeholder does the same. */
 .article-order-row-item { cursor: grab; }
 .article-order-row-item:active { cursor: grabbing; }
 .article-order-dragging { opacity: 0.4; }
 .article-order-drop-before { box-shadow: inset 0 2px 0 0 #3DB87A; }
 .article-order-drop-after { box-shadow: inset 0 -2px 0 0 #3DB87A; }
 .article-order-drag-handle { color: #bbb; font-size: 14px; line-height: 1; flex-shrink: 0; user-select: none; }
+.article-order-empty-row-dragover { border-color: #3DB87A !important; background: #eafaf1; color: #2E9E63 !important; }
 /* Loading-skeleton version of the same layout, shown briefly before real
    article data arrives — kept visually consistent with the real rows. */
 .article-rows-skeleton { display: flex; gap: 16px; overflow-x: hidden; }
@@ -2694,7 +2696,7 @@ footer {
 
       <div id="article-order-panel" style="margin-bottom:20px; padding:14px 16px; background:#f7f6f2; border:1px solid #e2e0da; border-radius:10px;">
         <div style="font-family:'Lato',sans-serif; font-weight:800; font-size:14px; color:#333; margin-bottom:4px;">Row order</div>
-        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Drag an article by its <span style="letter-spacing:-1px;">⋮⋮</span> handle, or use the arrows, to set the order articles appear in within each row on the site. This only changes where an article sits in its row — it never touches the article's content, its Free/Pro setting, or its URL, and you can't drag an article into a different row this way.</div>
+        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Drag an article by its <span style="letter-spacing:-1px;">⋮⋮</span> handle, or use the arrows, to reorder it within its row. Drag it into a different row's section (even an empty one) to move it there instead — that updates its Row field too, exactly like editing the article, just without opening it. Either way, this never touches the article's content, its Free/Pro setting, or its URL.</div>
         <div id="article-order-rows"></div>
         <div id="article-order-status" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; font-weight:700; margin-top:8px;"></div>
       </div>
@@ -11420,8 +11422,12 @@ function renderArticleOrderPanel() {
 
     if (idsInRow.length === 0) {
       const empty = document.createElement('div');
-      empty.style.cssText = "font-family:'Lato',sans-serif;font-size:12px;color:#999;font-style:italic;";
-      empty.textContent = 'No published articles in this row yet.';
+      empty.className = 'article-order-empty-row';
+      empty.style.cssText = "font-family:'Lato',sans-serif;font-size:12px;color:#999;font-style:italic;padding:10px;border:1px dashed #ddd;border-radius:6px;";
+      empty.textContent = 'No published articles in this row yet. Drag an article here to move it into this row.';
+      empty.addEventListener('dragover', function (e) { articleOrderEmptyRowDragOver(e); });
+      empty.addEventListener('dragleave', function (e) { articleOrderEmptyRowDragLeave(e); });
+      empty.addEventListener('drop', function (e) { articleOrderEmptyRowDrop(e, rowLabel); });
       section.appendChild(empty);
       container.appendChild(section);
       return;
@@ -11537,12 +11543,72 @@ async function moveArticleInRow(rowLabel, id, direction) {
   await applyRowOrder(rowLabel, reordered);
 }
 
-// --- Drag-and-drop reordering within the Row order panel ---------------
-// Dragging is deliberately scoped to one row at a time: dragOver/drop only
-// ever accept a drop onto another item already in the SAME row (checked via
-// rowLabel below), so dragging can reorder a row but can never silently
-// move an article into a different row — that still has to be a deliberate
-// edit to the article's own Row field.
+// Moves an article into a DIFFERENT row by drag-and-drop: sets its Row
+// field to the row it was dropped into (exactly as if you'd typed that
+// name into the Row field yourself and published), then renumbers both the
+// row it left (closing the gap) and the row it entered (to include it at
+// the dropped position) to a clean 1, 2, 3... Everything else about the
+// article — its id, title, body, Free/Pro access — is left untouched, and
+// this still never goes through the publish flow, so it can't turn into
+// "publishing a brand new article."
+async function applyRowMove(id, fromRowLabel, toRowLabel, toOrderedIds) {
+  publishedArticles[id].rowLabel = toRowLabel;
+
+  const sortedIds = sortedArticleIds();
+  const fromRemaining = sortedIds.filter(aid => aid !== id && (publishedArticles[aid].rowLabel || '').trim() === fromRowLabel);
+
+  const orderUpdates = [];
+  function collectOrder(ids) {
+    ids.forEach((aid, i) => {
+      const newOrder = i + 1;
+      publishedArticles[aid].displayOrder = newOrder;
+      orderUpdates.push({ id: aid, displayOrder: newOrder });
+    });
+  }
+  collectOrder(fromRemaining);
+  collectOrder(toOrderedIds);
+
+  saveAppStateLocally();
+  populateArticleRowOptions();
+  renderArticleOrderPanel();
+  renderHomepageArticles();
+
+  // Keep the editor below in sync if the moved (or renumbered) article is
+  // the one currently loaded there.
+  const editingId = document.getElementById('article-editing-id').value;
+  if (editingId === id) document.getElementById('article-row').value = toRowLabel;
+  const editedOrder = orderUpdates.find(u => u.id === editingId);
+  if (editedOrder) document.getElementById('article-display-order').value = editedOrder.displayOrder;
+
+  const statusEl = document.getElementById('article-order-status');
+  if (supabaseClient) {
+    try {
+      const moveRes = await supabaseClient.from('articles')
+        .update({ row_label: toRowLabel, display_order: publishedArticles[id].displayOrder }).eq('id', id);
+      if (moveRes.error) throw moveRes.error;
+      for (const u of orderUpdates) {
+        if (u.id === id) continue; // already saved above, together with its new row_label
+        const res = await supabaseClient.from('articles').update({ display_order: u.displayOrder }).eq('id', u.id);
+        if (res.error) throw res.error;
+      }
+    } catch (e) {
+      console.error('Could not save the row change to the database:', e);
+      if (statusEl) {
+        statusEl.textContent = 'Moved here, but saving the row change to the database failed: ' + (e.message || e);
+        statusEl.style.display = 'block';
+      }
+      return;
+    }
+  }
+  if (statusEl) statusEl.style.display = 'none';
+}
+
+// --- Drag-and-drop reordering (and re-categorizing) in the Row order panel
+// Dropping an article onto another article moves it there, same-row or
+// not; dropping it below where it started may reorder within a row (see
+// applyRowOrder) or, when it lands in a different row's section, change
+// that article's Row field too (see applyRowMove) — exactly as if you'd
+// edited the Row field yourself, just without opening the article.
 let articleDragState = null; // { rowLabel, id } of whatever's currently being dragged
 
 function articleOrderDragStart(e, rowLabel, id) {
@@ -11557,6 +11623,7 @@ function articleOrderDragEnd() {
   document.querySelectorAll('.article-order-drop-before, .article-order-drop-after').forEach(el => {
     el.classList.remove('article-order-drop-before', 'article-order-drop-after');
   });
+  document.querySelectorAll('.article-order-empty-row-dragover').forEach(el => el.classList.remove('article-order-empty-row-dragover'));
   articleDragState = null;
 }
 
@@ -11565,7 +11632,7 @@ function articleOrderDragLeave(e) {
 }
 
 function articleOrderDragOver(e, rowLabel, id) {
-  if (!articleDragState || articleDragState.rowLabel !== rowLabel || articleDragState.id === id) return;
+  if (!articleDragState || articleDragState.id === id) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   const rect = e.currentTarget.getBoundingClientRect();
@@ -11578,19 +11645,48 @@ async function articleOrderDrop(e, rowLabel, targetId) {
   e.preventDefault();
   const droppedBefore = e.currentTarget.classList.contains('article-order-drop-before');
   e.currentTarget.classList.remove('article-order-drop-before', 'article-order-drop-after');
-  if (!articleDragState || articleDragState.rowLabel !== rowLabel) return;
+  if (!articleDragState) return;
   const draggedId = articleDragState.id;
+  const fromRowLabel = articleDragState.rowLabel;
   if (draggedId === targetId) return;
 
   const sortedIds = sortedArticleIds();
-  const idsInRow = sortedIds.filter(aid => (publishedArticles[aid].rowLabel || '').trim() === rowLabel);
-  const withoutDragged = idsInRow.filter(aid => aid !== draggedId);
-  let targetIdx = withoutDragged.indexOf(targetId);
+  const idsInTargetRow = sortedIds.filter(aid => aid !== draggedId && (publishedArticles[aid].rowLabel || '').trim() === rowLabel);
+  let targetIdx = idsInTargetRow.indexOf(targetId);
   if (targetIdx === -1) return;
   if (!droppedBefore) targetIdx += 1;
-  withoutDragged.splice(targetIdx, 0, draggedId);
+  idsInTargetRow.splice(targetIdx, 0, draggedId);
 
-  await applyRowOrder(rowLabel, withoutDragged);
+  if (fromRowLabel === rowLabel) {
+    await applyRowOrder(rowLabel, idsInTargetRow);
+  } else {
+    await applyRowMove(draggedId, fromRowLabel, rowLabel, idsInTargetRow);
+  }
+}
+
+// Dropping onto an empty row's placeholder (no existing items to drop
+// "onto") always means "move this article here, as the only one in this
+// row for now."
+function articleOrderEmptyRowDragOver(e) {
+  if (!articleDragState) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('article-order-empty-row-dragover');
+}
+
+function articleOrderEmptyRowDragLeave(e) {
+  e.currentTarget.classList.remove('article-order-empty-row-dragover');
+}
+
+async function articleOrderEmptyRowDrop(e, rowLabel) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('article-order-empty-row-dragover');
+  if (!articleDragState) return;
+  const draggedId = articleDragState.id;
+  const fromRowLabel = articleDragState.rowLabel;
+  if (fromRowLabel === rowLabel) return; // already the only thing in this row
+
+  await applyRowMove(draggedId, fromRowLabel, rowLabel, [draggedId]);
 }
 
 function loadArticleIntoEditor() {
