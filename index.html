@@ -2688,9 +2688,14 @@ footer {
 
       <div class="admin-field" style="margin-bottom:20px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <label class="auth-label" style="margin:0;">Team totals so far (every published week, added up)</label>
-          <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckPage()">Refresh</button>
+          <label class="auth-label" style="margin:0;">Team totals so far (pick which weeks to add together)</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="results-check-download-img-btn" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="downloadResultsCheckTotalsImage()">⬇ Download as Image</button>
+            <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckPage()">Refresh</button>
+          </div>
         </div>
+        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-top:6px;">Check the weeks that have actually been played so far — uncheck any week you've published ahead of time (like an early look at next week's totals) so it doesn't get added in before it's actually happened. Your choice here is remembered.</div>
+        <div id="results-check-weeks-picker" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;"></div>
         <div id="results-check-team-totals" style="margin-top:10px;"></div>
       </div>
 
@@ -9771,14 +9776,84 @@ function parseFantasyProsPointsCSV(text) {
   return players;
 }
 
-// Adds up each team's published Weekly Team Implied Total across EVERY
-// week currently in publishedTeamTotals — not an average, the running sum
+// Which weeks (out of every week with published Weekly Team Implied
+// Totals) should actually count toward "Team totals so far" — e.g. you
+// publish Team Implied Totals ahead of a week being played, but it
+// shouldn't count as a real result yet. Keyed by week number as a string;
+// a week not present here defaults to selected (true), so a week that's
+// never been explicitly touched still counts, same as before this picker
+// existed — only explicitly unchecking a week excludes it, and that choice
+// is remembered (localStorage, admin-only, never synced anywhere).
+const RESULTS_CHECK_WEEKS_KEY = 'prff_results_check_weeks_v1';
+let resultsCheckSelectedWeeks = {};
+function saveResultsCheckWeeksLocally() {
+  try { localStorage.setItem(RESULTS_CHECK_WEEKS_KEY, JSON.stringify(resultsCheckSelectedWeeks)); } catch (e) { /* best-effort only */ }
+}
+function loadResultsCheckWeeksLocally() {
+  try {
+    const raw = localStorage.getItem(RESULTS_CHECK_WEEKS_KEY);
+    if (raw) Object.assign(resultsCheckSelectedWeeks, JSON.parse(raw));
+  } catch (e) { /* fine to start from empty (= everything selected) if this ever fails to parse */ }
+}
+function getAvailableResultsCheckWeeks() {
+  return Object.keys(publishedTeamTotals).map(w => parseInt(w, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+}
+function isResultsCheckWeekSelected(week) {
+  return resultsCheckSelectedWeeks[String(week)] !== false;
+}
+function toggleResultsCheckWeek(week, checked) {
+  resultsCheckSelectedWeeks[String(week)] = !!checked;
+  saveResultsCheckWeeksLocally();
+  renderResultsCheckPage();
+}
+function setAllResultsCheckWeeks(selected) {
+  getAvailableResultsCheckWeeks().forEach(week => { resultsCheckSelectedWeeks[String(week)] = selected; });
+  saveResultsCheckWeeksLocally();
+  renderResultsCheckPage();
+}
+function renderResultsCheckWeeksPicker() {
+  const container = document.getElementById('results-check-weeks-picker');
+  if (!container) return;
+  const weeks = getAvailableResultsCheckWeeks();
+  if (weeks.length === 0) { container.innerHTML = ''; return; }
+  let html = weeks.map(week => {
+    const checked = isResultsCheckWeekSelected(week) ? ' checked' : '';
+    return '<label style="display:flex; align-items:center; gap:4px; font-family:\'Lato\',sans-serif; font-size:13px; color:#333; cursor:pointer;">' +
+      '<input type="checkbox"' + checked + ' onchange="toggleResultsCheckWeek(' + week + ', this.checked)" style="width:15px; height:15px; margin:0; cursor:pointer;"> Week ' + week +
+      '</label>';
+  }).join('');
+  html += '<button type="button" class="trade-add-btn" style="width:auto; padding:3px 10px; font-size:11px;" onclick="setAllResultsCheckWeeks(true)">Select all</button>';
+  html += '<button type="button" class="trade-add-btn" style="width:auto; padding:3px 10px; font-size:11px;" onclick="setAllResultsCheckWeeks(false)">Select none</button>';
+  container.innerHTML = html;
+}
+
+// Turns a sorted list of selected week numbers into a short readable label
+// for the card header — contiguous runs collapse to "1–3", separate weeks
+// or gaps (e.g. a skipped week) list out as "1–2, 4".
+function describeWeekSelection(weeks) {
+  if (weeks.length === 0) return '';
+  const parts = [];
+  let start = weeks[0], prev = weeks[0];
+  for (let i = 1; i <= weeks.length; i++) {
+    const w = weeks[i];
+    if (w === prev + 1) { prev = w; continue; }
+    parts.push(start === prev ? String(start) : (start + '–' + prev));
+    if (w !== undefined) { start = w; prev = w; }
+  }
+  return (weeks.length === 1 ? 'Week ' : 'Weeks ') + parts.join(', ');
+}
+
+// Adds up each team's published Weekly Team Implied Total across whichever
+// weeks are passed in (defaults to EVERY week currently in
+// publishedTeamTotals if omitted) — not an average, the running sum
 // (Week 1 + Week 2 + Week 3 + ... so far). A bye week's "BYE" entry is
 // skipped rather than counted as 0, so a team that's already had its bye
 // isn't dragged down relative to one that's played every week so far.
-function computeCumulativeTeamTotals() {
+function computeCumulativeTeamTotals(weeksFilter) {
+  const allowed = weeksFilter ? new Set(weeksFilter.map(w => String(w))) : null;
   const sums = {};
   Object.keys(publishedTeamTotals).forEach(week => {
+    if (allowed && !allowed.has(String(week))) return;
     const data = publishedTeamTotals[week];
     if (!data || !data.rows) return;
     data.rows.forEach(r => {
@@ -9865,23 +9940,29 @@ function refreshResultsCheckStatusLabels() {
 }
 
 function exportCumulativeTeamTotalsCSV() {
-  const rows = computeCumulativeTeamTotals().sort((a, b) => b.value - a.value);
+  const selectedWeeks = getAvailableResultsCheckWeeks().filter(isResultsCheckWeekSelected);
+  const rows = computeCumulativeTeamTotals(selectedWeeks).sort((a, b) => b.value - a.value);
   if (rows.length === 0) return;
   downloadCSV('team-implied-totals-so-far.csv', ['Team', 'Total So Far', 'Weeks Counted'], rows.map(r => [r.team, r.value, r.weeksCounted]));
 }
 
 function renderResultsCheckPage() {
   loadResultsCheckCSVLocally();
+  loadResultsCheckWeeksLocally();
   refreshResultsCheckStatusLabels();
+  renderResultsCheckWeeksPicker();
 
-  const cumulative = computeCumulativeTeamTotals();
+  const availableWeeks = getAvailableResultsCheckWeeks();
+  const selectedWeeks = availableWeeks.filter(isResultsCheckWeekSelected);
+  const cumulative = computeCumulativeTeamTotals(selectedWeeks);
   const totalsContainer = document.getElementById('results-check-team-totals');
   if (totalsContainer) {
-    if (cumulative.length === 0) {
+    if (availableWeeks.length === 0) {
       totalsContainer.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;">No Weekly Team Implied Totals have been published yet.</div>';
+    } else if (selectedWeeks.length === 0) {
+      totalsContainer.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;">No weeks are checked above — check at least one week to see a total.</div>';
     } else {
-      const weeksPublished = Object.keys(publishedTeamTotals).map(w => parseInt(w, 10)).filter(n => !isNaN(n));
-      const label = weeksPublished.length > 0 ? 'Weeks 1–' + Math.max(...weeksPublished) + ' So Far' : 'So Far';
+      const label = describeWeekSelection(selectedWeeks) + ' So Far';
       totalsContainer.innerHTML = buildPublishedTotalsHTML(label, cumulative, 'exportCumulativeTeamTotalsCSV');
     }
   }
@@ -10086,6 +10167,61 @@ async function downloadWeeklyTotalsImage() {
   } finally {
     if (container && container.parentNode) container.parentNode.removeChild(container);
     if (btn) { btn.disabled = false; btn.textContent = originalLabel || '⬇ Download as Image (for social media)'; }
+  }
+}
+
+// Same pattern as downloadWeeklyTotalsImage() above, but for Admin > Results
+// Check's cumulative "Team totals so far" card — the printable one-sheet of
+// season-to-date Team Implied Totals, reflecting exactly whichever weeks are
+// currently checked in the weeks picker. The Export-as-CSV button that
+// buildPublishedTotalsHTML embeds in this particular card (Results Check
+// passes exportCumulativeTeamTotalsCSV as its exportFnName, unlike the
+// per-week preview) is stripped from the clone first, so it never shows up
+// baked into the downloaded image.
+async function downloadResultsCheckTotalsImage() {
+  const totalsEl = document.getElementById('results-check-team-totals');
+  if (!totalsEl || !totalsEl.innerHTML.trim()) {
+    alert('Nothing to turn into an image yet — check at least one week above first.');
+    return;
+  }
+  const selectedWeeks = getAvailableResultsCheckWeeks().filter(isResultsCheckWeekSelected);
+  if (selectedWeeks.length === 0) {
+    alert('Check at least one week above before downloading an image.');
+    return;
+  }
+  const btn = document.getElementById('results-check-download-img-btn');
+  const originalLabel = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing image…'; }
+
+  let container = null;
+  try {
+    await loadHtml2Canvas();
+
+    container = document.createElement('div');
+    container.style.cssText = 'position:absolute; left:-99999px; top:0; width:1000px; background:#fff; padding:24px;';
+    container.innerHTML = totalsEl.innerHTML;
+    container.querySelectorAll('.totals-pub-exportrow').forEach(el => el.remove());
+    document.body.appendChild(container);
+
+    // Give web fonts a beat to finish loading so the image doesn't get
+    // captured in a fallback font (same reasoning as the trade report export).
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+
+    const canvas = await html2canvas(container, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+
+    const filenameWeeks = selectedWeeks.join('-');
+    const link = document.createElement('a');
+    link.download = 'team-implied-totals-weeks-' + filenameWeeks + '.png';
+    link.href = canvas.toDataURL('image/png');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.warn('Results Check totals image failed:', err);
+    alert('Could not build the image — check your connection and try again.');
+  } finally {
+    if (container && container.parentNode) container.parentNode.removeChild(container);
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel || '⬇ Download as Image'; }
   }
 }
 
@@ -12557,19 +12693,29 @@ async function loadAppState() {
       // safety net as the two tables above.
       supabaseClient.from('opening_season_long_rankings').select('*'),
     ]);
-    if (artRes.error) throw artRes.error;
-
-    (artRes.data || []).forEach(row => {
-      const article = { id: row.id, title: row.title, tag: row.tag, rowLabel: row.row_label || '', access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
-      if (row.status === 'published') publishedArticles[row.id] = article;
-      else draftArticles[row.id] = article;
-    });
-    // Fixes up any article still carrying an old, since-renamed Row value
-    // (see ARTICLE_ROW_RENAMES/migrateArticleRowLabels above) — the rename
-    // itself happens synchronously right now, so renderHomepageArticles()
-    // right after loadAppState() already shows the corrected header; not
-    // awaited, since the Supabase write-back is a best-effort background fix.
-    migrateArticleRowLabels();
+    // Same graceful, skip-but-continue pattern as every other query below:
+    // a problem fetching articles must never block the weekly totals, player
+    // projections, ROS, season-long, matchups, or opening-snapshot data that
+    // already arrived successfully in this same Promise.all from loading —
+    // this used to `throw` here instead, which (via the outer catch) bailed
+    // the ENTIRE function into loadAppStateLocally() — stale/cached data —
+    // any time JUST the articles table hiccupped, even though every other
+    // query had already succeeded. See CHANGELOG for the full story.
+    if (artRes.error) {
+      console.warn('Could not load articles from the database this time — articles may show as missing or stale until a later page load succeeds:', artRes.error);
+    } else {
+      (artRes.data || []).forEach(row => {
+        const article = { id: row.id, title: row.title, tag: row.tag, rowLabel: row.row_label || '', access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
+        if (row.status === 'published') publishedArticles[row.id] = article;
+        else draftArticles[row.id] = article;
+      });
+      // Fixes up any article still carrying an old, since-renamed Row value
+      // (see ARTICLE_ROW_RENAMES/migrateArticleRowLabels above) — the rename
+      // itself happens synchronously right now, so renderHomepageArticles()
+      // right after loadAppState() already shows the corrected header; not
+      // awaited, since the Supabase write-back is a best-effort background fix.
+      migrateArticleRowLabels();
+    }
 
     // Keeps the LATEST published_at seen for a given key — since a publish
     // deletes-then-inserts all rows together, they'll normally all share
