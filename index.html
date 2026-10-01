@@ -2443,7 +2443,6 @@ footer {
       <button class="admin-tab" id="admin-tab-totals" onclick="switchAdminTool('totals')">Weekly Team Implied Totals</button>
       <button class="admin-tab" id="admin-tab-rankings" onclick="switchAdminTool('rankings')">Weekly player projections</button>
       <button class="admin-tab" id="admin-tab-ros" onclick="switchAdminTool('ros')">Rest of season projections</button>
-      <button class="admin-tab" id="admin-tab-results-check" onclick="switchAdminTool('results-check')">Results Check</button>
       <button class="admin-tab" id="admin-tab-articles" onclick="switchAdminTool('articles')">Articles</button>
       <button class="admin-tab" id="admin-tab-export" onclick="switchAdminTool('export')">Export Data</button>
       <button class="admin-tab" id="admin-tab-users" onclick="switchAdminTool('users')">Users</button>
@@ -2681,49 +2680,6 @@ footer {
         <div class="admin-preview-label">Live preview — this is exactly what publishes</div>
         <div id="ros-preview"></div>
       </div>
-    </div>
-
-    <div id="admin-tool-results-check" style="display:none;">
-      <p class="article-body-p" style="max-width:100%;">This is a private, admin-only accuracy check — nothing on this page is ever shown to site visitors or saved to the shared database. It adds up every week of published Weekly Team Implied Totals so far to rank teams by actual season-to-date implied scoring, then lets you drop in a per-position "actual fantasy points scored" export (like FantasyPros' Fantasy Football Points CSV) to see how many of the real top-12 scorers at each position played for one of those top-12 teams.</p>
-
-      <div class="admin-field" style="margin-bottom:20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <label class="auth-label" style="margin:0;">Team totals so far (every published week, added up)</label>
-          <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckPage()">Refresh</button>
-        </div>
-        <div id="results-check-team-totals" style="margin-top:10px;"></div>
-      </div>
-
-      <div class="admin-field" style="margin-bottom:16px;">
-        <label class="auth-label">Actual fantasy points scored, by position <span class="trade-optional-tag">upload a CSV per position</span></label>
-        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Each file should be a "Fantasy Football Points" export (FantasyPros or similar) with a PLAYER column like "Trey McBride   ARI" and a TTL column for season-to-date points. Re-upload the same position any time to refresh it with more weeks of data — this stays in this browser only; it's never published anywhere.</div>
-        <div style="display:flex; gap:18px; flex-wrap:wrap;">
-          <div class="admin-field">
-            <label class="auth-label">QB</label>
-            <input type="file" accept=".csv" onchange="handleResultsCheckCSVUpload(event,'QB')">
-            <div id="results-check-status-QB" style="font-family:'Lato',sans-serif; font-size:12px; color:#999; margin-top:4px;">Not uploaded yet.</div>
-          </div>
-          <div class="admin-field">
-            <label class="auth-label">RB</label>
-            <input type="file" accept=".csv" onchange="handleResultsCheckCSVUpload(event,'RB')">
-            <div id="results-check-status-RB" style="font-family:'Lato',sans-serif; font-size:12px; color:#999; margin-top:4px;">Not uploaded yet.</div>
-          </div>
-          <div class="admin-field">
-            <label class="auth-label">WR</label>
-            <input type="file" accept=".csv" onchange="handleResultsCheckCSVUpload(event,'WR')">
-            <div id="results-check-status-WR" style="font-family:'Lato',sans-serif; font-size:12px; color:#999; margin-top:4px;">Not uploaded yet.</div>
-          </div>
-          <div class="admin-field">
-            <label class="auth-label">TE</label>
-            <input type="file" accept=".csv" onchange="handleResultsCheckCSVUpload(event,'TE')">
-            <div id="results-check-status-TE" style="font-family:'Lato',sans-serif; font-size:12px; color:#999; margin-top:4px;">Not uploaded yet.</div>
-          </div>
-        </div>
-        <div id="results-check-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; font-weight:700; margin-top:10px;"></div>
-      </div>
-
-      <div id="results-check-summary"></div>
-      <div id="results-check-tables"></div>
     </div>
 
     <div id="admin-tool-articles" style="display:none;">
@@ -8706,7 +8662,7 @@ function exportUsersCSV() {
 }
 
 function switchAdminTool(tool) {
-  ['rankings', 'totals', 'totals-sl', 'seasonlong', 'ros', 'results-check', 'articles', 'export', 'users', 'messages'].forEach(t => {
+  ['rankings', 'totals', 'totals-sl', 'seasonlong', 'ros', 'articles', 'export', 'users', 'messages'].forEach(t => {
     document.getElementById('admin-tool-' + t).style.display = tool === t ? 'block' : 'none';
     document.getElementById('admin-tab-' + t).classList.toggle('active', tool === t);
   });
@@ -8729,9 +8685,6 @@ function switchAdminTool(tool) {
   }
   if (tool === 'ros' && !document.getElementById('ros-rows').children.length) {
     loadRankTable('ros');
-  }
-  if (tool === 'results-check') {
-    renderResultsCheckPage();
   }
   if (tool === 'articles') {
     populateArticleLoadSelect();
@@ -9709,229 +9662,6 @@ function buildPublishedTotalsHTML(topLabel, rows, exportFnName, matchupsForWeek,
   html += '</div>'; // close totals-pub-columns
   html += '</div></div>'; // close totals-pub-wrap, totals-pub-outer
   return html;
-}
-
-// --- Admin > Results Check ----------------------------------------------
-// A private, admin-only accuracy check: never published to Supabase, never
-// shown to site visitors. It (1) adds up every week of published Weekly
-// Team Implied Totals so far into a season-to-date ranking, then (2) lets
-// you drop in a per-position "actual fantasy points scored" CSV (like
-// FantasyPros' Fantasy Football Points export) to see how many of the real
-// top-12 scorers at each position play for one of those top-12 teams.
-
-// Each uploaded CSV's raw text, kept only in this browser's localStorage —
-// re-uploading a position overwrites it (e.g. with more weeks of games),
-// and nothing here ever leaves this device or touches the shared database.
-const RESULTS_CHECK_KEY = 'prff_results_check_csv_v1';
-let resultsCheckCSVByPosition = { QB: '', RB: '', WR: '', TE: '' };
-
-function saveResultsCheckCSVLocally() {
-  try { localStorage.setItem(RESULTS_CHECK_KEY, JSON.stringify(resultsCheckCSVByPosition)); } catch (e) { /* best-effort only */ }
-}
-function loadResultsCheckCSVLocally() {
-  try {
-    const raw = localStorage.getItem(RESULTS_CHECK_KEY);
-    if (raw) Object.assign(resultsCheckCSVByPosition, JSON.parse(raw));
-  } catch (e) { /* fine to start from empty if this ever fails to parse */ }
-}
-
-// FantasyPros exports Jacksonville as "JAC"; every other NFL_TEAM_ABBR
-// value on this site (and everywhere else these exports use) is "JAX" —
-// normalize that one known mismatch rather than silently failing to match
-// Jaguars players to their team's implied total.
-const RESULTS_CHECK_TEAM_ALIAS = { JAC: 'JAX' };
-
-// Parses a FantasyPros-style "Fantasy Football Points" export:
-// RK,PLAYER,GP,<week 1>,<week 2>,...,AVG,TTL — where PLAYER is the
-// player's name and team abbreviation run together ("Trey McBride   ARI"),
-// separated by 2+ spaces. Deliberately does NOT assume any fixed number of
-// week columns (there are more of them every week of the season) — it just
-// reads RK/PLAYER from the front and TTL (season-to-date total) from
-// whichever column is last, so the same parser keeps working as the season
-// goes on and the file grows wider.
-function parseFantasyProsPointsCSV(text) {
-  const parsed = parseSimpleCSV(text);
-  if (parsed.length === 0) return [];
-  const first = parsed[0];
-  const looksLikeHeader = (first[1] || '').trim().toUpperCase() === 'PLAYER';
-  const dataRows = looksLikeHeader ? parsed.slice(1) : parsed;
-
-  const players = [];
-  dataRows.forEach(r => {
-    const raw = (r[1] || '').trim();
-    if (!raw) return;
-    const m = raw.match(/^(.*\S)\s{2,}([A-Za-z]{2,4})$/);
-    const name = m ? m[1].trim() : raw;
-    let team = m ? m[2].toUpperCase() : '';
-    team = RESULTS_CHECK_TEAM_ALIAS[team] || team;
-    const ttl = parseFloat(r[r.length - 1]);
-    if (!name || isNaN(ttl)) return;
-    players.push({ player: name, team: team, points: ttl });
-  });
-  return players;
-}
-
-// Adds up each team's published Weekly Team Implied Total across EVERY
-// week currently in publishedTeamTotals — not an average, the running sum
-// (Week 1 + Week 2 + Week 3 + ... so far). A bye week's "BYE" entry is
-// skipped rather than counted as 0, so a team that's already had its bye
-// isn't dragged down relative to one that's played every week so far.
-function computeCumulativeTeamTotals() {
-  const sums = {};
-  Object.keys(publishedTeamTotals).forEach(week => {
-    const data = publishedTeamTotals[week];
-    if (!data || !data.rows) return;
-    data.rows.forEach(r => {
-      if (typeof r.value !== 'number') return;
-      if (!sums[r.team]) sums[r.team] = { team: r.team, value: 0, weeksCounted: 0 };
-      sums[r.team].value += r.value;
-      sums[r.team].weeksCounted += 1;
-    });
-  });
-  return Object.values(sums).map(r => ({ team: r.team, value: Math.round(r.value * 100) / 100, weeksCounted: r.weeksCounted }));
-}
-
-// Which teams (by abbreviation) rank in the top N of the given cumulative
-// totals — same tie-aware "1-2-2-4" ranking used for every other ranked
-// list on the site, so a 3-way tie at the cutoff all count as top-N
-// together rather than one of them getting arbitrarily bumped out.
-function computeTopTeamAbbrSet(cumulativeRows, n) {
-  n = n || 12;
-  const scored = cumulativeRows.filter(r => typeof r.value === 'number').slice().sort((a, b) => b.value - a.value);
-  const ranks = computeDisplayRanks(scored, r => r.value);
-  const set = new Set();
-  scored.forEach((r, i) => { if (ranks[i] <= n) set.add(NFL_TEAM_ABBR[r.team] || r.team); });
-  return set;
-}
-
-// Cross-references one position's uploaded CSV against the top-N team set:
-// ranks the CSV's players by actual points scored (TTL), takes the top 12
-// (tie-aware, so a tie AT 12th includes everyone tied there), and flags
-// which of them play for a team in topTeamAbbrSet.
-function computeTopScorersVsTopTeams(position, topTeamAbbrSet) {
-  const csvText = resultsCheckCSVByPosition[position];
-  if (!csvText) return null;
-  const players = parseFantasyProsPointsCSV(csvText);
-  if (players.length === 0) return null;
-  const sorted = players.slice().sort((a, b) => b.points - a.points);
-  const ranks = computeDisplayRanks(sorted, p => p.points);
-  const top12 = [];
-  sorted.forEach((p, i) => {
-    if (ranks[i] <= 12) top12.push({ rank: ranks[i], player: p.player, team: p.team, points: p.points, onTopTeam: topTeamAbbrSet.has(p.team) });
-  });
-  return { top12: top12, countOnTopTeams: top12.filter(p => p.onTopTeam).length };
-}
-
-function buildResultsCheckPositionTableHTML(position, result) {
-  if (!result) {
-    return '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;margin-bottom:20px;">' + position + ': upload a CSV above to see this.</div>';
-  }
-  let html = '<div style="margin-bottom:24px;">';
-  html += '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:15px;color:#333;margin-bottom:6px;">' + position + ' — ' + result.countOnTopTeams + ' of ' + result.top12.length + ' top scorers play for a top-12 team</div>';
-  html += '<table style="width:100%;border-collapse:collapse;font-family:\'Lato\',sans-serif;font-size:13px;">';
-  html += '<thead><tr style="border-bottom:2px solid #333;">' +
-    '<th style="text-align:left;padding:6px 10px;">Rank</th>' +
-    '<th style="text-align:left;padding:6px 10px;">Player</th>' +
-    '<th style="text-align:left;padding:6px 10px;">Team</th>' +
-    '<th style="text-align:right;padding:6px 10px;">Points</th>' +
-    '<th style="text-align:center;padding:6px 10px;">Top-12 team?</th>' +
-    '</tr></thead><tbody>';
-  result.top12.forEach((p, i) => {
-    const bg = i % 2 === 1 ? 'background:#f7f6f3;' : '';
-    const badge = p.onTopTeam
-      ? '<span style="color:#3DB87A;font-weight:800;">&#10003; Yes</span>'
-      : '<span style="color:#c0392b;font-weight:800;">&#10007; No</span>';
-    html += '<tr style="' + bg + '">' +
-      '<td style="padding:6px 10px;color:#777;">' + p.rank + '</td>' +
-      '<td style="padding:6px 10px;font-weight:700;">' + p.player + '</td>' +
-      '<td style="padding:6px 10px;">' + p.team + '</td>' +
-      '<td style="padding:6px 10px;text-align:right;">' + p.points.toFixed(1) + '</td>' +
-      '<td style="padding:6px 10px;text-align:center;">' + badge + '</td>' +
-      '</tr>';
-  });
-  html += '</tbody></table></div>';
-  return html;
-}
-
-function refreshResultsCheckStatusLabels() {
-  ['QB', 'RB', 'WR', 'TE'].forEach(pos => {
-    const statusEl = document.getElementById('results-check-status-' + pos);
-    if (!statusEl) return;
-    const text = resultsCheckCSVByPosition[pos];
-    if (!text) { statusEl.textContent = 'Not uploaded yet.'; return; }
-    const players = parseFantasyProsPointsCSV(text);
-    statusEl.textContent = 'Loaded ' + players.length + ' players.';
-  });
-}
-
-function exportCumulativeTeamTotalsCSV() {
-  const rows = computeCumulativeTeamTotals().sort((a, b) => b.value - a.value);
-  if (rows.length === 0) return;
-  downloadCSV('team-implied-totals-so-far.csv', ['Team', 'Total So Far', 'Weeks Counted'], rows.map(r => [r.team, r.value, r.weeksCounted]));
-}
-
-function renderResultsCheckPage() {
-  loadResultsCheckCSVLocally();
-  refreshResultsCheckStatusLabels();
-
-  const cumulative = computeCumulativeTeamTotals();
-  const totalsContainer = document.getElementById('results-check-team-totals');
-  if (totalsContainer) {
-    if (cumulative.length === 0) {
-      totalsContainer.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;">No Weekly Team Implied Totals have been published yet.</div>';
-    } else {
-      const weeksPublished = Object.keys(publishedTeamTotals).map(w => parseInt(w, 10)).filter(n => !isNaN(n));
-      const label = weeksPublished.length > 0 ? 'Weeks 1–' + Math.max(...weeksPublished) + ' So Far' : 'So Far';
-      totalsContainer.innerHTML = buildPublishedTotalsHTML(label, cumulative, 'exportCumulativeTeamTotalsCSV');
-    }
-  }
-
-  const topTeamAbbrSet = computeTopTeamAbbrSet(cumulative, 12);
-  const positions = ['QB', 'RB', 'WR', 'TE'];
-  const results = {};
-  positions.forEach(pos => { results[pos] = computeTopScorersVsTopTeams(pos, topTeamAbbrSet); });
-
-  const tablesContainer = document.getElementById('results-check-tables');
-  if (tablesContainer) {
-    tablesContainer.innerHTML = positions.map(pos => buildResultsCheckPositionTableHTML(pos, results[pos])).join('');
-  }
-
-  const summaryContainer = document.getElementById('results-check-summary');
-  if (summaryContainer) {
-    const withData = positions.filter(pos => results[pos]);
-    if (withData.length === 0 || cumulative.length === 0) {
-      summaryContainer.innerHTML = '';
-    } else {
-      const totalTop = withData.reduce((sum, pos) => sum + results[pos].top12.length, 0);
-      const totalOnTopTeams = withData.reduce((sum, pos) => sum + results[pos].countOnTopTeams, 0);
-      summaryContainer.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:16px;color:#111;padding:10px 0;border-top:1px solid #e2e0da;margin-top:4px;">Overall: ' + totalOnTopTeams + ' of ' + totalTop + ' top-12 scorers (across ' + withData.length + ' position' + (withData.length === 1 ? '' : 's') + ' with a CSV uploaded) play for a top-12 team.</div>';
-    }
-  }
-}
-
-function handleResultsCheckCSVUpload(event, position) {
-  const file = event.target.files[0];
-  event.target.value = '';
-  if (!file) return;
-  const errorEl = document.getElementById('results-check-error');
-  if (errorEl) errorEl.style.display = 'none';
-  const reader = new FileReader();
-  reader.onload = function (e) {
-    try {
-      const text = e.target.result;
-      const players = parseFantasyProsPointsCSV(text);
-      if (players.length === 0) throw new Error('No player rows found in that file.');
-      resultsCheckCSVByPosition[position] = text;
-      saveResultsCheckCSVLocally();
-      renderResultsCheckPage();
-    } catch (err) {
-      if (errorEl) {
-        errorEl.textContent = 'Could not read the ' + position + ' file: ' + err.message;
-        errorEl.style.display = 'block';
-      }
-    }
-  };
-  reader.readAsText(file);
 }
 
 async function publishAdminTotalsTable() {
