@@ -9644,7 +9644,12 @@ function renderResultsCheckWeeklyAdmin() {
     container.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;">No ' + resultsCheckWeeklyPosition + ' projections were published for Week ' + week + ' yet — publish that week on the Weekly Player Projections tool first.</div>';
     return;
   }
-  container.innerHTML = buildWeeklyAccuracyTableHTML(resultsCheckWeeklyPosition, 'Week ' + week, data, null);
+  const dupNotice = data.duplicateCount > 0
+    ? '<div style="font-family:\'Lato\',sans-serif;font-size:12px;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;margin-bottom:10px;">' +
+      'Heads up: ' + (data.duplicateNames || []).join(', ') + (data.duplicateCount === 1 ? ' appears' : ' appear') + ' more than once in your Weekly Player Projections for ' + resultsCheckWeeklyPosition + ' Week ' + week + '. Only the first entry for each was kept below — you may want to clean up the duplicate' + (data.duplicateCount === 1 ? '' : 's') + ' on the Weekly Player Projections tool.' +
+      '</div>'
+    : '';
+  container.innerHTML = dupNotice + buildWeeklyAccuracyTableHTML(resultsCheckWeeklyPosition, 'Week ' + week, data, null);
 }
 
 // Publishes the CURRENT position/week's projected-vs-actual breakdown
@@ -10393,6 +10398,29 @@ function computeWeeklyAccuracyForPosition(position, week) {
   const predicted = publishedRankings[position + '-' + week];
   if (!predicted || !predicted.rows || predicted.rows.length === 0) return null;
 
+  // Weekly Player Projections doesn't stop an admin from fat-fingering the
+  // same player into a week's table twice. That was always harmless before
+  // (nothing else cared about player-name uniqueness), but published_weekly_accuracy
+  // has a (pos, week, player) primary key, so two identical names reaching the
+  // insert in the same batch will hard-crash the publish. Keep only the first
+  // occurrence of each exact player name (rows are entered/sorted highest
+  // probability first, so the first occurrence is the one worth keeping) and
+  // report how many duplicates got dropped so the admin can go clean up the
+  // source data if they want to.
+  const seenNames = {};
+  const dedupedPredictedRows = [];
+  const duplicateNames = [];
+  predicted.rows.forEach(r => {
+    const key = (r.player || '').trim();
+    if (seenNames[key]) {
+      if (duplicateNames.indexOf(key) === -1) duplicateNames.push(key);
+      return;
+    }
+    seenNames[key] = true;
+    dedupedPredictedRows.push(r);
+  });
+  const duplicateCount = duplicateNames.length;
+
   const csvText = resultsCheckCSVByPosition[position];
   const csvPlayers = csvText ? parseFantasyProsPointsCSV(csvText) : [];
   const weekNum = Number(week);
@@ -10405,7 +10433,7 @@ function computeWeeklyAccuracyForPosition(position, week) {
     actualByName[normalizeNameForWeeklyMatch(p.player)] = { points: p.weekly[weekNum], rank: actualRanks[i] };
   });
 
-  const rows = predicted.rows.map(r => {
+  const rows = dedupedPredictedRows.map(r => {
     // Try the straightforward normalized match first; if that misses, fall
     // back to a manually-saved alias (see resultsCheckPlayerAliases) for a
     // genuine nickname mismatch normalization alone can't resolve (e.g.
@@ -10423,7 +10451,7 @@ function computeWeeklyAccuracyForPosition(position, week) {
     };
   });
 
-  return { rows: rows, hasActualData: playedThisWeek.length > 0, topN: predicted.topN };
+  return { rows: rows, hasActualData: playedThisWeek.length > 0, topN: predicted.topN, duplicateCount: duplicateCount, duplicateNames: duplicateNames };
 }
 
 // Which weeks (out of every week with published Weekly Team Implied
