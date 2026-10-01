@@ -1038,6 +1038,18 @@ footer {
 .pub-select-reset-hint { font-family: 'Lato', sans-serif; font-size: 12px; color: #888; margin-top: 8px; }
 .pub-select-reset-hint a { color: #3DB87A; font-weight: 700; text-decoration: none; }
 .pub-select-reset-hint a:hover { text-decoration: underline; }
+/* Results Check > Weekly Breakdown: the extra "how did the selection
+   actually do" line under the probability sum (see updatePubSelection),
+   and the amber notice shown while a week's actual results aren't in yet. */
+.pub-select-actual { margin-top: 10px; }
+.pub-select-actual-line { font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700; color: #111; }
+.pub-select-actual-line strong { color: #3DB87A; }
+.pub-select-actual-pending { font-family: 'Lato', sans-serif; font-size: 12px; color: #aaa; font-style: italic; }
+.rcwk-pending-note {
+  font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; color: #8a6d3b;
+  background: #fcf3d9; border: 1px solid #f0dca0; border-radius: 6px;
+  padding: 10px 14px; margin: 0 20px 14px; text-align: center;
+}
 .pub-title { font-family: 'Lato', sans-serif; font-size: 18px; font-weight: 900; color: #111; padding: 12px 20px 10px; border-bottom: 2px solid #111; text-align: center; }
 .pub-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .pub-table { width: 100%; border-collapse: collapse; }
@@ -2158,6 +2170,23 @@ footer {
     <select class="admin-select" id="proj-ros-week-select" onchange="renderProjectionsPage()" style="width:80px; padding:6px 10px;"></select>
   </div>
 
+  <div id="proj-rc-view-tabs" class="proj-subtabs" style="display:none;">
+    <button class="proj-subtab active" id="proj-rc-view-season" onclick="switchResultsCheckPublicView('season')">Season Totals</button>
+    <button class="proj-subtab" id="proj-rc-view-weekly" onclick="switchResultsCheckPublicView('weekly')">Weekly Breakdown</button>
+  </div>
+
+  <div id="proj-rc-weekly-subtabs" class="proj-subtabs" style="display:none;">
+    <button class="proj-subtab active" id="proj-rc-subtab-QB" onclick="switchResultsCheckWeeklyPublicPosition('QB')">QB</button>
+    <button class="proj-subtab" id="proj-rc-subtab-WR" onclick="switchResultsCheckWeeklyPublicPosition('WR')">WR</button>
+    <button class="proj-subtab" id="proj-rc-subtab-RB" onclick="switchResultsCheckWeeklyPublicPosition('RB')">RB</button>
+    <button class="proj-subtab" id="proj-rc-subtab-TE" onclick="switchResultsCheckWeeklyPublicPosition('TE')">TE</button>
+  </div>
+
+  <div id="proj-rc-weekly-week-row" class="proj-subtabs" style="display:none; align-items:center; gap:10px;">
+    <span style="font-family:'Lato',sans-serif; font-size:13px; font-weight:700; color:#555;">Week</span>
+    <select class="admin-select" id="proj-rc-weekly-week-select" onchange="renderProjectionsPage()" style="width:80px; padding:6px 10px;"></select>
+  </div>
+
   <div id="proj-locked" class="proj-locked" style="display:none;">
     <div class="proj-locked-title">🔒 Sign in to view projections</div>
     <div class="proj-locked-sub">Create a free account to see this week's full player projections.</div>
@@ -2776,20 +2805,52 @@ footer {
         <div id="results-check-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; font-weight:700; margin-top:10px;"></div>
       </div>
 
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:22px 0 4px;">
-        <label class="auth-label" style="margin:0;">Preview — exactly what publishes to subscribers</label>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" id="results-check-download-img-btn" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="downloadResultsCheckTotalsImage()">⬇ Download as Image</button>
-          <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckPage()">Refresh</button>
-          <button type="button" id="results-check-publish-btn" class="trade-analyze-btn" style="width:auto; padding:6px 18px;" onclick="publishResultsCheckToSubscribers()">Publish to Subscribers</button>
+      <div class="proj-subtabs" style="margin:0 0 18px;">
+        <button class="proj-subtab active" id="rc-admin-view-season" onclick="switchResultsCheckAdminView('season')">Season Totals</button>
+        <button class="proj-subtab" id="rc-admin-view-weekly" onclick="switchResultsCheckAdminView('weekly')">Weekly Breakdown</button>
+      </div>
+
+      <div id="rc-admin-season-view">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 4px;">
+          <label class="auth-label" style="margin:0;">Preview — exactly what publishes to subscribers</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="results-check-download-img-btn" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="downloadResultsCheckTotalsImage()">⬇ Download as Image</button>
+            <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckPage()">Refresh</button>
+            <button type="button" id="results-check-publish-btn" class="trade-analyze-btn" style="width:auto; padding:6px 18px;" onclick="publishResultsCheckToSubscribers()">Publish to Subscribers</button>
+          </div>
+        </div>
+        <div id="results-check-publish-status" style="display:none; font-family:'Lato',sans-serif; font-size:12px; color:#2E9E63; font-weight:700; margin-bottom:10px;"></div>
+
+        <div id="results-check-summary"></div>
+        <div class="rc-compact-wrap">
+          <div id="results-check-tables" class="rc-compact-left"></div>
+          <div id="results-check-team-totals" class="rc-compact-right"></div>
         </div>
       </div>
-      <div id="results-check-publish-status" style="display:none; font-family:'Lato',sans-serif; font-size:12px; color:#2E9E63; font-weight:700; margin-bottom:10px;"></div>
 
-      <div id="results-check-summary"></div>
-      <div class="rc-compact-wrap">
-        <div id="results-check-tables" class="rc-compact-left"></div>
-        <div id="results-check-team-totals" class="rc-compact-right"></div>
+      <div id="rc-admin-weekly-view" style="display:none;">
+        <p class="article-body-p" style="max-width:100%;">Lines up one week's published Weekly Player Projections against that same week's actual points from the CSVs uploaded above — a per-week accuracy check instead of a written recap. Each position/week is published separately, whenever you're ready, same "nothing visible until you click Publish" rule as the Season Totals view.</p>
+        <div class="proj-subtabs" style="margin:0 0 14px;">
+          <button class="proj-subtab active" id="rc-weekly-admin-pos-QB" onclick="switchResultsCheckWeeklyPosition('QB')">QB</button>
+          <button class="proj-subtab" id="rc-weekly-admin-pos-WR" onclick="switchResultsCheckWeeklyPosition('WR')">WR</button>
+          <button class="proj-subtab" id="rc-weekly-admin-pos-RB" onclick="switchResultsCheckWeeklyPosition('RB')">RB</button>
+          <button class="proj-subtab" id="rc-weekly-admin-pos-TE" onclick="switchResultsCheckWeeklyPosition('TE')">TE</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <span style="font-family:'Lato',sans-serif; font-size:13px; font-weight:700; color:#555;">Week</span>
+          <select class="admin-select" id="rc-weekly-admin-week-select" onchange="renderResultsCheckWeeklyAdmin()" style="width:80px; padding:6px 10px;"></select>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 4px;">
+          <label class="auth-label" style="margin:0;">Preview — exactly what publishes to subscribers</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckWeeklyAdmin()">Refresh</button>
+            <button type="button" id="results-check-weekly-publish-btn" class="trade-analyze-btn" style="width:auto; padding:6px 18px;" onclick="publishWeeklyAccuracyToSubscribers()">Publish This Week's Breakdown</button>
+          </div>
+        </div>
+        <div id="results-check-weekly-publish-status" style="display:none; font-family:'Lato',sans-serif; font-size:12px; color:#2E9E63; font-weight:700; margin-bottom:10px;"></div>
+
+        <div id="rc-weekly-admin-table"></div>
       </div>
     </div>
 
@@ -3667,6 +3728,16 @@ function refreshProjectionsGate() {
 
 let activeWeeklyPosition = 'QB';
 
+// Which of Results Check's two public sub-views is showing ('season' or
+// 'weekly' — see switchResultsCheckPublicView), and which position its
+// Weekly Breakdown is showing (switchResultsCheckWeeklyPublicPosition).
+// Deliberately separate from activeWeeklyPosition above — that one is
+// shared across the Season Long/Weekly/Rest of Season tabs, but Results
+// Check is a visually distinct page one level down, so picking QB here
+// doesn't reach over and change what those other tabs are showing.
+let activeResultsCheckView = 'season';
+let activeResultsCheckWeeklyPosition = 'QB';
+
 function switchProjTab(tab, opts) {
   opts = opts || {};
   activeProjTab = tab;
@@ -3677,9 +3748,14 @@ function switchProjTab(tab, opts) {
   document.getElementById('proj-totals-week-row').style.display = (tab === 'totals') ? 'flex' : 'none';
   document.getElementById('proj-weekly-week-row').style.display = (tab === 'weekly') ? 'flex' : 'none';
   document.getElementById('proj-ros-week-row').style.display = (tab === 'ros') ? 'flex' : 'none';
+  document.getElementById('proj-rc-view-tabs').style.display = (tab === 'results-check') ? 'flex' : 'none';
+  const showRCWeeklyControls = (tab === 'results-check' && activeResultsCheckView === 'weekly');
+  document.getElementById('proj-rc-weekly-subtabs').style.display = showRCWeeklyControls ? 'flex' : 'none';
+  document.getElementById('proj-rc-weekly-week-row').style.display = showRCWeeklyControls ? 'flex' : 'none';
   if (tab === 'totals') populateTotalsWeekSelect();
   if (tab === 'weekly') populateWeeklyProjWeekSelect();
   if (tab === 'ros') populateROSWeekSelect();
+  if (showRCWeeklyControls) populateResultsCheckWeeklyPublicWeekSelect();
 
   document.getElementById('proj-content-wrap').style.display = (tab === 'cheatsheet') ? 'none' : 'block';
   document.getElementById('proj-cheatsheet-wrap').style.display = (tab === 'cheatsheet') ? 'block' : 'none';
@@ -3782,6 +3858,49 @@ function switchWeeklyPosition(pos) {
   if (activeProjTab === 'weekly') populateWeeklyProjWeekSelect();
   if (activeProjTab === 'ros') populateROSWeekSelect();
   renderProjectionsPage();
+}
+
+// Switches between Results Check's two public sub-views. Weekly Breakdown's
+// position tabs + week dropdown only ever show while that sub-view is
+// active (see switchProjTab) — Season Totals is position-agnostic (it
+// already shows all four positions' tables together), so it has none.
+function switchResultsCheckPublicView(view) {
+  activeResultsCheckView = view;
+  document.getElementById('proj-rc-view-season').classList.toggle('active', view === 'season');
+  document.getElementById('proj-rc-view-weekly').classList.toggle('active', view === 'weekly');
+  document.getElementById('proj-rc-weekly-subtabs').style.display = view === 'weekly' ? 'flex' : 'none';
+  document.getElementById('proj-rc-weekly-week-row').style.display = view === 'weekly' ? 'flex' : 'none';
+  if (view === 'weekly') populateResultsCheckWeeklyPublicWeekSelect();
+  renderProjectionsPage();
+}
+
+function switchResultsCheckWeeklyPublicPosition(pos) {
+  activeResultsCheckWeeklyPosition = pos;
+  ['QB', 'RB', 'WR', 'TE'].forEach(p => {
+    document.getElementById('proj-rc-subtab-' + p).classList.toggle('active', p === pos);
+  });
+  populateResultsCheckWeeklyPublicWeekSelect();
+  renderProjectionsPage();
+}
+
+// Defaults to the latest week that's actually been PUBLISHED to subscribers
+// for the current position (not just computed in the admin preview) — same
+// "latest published week" convention as every other Week dropdown.
+function populateResultsCheckWeeklyPublicWeekSelect() {
+  const select = document.getElementById('proj-rc-weekly-week-select');
+  if (!select) return;
+  select.innerHTML = '';
+  for (let w = 1; w <= 18; w++) {
+    const opt = document.createElement('option');
+    opt.value = w;
+    opt.textContent = w;
+    select.appendChild(opt);
+  }
+  const publishedWeeks = Object.keys(publishedWeeklyAccuracy)
+    .filter(key => key.startsWith(activeResultsCheckWeeklyPosition + '-'))
+    .map(key => parseInt(key.split('-')[1], 10))
+    .filter(n => !isNaN(n));
+  if (publishedWeeks.length > 0) select.value = Math.max(...publishedWeeks);
 }
 
 // Pulls everything published in Admin (position rankings + team implied
@@ -3918,6 +4037,35 @@ function renderProjectionsPage() {
   }
 
   if (activeProjTab === 'results-check') {
+    if (activeResultsCheckView === 'weekly') {
+      const pos = activeResultsCheckWeeklyPosition;
+      const accuracyKeys = Object.keys(publishedWeeklyAccuracy).filter(key => key.startsWith(pos + '-'));
+      if (accuracyKeys.length === 0) {
+        emptyState.querySelector('.proj-locked-title').textContent = 'Nothing published yet';
+        emptyState.querySelector('.proj-locked-sub').textContent = 'Once a Weekly Breakdown is published for ' + pos + ', it\'ll show up here.';
+        emptyState.style.display = 'block';
+        return;
+      }
+      const weekSelect = document.getElementById('proj-rc-weekly-week-select');
+      const selectedWeek = weekSelect.value;
+      const key = pos + '-' + selectedWeek;
+      const weekData = publishedWeeklyAccuracy[key];
+      if (!weekData) {
+        emptyState.querySelector('.proj-locked-title').textContent = 'Nothing published for ' + pos + ', Week ' + selectedWeek;
+        emptyState.querySelector('.proj-locked-sub').textContent = 'Try a different week from the dropdown above.';
+        emptyState.style.display = 'block';
+        return;
+      }
+      emptyState.style.display = 'none';
+      const section = document.createElement('div');
+      const hasActualData = weekData.rows.some(r => r.actualPoints !== null && r.actualPoints !== undefined);
+      section.innerHTML = '<h3 class="proj-question-heading">How did our Week ' + selectedWeek + ' ' + pos + ' projections hold up?</h3>' +
+        lastUpdatedBlurbHTML(weekData.publishedAt) +
+        buildWeeklyAccuracyTableHTML(pos, 'Week ' + selectedWeek, { rows: weekData.rows, hasActualData: hasActualData }, "exportWeeklyAccuracyCSV('" + pos + "','" + selectedWeek + "')");
+      container.appendChild(section);
+      return;
+    }
+
     if (!publishedResultsCheck) {
       emptyState.querySelector('.proj-locked-title').textContent = 'Nothing published yet';
       emptyState.querySelector('.proj-locked-sub').textContent = 'Once a Results Check is published in Admin, it\'ll show up here.';
@@ -7788,12 +7936,17 @@ function updatePubSelection(uid) {
   const table = document.getElementById(uid);
   const listEl = document.getElementById(uid + '-list');
   const sumEl = document.getElementById(uid + '-sum');
+  // Only present on a Weekly Breakdown table (see buildWeeklyAccuracyTableHTML)
+  // — every other caller of this same selection tool simply doesn't have
+  // this element, so the block below is a no-op for them.
+  const actualEl = document.getElementById(uid + '-actual');
   if (!table || !listEl || !sumEl) return;
 
   const selected = Array.from(table.querySelectorAll('.pub-prob-cell.selected'));
   if (selected.length === 0) {
     listEl.innerHTML = '<div class="pub-select-empty">No players selected yet.</div>';
     sumEl.textContent = '0';
+    if (actualEl) actualEl.innerHTML = '';
     return;
   }
 
@@ -7806,6 +7959,81 @@ function updatePubSelection(uid) {
   const sumRounded = Math.round(sum * 1000) / 1000;
   const equation = decimals.map(d => toDecimalStr(d * 100)).join('+');
   sumEl.textContent = equation + ' = ' + sumRounded;
+
+  if (actualEl) {
+    // data-top12 is '1'/'0' once that week's actual result is known for a
+    // player, or '' (unknown — not yet played, or no CSV match) otherwise.
+    // Only players with a known result count toward "of your N selected" —
+    // an unplayed week just shows the pending message instead of a
+    // misleadingly confident "0 of N."
+    const known = selected.filter(cell => cell.dataset.top12 === '1' || cell.dataset.top12 === '0');
+    if (known.length === 0) {
+      actualEl.innerHTML = '<div class="pub-select-actual-pending">Actual results aren’t in yet for this week.</div>';
+    } else {
+      const hitCount = known.filter(cell => cell.dataset.top12 === '1').length;
+      actualEl.innerHTML = '<div class="pub-select-actual-line">Actually finished top-12: <strong>' + hitCount + '</strong> of your ' + known.length + ' selected' + (known.length !== selected.length ? ' (' + (selected.length - known.length) + ' not yet played)' : '') + '.</div>';
+    }
+  }
+}
+
+// Builds Results Check's Weekly Breakdown table for one position/week: the
+// same probability-to-finish-top-12 column and click-to-select "do the math
+// yourself" sidebar as Weekly Player Projections (buildPublishedTableHTML),
+// plus three more columns showing what actually happened that week (actual
+// points, actual rank at the position, and a top-12 checkmark) — so a past
+// week's projection sits right next to its real outcome instead of needing
+// a separately-written recap article. `data` comes from
+// computeWeeklyAccuracyForPosition: { rows, hasActualData, topN }.
+function buildWeeklyAccuracyTableHTML(position, weekLabel, data, exportFnName) {
+  const uid = 'rcwk-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const rows = data.rows;
+
+  let html = '<div class="pub-table-wrap">';
+  if (exportFnName) {
+    const exportCall = exportFnName.indexOf('(') !== -1 ? exportFnName : exportFnName + '()';
+    html += '<button type="button" class="export-csv-btn" onclick="' + exportCall + '">Export as CSV</button>';
+  }
+  html += '<div class="pub-title">' + position + ' Projected vs. Actual – ' + weekLabel + '</div>';
+  if (!data.hasActualData) {
+    html += '<div class="rcwk-pending-note">Actual results for ' + weekLabel + ' aren’t in yet — showing projections only for now.</div>';
+  }
+  html += '<div class="pub-table-flex">';
+
+  html += '<div class="pub-table-scroll"><table class="pub-table" id="' + uid + '"><thead><tr>' +
+    '<th>Rank</th><th>Player</th><th>Team</th><th>Prob</th><th>Actual Pts</th><th>Actual Rank</th><th>Top12</th>' +
+    '</tr></thead><tbody>';
+  const displayRanks = computeDisplayRanks(rows, r => parseFloat(r.prob));
+  rows.forEach((r, i) => {
+    const hasActual = r.actualPoints !== null && r.actualPoints !== undefined;
+    const top12Attr = hasActual ? (r.actualTop12 ? '1' : '0') : '';
+    const mark = !hasActual
+      ? '<span style="color:#bbb;">—</span>'
+      : (r.actualTop12 ? '<span style="color:#3DB87A;">&#10003;</span>' : '<span style="color:#c0392b;">&#10007;</span>');
+    html += '<tr>' +
+      '<td>' + displayRanks[i] + '</td>' +
+      '<td>' + r.player + '</td>' +
+      '<td>' + (r.team || '') + '</td>' +
+      '<td class="pub-prob-cell pub-prob-selectable" data-name="' + r.player + '" data-prob="' + r.prob + '" data-top12="' + top12Attr + '" ' +
+      'style="background:' + probToColor(r.prob) + ';" ' +
+      'onmousedown="pubProbDragStart(event,\'' + uid + '\')" onmouseenter="pubProbDragOver(event,\'' + uid + '\')">' + r.prob + '%</td>' +
+      '<td>' + (hasActual ? r.actualPoints.toFixed(1) : '—') + '</td>' +
+      '<td>' + (hasActual ? r.actualRank : '—') + '</td>' +
+      '<td>' + mark + '</td>' +
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  html += '<div class="pub-select-sidebar">' +
+    '<div class="pub-select-title">Do the math yourself</div>' +
+    '<div class="pub-select-hint">Select players’ probabilities — pick specific ones, or straight down the list. The sum is what we projected for the group going in; once this week’s actual results are in, you’ll also see how many of your selected players really did finish top-12.</div>' +
+    '<div class="pub-select-list" id="' + uid + '-list"></div>' +
+    '<div class="pub-select-sum" id="' + uid + '-sum">0</div>' +
+    '<div class="pub-select-actual" id="' + uid + '-actual"></div>' +
+    '<div class="pub-select-reset-hint">Click a selected player again to deselect it, or <a href="#" onclick="pubResetSelection(event,\'' + uid + '\')">click here to reset</a>.</div>' +
+    '</div>';
+
+  html += '</div></div>';
+  return html;
 }
 
 // Small notice prepended above the "Live preview" whenever one or more
@@ -8816,6 +9044,10 @@ function switchAdminTool(tool) {
   }
   if (tool === 'results-check') {
     renderResultsCheckPage();
+    if (resultsCheckAdminView === 'weekly') {
+      populateResultsCheckWeeklyAdminWeekSelect();
+      renderResultsCheckWeeklyAdmin();
+    }
   }
   if (tool === 'articles') {
     populateArticleLoadSelect();
@@ -9323,6 +9555,145 @@ let publishedMatchups = {}; // key "week" -> [{teamA, teamB, gameTotal, spreadA,
 //          positions: { QB: {top12,countOnTopTeams} | null, RB:..., WR:..., TE:... },
 //          publishedAt }
 let publishedResultsCheck = null;
+
+// The subscriber-facing snapshot of Results Check's Weekly Breakdown view —
+// one entry per position/week, keyed "QB-4" exactly like publishedRankings/
+// publishedROS, each set only by its own explicit "Publish This Week's
+// Breakdown" click (see publishWeeklyAccuracyToSubscribers). A position/week
+// never appears here just from viewing it in the admin preview.
+// Shape: { 'QB-4': { rows: [{player,team,prob,actualPoints,actualRank,actualTop12}], publishedAt } }
+let publishedWeeklyAccuracy = {};
+
+// Which of Results Check's two admin views is showing ('season' or
+// 'weekly' — see switchResultsCheckAdminView), and which position Weekly
+// Breakdown is currently showing (switchResultsCheckWeeklyPosition). Both
+// admin-only, session-only state — nothing here is ever published itself,
+// only whatever position/week it's pointed at when Publish is clicked.
+let resultsCheckAdminView = 'season';
+let resultsCheckWeeklyPosition = 'QB';
+
+function switchResultsCheckAdminView(view) {
+  resultsCheckAdminView = view;
+  document.getElementById('rc-admin-view-season').classList.toggle('active', view === 'season');
+  document.getElementById('rc-admin-view-weekly').classList.toggle('active', view === 'weekly');
+  document.getElementById('rc-admin-season-view').style.display = view === 'season' ? 'block' : 'none';
+  document.getElementById('rc-admin-weekly-view').style.display = view === 'weekly' ? 'block' : 'none';
+  if (view === 'weekly') {
+    populateResultsCheckWeeklyAdminWeekSelect();
+    renderResultsCheckWeeklyAdmin();
+  }
+}
+
+function switchResultsCheckWeeklyPosition(pos) {
+  resultsCheckWeeklyPosition = pos;
+  ['QB', 'RB', 'WR', 'TE'].forEach(p => {
+    document.getElementById('rc-weekly-admin-pos-' + p).classList.toggle('active', p === pos);
+  });
+  populateResultsCheckWeeklyAdminWeekSelect();
+  renderResultsCheckWeeklyAdmin();
+}
+
+// Defaults to the latest week that's actually been published for the
+// current position on Weekly Player Projections — same "latest published
+// week" convention as every other Week dropdown on the site (see
+// populateWeeklyProjWeekSelect) — since that's normally the week an admin
+// just finished entering and wants to check.
+function populateResultsCheckWeeklyAdminWeekSelect() {
+  const select = document.getElementById('rc-weekly-admin-week-select');
+  if (!select) return;
+  select.innerHTML = '';
+  for (let w = 1; w <= 18; w++) {
+    const opt = document.createElement('option');
+    opt.value = w;
+    opt.textContent = w;
+    select.appendChild(opt);
+  }
+  const publishedWeeks = Object.keys(publishedRankings)
+    .filter(key => key.startsWith(resultsCheckWeeklyPosition + '-'))
+    .map(key => parseInt(key.split('-')[1], 10))
+    .filter(n => !isNaN(n));
+  if (publishedWeeks.length > 0) select.value = Math.max(...publishedWeeks);
+}
+
+function renderResultsCheckWeeklyAdmin() {
+  const weekSelect = document.getElementById('rc-weekly-admin-week-select');
+  const container = document.getElementById('rc-weekly-admin-table');
+  const statusEl = document.getElementById('results-check-weekly-publish-status');
+  if (!weekSelect || !container) return;
+  if (statusEl) statusEl.style.display = 'none';
+  const week = weekSelect.value;
+  const data = computeWeeklyAccuracyForPosition(resultsCheckWeeklyPosition, week);
+  if (!data) {
+    container.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;">No ' + resultsCheckWeeklyPosition + ' projections were published for Week ' + week + ' yet — publish that week on the Weekly Player Projections tool first.</div>';
+    return;
+  }
+  container.innerHTML = buildWeeklyAccuracyTableHTML(resultsCheckWeeklyPosition, 'Week ' + week, data, null);
+}
+
+// Publishes the CURRENT position/week's projected-vs-actual breakdown
+// (whatever renderResultsCheckWeeklyAdmin is showing right now) to
+// subscribers — a deliberate, explicit action, same as Results Check's
+// Season Totals publish and every other publish on the site: nothing here
+// reaches subscribers just from switching position/week or re-uploading a
+// CSV, only from clicking this button.
+async function publishWeeklyAccuracyToSubscribers() {
+  const weekSelect = document.getElementById('rc-weekly-admin-week-select');
+  const week = weekSelect.value;
+  const position = resultsCheckWeeklyPosition;
+  const data = computeWeeklyAccuracyForPosition(position, week);
+  if (!data) {
+    alert('Nothing to publish — publish ' + position + ' projections for Week ' + week + ' on Weekly Player Projections first.');
+    return;
+  }
+  const key = position + '-' + week;
+  const publishedAt = new Date().toISOString();
+
+  const btn = document.getElementById('results-check-weekly-publish-btn');
+  const originalLabel = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+  const statusEl = document.getElementById('results-check-weekly-publish-status');
+  if (statusEl) statusEl.style.display = 'none';
+
+  try {
+    if (supabaseClient) {
+      // Same delete-then-insert replace pattern as weekly_rankings/ros_rankings
+      // (see supabaseReplaceRows) — every row for this position/week is
+      // wholesale-replaced on each publish. Requires the
+      // published_weekly_accuracy table (see CHANGELOG for the exact SQL).
+      await supabaseReplaceRows('published_weekly_accuracy', { pos: position, week: Number(week) },
+        data.rows.map(r => ({
+          pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob,
+          actual_points: r.actualPoints, actual_rank: r.actualRank, actual_top12: r.actualTop12,
+          published_at: publishedAt,
+        })));
+    }
+    publishedWeeklyAccuracy[key] = { rows: data.rows, publishedAt: publishedAt };
+    saveAppStateLocally();
+    if (statusEl) {
+      statusEl.textContent = 'Published to subscribers — live now on their Projections page (' + position + ', Week ' + week + ').';
+      statusEl.style.display = 'block';
+    }
+  } catch (e) {
+    console.error('Publishing Weekly Breakdown failed:', e);
+    alert('Could not publish: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel || "Publish This Week's Breakdown"; }
+  }
+}
+
+function exportWeeklyAccuracyCSV(position, week) {
+  if (!requireDownloadAccess()) return;
+  const data = publishedWeeklyAccuracy[position + '-' + week];
+  if (!data || !data.rows || data.rows.length === 0) return;
+  const rows = data.rows.map(r => [
+    r.player, r.team, r.prob + '%',
+    (r.actualPoints === null || r.actualPoints === undefined) ? '' : r.actualPoints,
+    (r.actualRank === null || r.actualRank === undefined) ? '' : r.actualRank,
+    (r.actualTop12 === null || r.actualTop12 === undefined) ? '' : (r.actualTop12 ? 'Yes' : 'No'),
+  ]);
+  downloadCSV('weekly-accuracy-' + position.toLowerCase() + '-week-' + week + '.csv',
+    ['Player', 'Team', 'Projected Probability (%)', 'Actual Points', 'Actual Rank', 'Finished Top 12'], rows);
+}
 
 // ==================== MATCHUP BUILDER (admin) ====================
 // Drag teams into a game, enter game total + each team's own spread, and
@@ -9844,12 +10215,34 @@ const RESULTS_CHECK_TEAM_ALIAS = { JAC: 'JAX' };
 // reads RK/PLAYER from the front and TTL (season-to-date total) from
 // whichever column is last, so the same parser keeps working as the season
 // goes on and the file grows wider.
+//
+// Each player's individual week-by-week points (the columns between GP and
+// AVG) are also captured here as a `weekly` map — e.g. { 1: 35.7, 2: 40.8 }
+// — even though only the TTL was ever used before this existed. Results
+// Check's Weekly Breakdown (see computeWeeklyAccuracyForPosition) reads
+// this to show a specific week's actual finish, from the exact same CSV
+// that's already being uploaded for the season-to-date check — no second
+// upload needed. Reading `weekly` requires a real header row, since that's
+// the only place the week NUMBERS themselves (not just "how many columns")
+// come from; a headerless file still parses fine for TTL, just with no
+// weekly breakdown available from it.
 function parseFantasyProsPointsCSV(text) {
   const parsed = parseSimpleCSV(text);
   if (parsed.length === 0) return [];
   const first = parsed[0];
   const looksLikeHeader = (first[1] || '').trim().toUpperCase() === 'PLAYER';
   const dataRows = looksLikeHeader ? parsed.slice(1) : parsed;
+
+  // Week columns sit between GP (index 2) and the trailing AVG/TTL columns
+  // (the last two). Each one's header is just the week number itself
+  // ("1", "2", "3", ...) in a real FantasyPros export.
+  const weekColumns = [];
+  if (looksLikeHeader && first.length > 5) {
+    for (let i = 3; i < first.length - 2; i++) {
+      const weekNum = parseInt((first[i] || '').trim(), 10);
+      if (!isNaN(weekNum)) weekColumns.push({ index: i, week: weekNum });
+    }
+  }
 
   const players = [];
   dataRows.forEach(r => {
@@ -9861,9 +10254,83 @@ function parseFantasyProsPointsCSV(text) {
     team = RESULTS_CHECK_TEAM_ALIAS[team] || team;
     const ttl = parseFloat(r[r.length - 1]);
     if (!name || isNaN(ttl)) return;
-    players.push({ player: name, team: team, points: ttl });
+    const weekly = {};
+    weekColumns.forEach(wc => {
+      // A blank cell or non-numeric marker (e.g. "BYE") means no real score
+      // for that week — left out of `weekly` entirely rather than stored as
+      // 0, so "didn't play" is distinguishable from "scored zero."
+      const num = parseFloat((r[wc.index] || '').trim());
+      if (!isNaN(num)) weekly[wc.week] = num;
+    });
+    players.push({ player: name, team: team, points: ttl, weekly: weekly });
   });
   return players;
+}
+
+// --- Results Check > Weekly Breakdown -----------------------------------
+// A second view inside Results Check (alongside the season-to-date totals
+// above): instead of a cumulative season check, this lines up ONE week's
+// published Weekly Player Projections (publishedRankings) against that same
+// week's actual points from the already-uploaded FantasyPros CSV (see
+// `weekly` on parseFantasyProsPointsCSV above) — the per-week replacement
+// for manually writing a weekly accuracy article.
+
+// Loosely matches a projected player's name (typed by hand in Admin) against
+// the CSV's name for the same player. Both sides run through the same
+// normalization, so small formatting differences (periods, apostrophes,
+// extra spaces, a trailing Jr./Sr./II/III/IV) don't cause an otherwise-
+// correct match to be missed.
+function normalizeNameForWeeklyMatch(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[.'‘’]/g, '')
+    .replace(/\s+(jr|sr|ii|iii|iv|v)$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Builds one week's projected-vs-actual breakdown for a position: takes
+// whatever was published to Weekly Player Projections for that position/week
+// (the prediction) and cross-references it against that position's uploaded
+// CSV's per-week points (the actual result), computing each predicted
+// player's actual rank at the position that week (among every CSV player who
+// actually played, not just the predicted ones) and whether that rank
+// actually landed in the top 12. Returns null if nothing was ever published
+// for this position/week at all — there's nothing to show a breakdown of.
+// If the CSV hasn't been uploaded yet, or that particular week's column
+// isn't in it (e.g. the week hasn't been played), every row's actual fields
+// just come back null and `hasActualData` is false — the predictions alone
+// still render, same "projections only for now" treatment as anywhere else
+// on the site that's waiting on a real result.
+function computeWeeklyAccuracyForPosition(position, week) {
+  const predicted = publishedRankings[position + '-' + week];
+  if (!predicted || !predicted.rows || predicted.rows.length === 0) return null;
+
+  const csvText = resultsCheckCSVByPosition[position];
+  const csvPlayers = csvText ? parseFantasyProsPointsCSV(csvText) : [];
+  const weekNum = Number(week);
+
+  const playedThisWeek = csvPlayers.filter(p => p.weekly && p.weekly[weekNum] !== undefined);
+  const sortedByActual = playedThisWeek.slice().sort((a, b) => b.weekly[weekNum] - a.weekly[weekNum]);
+  const actualRanks = computeDisplayRanks(sortedByActual, p => p.weekly[weekNum]);
+  const actualByName = {};
+  sortedByActual.forEach((p, i) => {
+    actualByName[normalizeNameForWeeklyMatch(p.player)] = { points: p.weekly[weekNum], rank: actualRanks[i] };
+  });
+
+  const rows = predicted.rows.map(r => {
+    const match = actualByName[normalizeNameForWeeklyMatch(r.player)];
+    return {
+      player: r.player,
+      team: r.team,
+      prob: r.prob,
+      actualPoints: match ? match.points : null,
+      actualRank: match ? match.rank : null,
+      actualTop12: match ? match.rank <= 12 : null,
+    };
+  });
+
+  return { rows: rows, hasActualData: playedThisWeek.length > 0, topN: predicted.topN };
 }
 
 // Which weeks (out of every week with published Weekly Team Implied
@@ -12790,6 +13257,7 @@ function saveAppStateLocally() {
       openingWeeklyRankings,
       openingSeasonLong,
       publishedResultsCheck,
+      publishedWeeklyAccuracy,
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -12814,6 +13282,7 @@ function loadAppStateLocally() {
     if (state.openingWeeklyRankings) Object.assign(openingWeeklyRankings, state.openingWeeklyRankings);
     if (state.openingSeasonLong) Object.assign(openingSeasonLong, state.openingSeasonLong);
     if (state.publishedResultsCheck) publishedResultsCheck = state.publishedResultsCheck;
+    if (state.publishedWeeklyAccuracy) Object.assign(publishedWeeklyAccuracy, state.publishedWeeklyAccuracy);
     migrateArticleRowLabels(); // not awaited — see its own comment above
   } catch (e) {
     console.warn('Could not load previously published data:', e);
@@ -12897,7 +13366,7 @@ async function loadAppState() {
     return;
   }
   try {
-    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes] = await Promise.all([
+    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes, pubWeeklyAccuracyRes] = await Promise.all([
       supabaseClient.from('articles').select('*'),
       supabaseClient.from('season_long_rankings').select('*'),
       supabaseClient.from('season_long_totals').select('*'),
@@ -12928,6 +13397,11 @@ async function loadAppState() {
       // and publishedResultsCheck simply stays null (the public tab shows
       // "nothing published yet") — it never affects any other data loading.
       supabaseClient.from('published_results_check').select('*'),
+      // The subscriber-facing Results Check Weekly Breakdown rows — one row
+      // per position/week/player, same shape and same missing-table safety
+      // net as weekly_rankings/ros_rankings above (see
+      // publishWeeklyAccuracyToSubscribers and CHANGELOG for the SQL).
+      supabaseClient.from('published_weekly_accuracy').select('*'),
     ]);
     // Same graceful, skip-but-continue pattern as every other query below:
     // a problem fetching articles must never block the weekly totals, player
@@ -13054,6 +13528,27 @@ async function loadAppState() {
         positions: row.positions || {},
         publishedAt: row.published_at,
       };
+    }
+
+    if (!pubWeeklyAccuracyRes.error) {
+      const byKey = {};
+      (pubWeeklyAccuracyRes.data || []).forEach(row => {
+        const key = row.pos + '-' + row.week;
+        if (!byKey[key]) byKey[key] = { rows: [], publishedAt: row.published_at };
+        byKey[key].rows.push({
+          player: row.player,
+          team: row.team,
+          prob: Number(row.prob),
+          actualPoints: (row.actual_points === null || row.actual_points === undefined) ? null : Number(row.actual_points),
+          actualRank: (row.actual_rank === null || row.actual_rank === undefined) ? null : Number(row.actual_rank),
+          actualTop12: (row.actual_top12 === null || row.actual_top12 === undefined) ? null : !!row.actual_top12,
+        });
+        if (row.published_at && new Date(row.published_at) > new Date(byKey[key].publishedAt)) {
+          byKey[key].publishedAt = row.published_at;
+        }
+      });
+      Object.keys(byKey).forEach(key => byKey[key].rows.sort((a, b) => b.prob - a.prob));
+      Object.assign(publishedWeeklyAccuracy, byKey);
     }
 
     // Backfill: Season Long Player Projections already has real data for
