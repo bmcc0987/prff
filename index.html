@@ -1209,8 +1209,8 @@ footer {
    weight treatment as a table footer, rather than reading as just another row. */
 .rc-table .rc-total-row { background: #f7f6f3; }
 .rc-table .rc-total-row td { border-top: 2px solid #ddd9cf; padding-top: 4px; padding-bottom: 4px; }
-.rc-table .rc-total-row .rc-player { font-weight: 800; }
-.rc-table .rc-total-row .rc-check { font-size: 13px; }
+.rc-table .rc-total-row .rc-pts { font-weight: 800; }
+.rc-table .rc-total-row .rc-check { font-size: 15px; font-weight: 800; }
 .rc-table .rc-rank { color: #999; }
 .rc-table .rc-player { font-weight: 700; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-table .rc-team { color: #777; }
@@ -10039,13 +10039,15 @@ function buildResultsCheckPositionTableHTML(position, result) {
   // A closing Total row — the count of checkmarks above, spelled out in one
   // place instead of making someone count them — mirrors the same number
   // already shown in the head ("X / 12 on a top-12 team"), just restated
-  // right under the column it's summing.
+  // right under the column it's summing. The "Total" label sits in the
+  // Points column and the count itself sits in the checkmark/Top12 column,
+  // directly under the checkmarks it's totaling.
   html += '<tr class="rc-total-row">' +
     '<td></td>' +
-    '<td class="rc-player">Total</td>' +
     '<td></td>' +
-    '<td class="rc-pts">' + result.countOnTopTeams + '</td>' +
     '<td></td>' +
+    '<td class="rc-pts">Total</td>' +
+    '<td class="rc-check">' + result.countOnTopTeams + '</td>' +
     '</tr>';
   html += '</tbody></table></div>';
   return html;
