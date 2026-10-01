@@ -1163,6 +1163,45 @@ footer {
 .totals-pub-move { width: 48px; flex-shrink: 0; margin-right: 6px; overflow: visible; }
 .totals-pub-move-badge { font-weight: 800; font-size: 12px; white-space: nowrap; }
 /* ============================================================
+   RESULTS CHECK — compact two-column layout (skinny position tables on
+   the left, the Team Implied Totals card on the right). Used identically
+   by Admin's own preview (so what the admin sees while deciding what to
+   publish IS the layout that goes out) and the public, subscriber-facing
+   Results Check tab on the Projections page — see
+   buildResultsCheckCompactHTML/buildResultsCheckPositionTableHTML.
+   ============================================================ */
+.rc-compact-wrap { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.rc-compact-left { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 12px; }
+.rc-compact-right { flex: 0 0 380px; width: 380px; }
+/* Re-sizes the normally much-wider totals-pub-* card to fit this narrower
+   column instead of its usual 60%-of-page width — same card, same colors,
+   just scaled down to sit comfortably next to the position tables. */
+.rc-compact-right .totals-pub-outer { width: 100%; min-width: 0; margin: 0; }
+.rc-compact-right .totals-pub-row { padding: 6px 14px; }
+.rc-compact-right .totals-pub-rank { width: 20px; font-size: 11px; }
+.rc-compact-right .totals-pub-team { width: 112px; font-size: 12px; }
+.rc-compact-right .totals-pub-value { width: 42px; font-size: 12px; }
+.rc-compact-right .totals-pub-move { width: 26px; margin-right: 4px; }
+.rc-compact-right .totals-pub-header-block { padding: 14px 14px 8px; }
+.rc-compact-right .totals-pub-title { font-size: 18px; }
+@media (max-width: 860px) {
+  .rc-compact-wrap { flex-direction: column; }
+  .rc-compact-right { width: 100%; flex-basis: auto; }
+}
+.rc-table-wrap { border: 1px solid #e2e0da; border-radius: 8px; overflow: hidden; background: #fff; }
+.rc-table-head { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: #f7f6f3; border-bottom: 1px solid #e2e0da; font-family: 'Lato', sans-serif; }
+.rc-table-head-pos { font-weight: 800; font-size: 13px; color: #111; }
+.rc-table-head-count { font-size: 11px; color: #666; font-weight: 700; }
+.rc-table { width: 100%; border-collapse: collapse; font-family: 'Lato', sans-serif; font-size: 11.5px; }
+.rc-table th { text-align: left; padding: 3px 8px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #999; border-bottom: 1px solid #eee; font-weight: 700; }
+.rc-table td { padding: 3px 8px; border-bottom: 1px solid #f3f2ee; }
+.rc-table tr:last-child td { border-bottom: none; }
+.rc-table .rc-rank { color: #999; width: 18px; }
+.rc-table .rc-player { font-weight: 700; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
+.rc-table .rc-team { color: #777; width: 32px; }
+.rc-table .rc-pts { text-align: right; font-weight: 700; width: 40px; }
+.rc-table .rc-check { text-align: center; width: 22px; font-weight: 800; }
+/* ============================================================
    MOBILE NAV (hamburger + slide-down menu)
    ============================================================ */
 .nav-hamburger {
@@ -2078,6 +2117,7 @@ footer {
     <button class="proj-tab" id="proj-tab-totals" onclick="switchProjTab('totals')">Weekly Team Implied Totals</button>
     <button class="proj-tab" id="proj-tab-weekly" onclick="switchProjTab('weekly')">Weekly Player Projections</button>
     <button class="proj-tab" id="proj-tab-ros" onclick="switchProjTab('ros')">Rest of Season Player Projections</button>
+    <button class="proj-tab" id="proj-tab-results-check" onclick="switchProjTab('results-check')">Results Check</button>
   </div>
 
   <div id="proj-totals-week-row" class="proj-subtabs" style="display:none; align-items:center; gap:10px;">
@@ -2684,24 +2724,17 @@ footer {
     </div>
 
     <div id="admin-tool-results-check" style="display:none;">
-      <p class="article-body-p" style="max-width:100%;">This is a private, admin-only accuracy check — nothing on this page is ever shown to site visitors or saved to the shared database. It adds up every week of published Weekly Team Implied Totals so far to rank teams by actual season-to-date implied scoring, then lets you drop in a per-position "actual fantasy points scored" export (like FantasyPros' Fantasy Football Points CSV) to see how many of the real top-12 scorers at each position played for one of those top-12 teams.</p>
+      <p class="article-body-p" style="max-width:100%;">This is where you check how the projections have done so far — adds up every checked week of published Weekly Team Implied Totals to rank teams by actual season-to-date implied scoring, then cross-references a per-position "actual fantasy points scored" export (like FantasyPros' Fantasy Football Points CSV) to see how many of the real top-12 scorers at each position played for one of those top-12 teams. None of this is visible to anyone else until you click Publish down below — at that point, exactly what's shown in the preview (just without these controls) becomes visible to subscribers on the Projections page, and stays that way until you publish again.</p>
 
-      <div class="admin-field" style="margin-bottom:20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <label class="auth-label" style="margin:0;">Team totals so far (pick which weeks to add together)</label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" id="results-check-download-img-btn" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="downloadResultsCheckTotalsImage()">⬇ Download as Image</button>
-            <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckPage()">Refresh</button>
-          </div>
-        </div>
-        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-top:6px;">Check the weeks that have actually been played so far — uncheck any week you've published ahead of time (like an early look at next week's totals) so it doesn't get added in before it's actually happened. Your choice here is remembered.</div>
+      <div class="admin-field" style="margin-bottom:16px;">
+        <label class="auth-label" style="margin:0;">Team totals so far (pick which weeks to add together)</label>
+        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-top:6px;">Check the weeks that have actually been played so far — uncheck any week you've published ahead of time (like an early look at next week's totals) so it doesn't get added in before it's actually happened. Your choice here is remembered, and is never shown to subscribers — only the resulting total is.</div>
         <div id="results-check-weeks-picker" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;"></div>
-        <div id="results-check-team-totals" style="margin-top:10px;"></div>
       </div>
 
       <div class="admin-field" style="margin-bottom:16px;">
         <label class="auth-label">Actual fantasy points scored, by position <span class="trade-optional-tag">upload a CSV per position</span></label>
-        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Each file should be a "Fantasy Football Points" export (FantasyPros or similar) with a PLAYER column like "Trey McBride   ARI" and a TTL column for season-to-date points. Re-upload the same position any time to refresh it with more weeks of data — this stays in this browser only; it's never published anywhere.</div>
+        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Each file should be a "Fantasy Football Points" export (FantasyPros or similar) with a PLAYER column like "Trey McBride   ARI" and a TTL column for season-to-date points. Re-upload the same position any time to refresh it with more weeks of data — the files themselves stay in this browser only and are never published; only the resulting top-12 breakdown below is, once you click Publish.</div>
         <div style="display:flex; gap:18px; flex-wrap:wrap;">
           <div class="admin-field">
             <label class="auth-label">QB</label>
@@ -2727,8 +2760,21 @@ footer {
         <div id="results-check-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; font-weight:700; margin-top:10px;"></div>
       </div>
 
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:22px 0 4px;">
+        <label class="auth-label" style="margin:0;">Preview — exactly what publishes to subscribers</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" id="results-check-download-img-btn" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="downloadResultsCheckTotalsImage()">⬇ Download as Image</button>
+          <button type="button" class="trade-add-btn" style="width:auto; padding:6px 14px;" onclick="renderResultsCheckPage()">Refresh</button>
+          <button type="button" id="results-check-publish-btn" class="trade-analyze-btn" style="width:auto; padding:6px 18px;" onclick="publishResultsCheckToSubscribers()">Publish to Subscribers</button>
+        </div>
+      </div>
+      <div id="results-check-publish-status" style="display:none; font-family:'Lato',sans-serif; font-size:12px; color:#2E9E63; font-weight:700; margin-bottom:10px;"></div>
+
       <div id="results-check-summary"></div>
-      <div id="results-check-tables"></div>
+      <div class="rc-compact-wrap">
+        <div id="results-check-tables" class="rc-compact-left"></div>
+        <div id="results-check-team-totals" class="rc-compact-right"></div>
+      </div>
     </div>
 
     <div id="admin-tool-articles" style="display:none;">
@@ -3119,6 +3165,7 @@ const PROJ_TAB_PATHS = {
   'totals': '/projections/weekly-totals',
   'weekly': '/projections/weekly-player-projections',
   'ros': '/projections/ros-players',
+  'results-check': '/projections/results-check',
 };
 
 function showPage(evt, pageName, opts) {
@@ -3607,7 +3654,7 @@ let activeWeeklyPosition = 'QB';
 function switchProjTab(tab, opts) {
   opts = opts || {};
   activeProjTab = tab;
-  ['totals', 'totals-sl', 'weekly', 'season', 'ros', 'cheatsheet'].forEach(t => {
+  ['totals', 'totals-sl', 'weekly', 'season', 'ros', 'cheatsheet', 'results-check'].forEach(t => {
     document.getElementById('proj-tab-' + t).classList.toggle('active', t === tab);
   });
   document.getElementById('proj-weekly-subtabs').style.display = (tab === 'weekly' || tab === 'season' || tab === 'ros') ? 'flex' : 'none';
@@ -3850,6 +3897,22 @@ function renderProjectionsPage() {
     const totalsMovement = getTeamTotalsMovementForWeek(selectedWeek, data.rows);
     section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.teamTotals[selectedWeek]) +
       buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows, 'exportWeeklyImpliedTotalsForWeekCSV', publishedMatchups[selectedWeek], totalsMovement);
+    container.appendChild(section);
+    return;
+  }
+
+  if (activeProjTab === 'results-check') {
+    if (!publishedResultsCheck) {
+      emptyState.querySelector('.proj-locked-title').textContent = 'Nothing published yet';
+      emptyState.querySelector('.proj-locked-sub').textContent = 'Once a Results Check is published in Admin, it\'ll show up here.';
+      emptyState.style.display = 'block';
+      return;
+    }
+    emptyState.style.display = 'none';
+    const section = document.createElement('div');
+    section.innerHTML = '<h3 class="proj-question-heading">How has our season-to-date accuracy looked so far?</h3>' +
+      lastUpdatedBlurbHTML(publishedResultsCheck.publishedAt) +
+      buildResultsCheckCompactHTML(publishedResultsCheck);
     container.appendChild(section);
     return;
   }
@@ -9234,6 +9297,17 @@ const publishedTeamTotals = {}; // key "week" -> { rows: [{team, value}] } — v
 const openingTeamTotals = {};
 let publishedMatchups = {}; // key "week" -> [{teamA, teamB, gameTotal, spreadA, spreadB, totalA, totalB}, ...]
 
+// The subscriber-facing snapshot of Admin > Results Check — set only by an
+// explicit "Publish to Subscribers" click (see publishResultsCheckToSubscribers),
+// never automatically from whatever weeks/CSVs are currently loaded in the
+// admin editor, so an admin can freely experiment with the weeks picker and
+// CSV uploads without anything changing for subscribers until they choose
+// to publish. null until the first publish ever happens.
+// Shape: { weeksLabel, weeks: [1,2,3], teamTotals: [{team,value,weeksCounted}],
+//          positions: { QB: {top12,countOnTopTeams} | null, RB:..., WR:..., TE:... },
+//          publishedAt }
+let publishedResultsCheck = null;
+
 // ==================== MATCHUP BUILDER (admin) ====================
 // Drag teams into a game, enter game total + each team's own spread, and
 // the implied total (game total/2 - spread/2) auto-fills into the flat
@@ -9897,31 +9971,34 @@ function computeTopScorersVsTopTeams(position, topTeamAbbrSet) {
   return { top12: top12, countOnTopTeams: top12.filter(p => p.onTopTeam).length };
 }
 
+// A compact, skinny card (not a full-width table) for one position's
+// top-12-scorers-vs-top-12-teams breakdown — sized to sit comfortably in a
+// narrow column next to 3 others (see .rc-compact-left/.rc-table-* CSS),
+// identically on Admin's own preview and the public, subscriber-facing
+// Results Check tab, since both call this same function on the same data.
 function buildResultsCheckPositionTableHTML(position, result) {
   if (!result) {
-    return '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;margin-bottom:20px;">' + position + ': upload a CSV above to see this.</div>';
+    return '<div class="rc-table-wrap"><div class="rc-table-head"><span class="rc-table-head-pos">' + position + '</span><span style="font-family:\'Lato\',sans-serif;font-size:11px;color:#999;font-style:italic;">Not available yet</span></div></div>';
   }
-  let html = '<div style="margin-bottom:24px;">';
-  html += '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:15px;color:#333;margin-bottom:6px;">' + position + ' — ' + result.countOnTopTeams + ' of ' + result.top12.length + ' top scorers play for a top-12 team</div>';
-  html += '<table style="width:100%;border-collapse:collapse;font-family:\'Lato\',sans-serif;font-size:13px;">';
-  html += '<thead><tr style="border-bottom:2px solid #333;">' +
-    '<th style="text-align:left;padding:6px 10px;">Rank</th>' +
-    '<th style="text-align:left;padding:6px 10px;">Player</th>' +
-    '<th style="text-align:left;padding:6px 10px;">Team</th>' +
-    '<th style="text-align:right;padding:6px 10px;">Points</th>' +
-    '<th style="text-align:center;padding:6px 10px;">Top-12 team?</th>' +
+  let html = '<div class="rc-table-wrap">';
+  html += '<div class="rc-table-head"><span class="rc-table-head-pos">' + position + '</span><span class="rc-table-head-count">' + result.countOnTopTeams + ' / ' + result.top12.length + ' on a top-12 team</span></div>';
+  html += '<table class="rc-table"><thead><tr>' +
+    '<th></th>' +
+    '<th>Player</th>' +
+    '<th>Tm</th>' +
+    '<th style="text-align:right;">Pts</th>' +
+    '<th style="text-align:center;">Top12</th>' +
     '</tr></thead><tbody>';
-  result.top12.forEach((p, i) => {
-    const bg = i % 2 === 1 ? 'background:#f7f6f3;' : '';
-    const badge = p.onTopTeam
-      ? '<span style="color:#3DB87A;font-weight:800;">&#10003; Yes</span>'
-      : '<span style="color:#c0392b;font-weight:800;">&#10007; No</span>';
-    html += '<tr style="' + bg + '">' +
-      '<td style="padding:6px 10px;color:#777;">' + p.rank + '</td>' +
-      '<td style="padding:6px 10px;font-weight:700;">' + p.player + '</td>' +
-      '<td style="padding:6px 10px;">' + p.team + '</td>' +
-      '<td style="padding:6px 10px;text-align:right;">' + p.points.toFixed(1) + '</td>' +
-      '<td style="padding:6px 10px;text-align:center;">' + badge + '</td>' +
+  result.top12.forEach(p => {
+    const mark = p.onTopTeam
+      ? '<span style="color:#3DB87A;">&#10003;</span>'
+      : '<span style="color:#c0392b;">&#10007;</span>';
+    html += '<tr>' +
+      '<td class="rc-rank">' + p.rank + '</td>' +
+      '<td class="rc-player">' + p.player + '</td>' +
+      '<td class="rc-team">' + p.team + '</td>' +
+      '<td class="rc-pts">' + p.points.toFixed(1) + '</td>' +
+      '<td class="rc-check">' + mark + '</td>' +
       '</tr>';
   });
   html += '</tbody></table></div>';
@@ -9944,6 +10021,17 @@ function exportCumulativeTeamTotalsCSV() {
   const rows = computeCumulativeTeamTotals(selectedWeeks).sort((a, b) => b.value - a.value);
   if (rows.length === 0) return;
   downloadCSV('team-implied-totals-so-far.csv', ['Team', 'Total So Far', 'Weeks Counted'], rows.map(r => [r.team, r.value, r.weeksCounted]));
+}
+
+// Shared "Overall: X of Y top-12 scorers..." line — used both by Admin's
+// own live preview and the public, subscriber-facing Results Check tab, so
+// the wording and numbers always read identically in both places.
+function buildResultsCheckSummaryHTML(positions, results, hasCumulative) {
+  const withData = positions.filter(pos => results[pos]);
+  if (withData.length === 0 || !hasCumulative) return '';
+  const totalTop = withData.reduce((sum, pos) => sum + results[pos].top12.length, 0);
+  const totalOnTopTeams = withData.reduce((sum, pos) => sum + results[pos].countOnTopTeams, 0);
+  return '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:16px;color:#111;padding:10px 0;border-top:1px solid #e2e0da;margin-top:4px;">Overall: ' + totalOnTopTeams + ' of ' + totalTop + ' top-12 scorers (across ' + withData.length + ' position' + (withData.length === 1 ? '' : 's') + ' tracked) play for a top-12 team.</div>';
 }
 
 function renderResultsCheckPage() {
@@ -9979,15 +10067,105 @@ function renderResultsCheckPage() {
 
   const summaryContainer = document.getElementById('results-check-summary');
   if (summaryContainer) {
-    const withData = positions.filter(pos => results[pos]);
-    if (withData.length === 0 || cumulative.length === 0) {
-      summaryContainer.innerHTML = '';
-    } else {
-      const totalTop = withData.reduce((sum, pos) => sum + results[pos].top12.length, 0);
-      const totalOnTopTeams = withData.reduce((sum, pos) => sum + results[pos].countOnTopTeams, 0);
-      summaryContainer.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:16px;color:#111;padding:10px 0;border-top:1px solid #e2e0da;margin-top:4px;">Overall: ' + totalOnTopTeams + ' of ' + totalTop + ' top-12 scorers (across ' + withData.length + ' position' + (withData.length === 1 ? '' : 's') + ' with a CSV uploaded) play for a top-12 team.</div>';
-    }
+    summaryContainer.innerHTML = buildResultsCheckSummaryHTML(positions, results, cumulative.length > 0);
   }
+}
+
+// Saves a frozen snapshot of Admin's CURRENT Results Check state (whichever
+// weeks are checked above, cross-referenced against whatever position CSVs
+// are currently loaded) as the subscriber-facing Results Check tab on the
+// public Projections page. This is a deliberate, explicit action — nothing
+// here ever reaches subscribers just from checking/unchecking weeks or
+// uploading a CSV; it takes clicking this button, and the admin can
+// freely experiment beforehand without anything changing publicly until
+// they do. Subscribers see only the computed output (team totals + each
+// position's top-12-vs-top-team breakdown) — never the raw CSVs, which
+// stay local to this browser, same as before.
+async function publishResultsCheckToSubscribers() {
+  const selectedWeeks = getAvailableResultsCheckWeeks().filter(isResultsCheckWeekSelected);
+  if (selectedWeeks.length === 0) {
+    alert('Check at least one week above before publishing.');
+    return;
+  }
+  const cumulative = computeCumulativeTeamTotals(selectedWeeks);
+  if (cumulative.length === 0) {
+    alert('Nothing to publish yet — there\'s no Team Implied Totals data for the checked weeks.');
+    return;
+  }
+  const topTeamAbbrSet = computeTopTeamAbbrSet(cumulative, 12);
+  const positions = {};
+  ['QB', 'RB', 'WR', 'TE'].forEach(pos => { positions[pos] = computeTopScorersVsTopTeams(pos, topTeamAbbrSet); });
+
+  const snapshot = {
+    weeksLabel: describeWeekSelection(selectedWeeks),
+    weeks: selectedWeeks,
+    teamTotals: cumulative,
+    positions: positions,
+    publishedAt: new Date().toISOString(),
+  };
+
+  const btn = document.getElementById('results-check-publish-btn');
+  const originalLabel = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+  const statusEl = document.getElementById('results-check-publish-status');
+  if (statusEl) statusEl.style.display = 'none';
+
+  try {
+    if (supabaseClient) {
+      // One fixed row (id=1) holding the whole snapshot — there's only ever
+      // one "current" published Results Check, wholesale-replaced on every
+      // publish via upsert, same end result as every other publish flow's
+      // delete-then-insert, just for a single row instead of a set of them.
+      // Requires the published_results_check table (see CHANGELOG for the
+      // exact SQL) — if it doesn't exist yet, this throws and the catch
+      // below reports it clearly rather than silently losing the publish.
+      const { error } = await supabaseClient.from('published_results_check').upsert({
+        id: 1,
+        weeks: snapshot.weeks,
+        weeks_label: snapshot.weeksLabel,
+        team_totals: snapshot.teamTotals,
+        positions: snapshot.positions,
+        published_at: snapshot.publishedAt,
+      }, { onConflict: 'id' });
+      if (error) throw error;
+    }
+    publishedResultsCheck = snapshot;
+    saveAppStateLocally();
+    if (statusEl) {
+      statusEl.textContent = 'Published to subscribers — live now on their Projections page (' + snapshot.weeksLabel + ').';
+      statusEl.style.display = 'block';
+    }
+  } catch (e) {
+    console.error('Publishing Results Check failed:', e);
+    alert('Could not publish: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel || 'Publish to Subscribers'; }
+  }
+}
+
+// Builds the full subscriber-facing Results Check card from a published
+// snapshot — the exact same compact two-column layout (skinny position
+// tables on the left, Team Implied Totals on the right) as Admin's own
+// preview, just assembled as one HTML string since the public page has no
+// interactive controls (no weeks picker, no CSV upload — those are
+// admin-only; see publishResultsCheckToSubscribers).
+function buildResultsCheckCompactHTML(snapshot) {
+  const positions = ['QB', 'RB', 'WR', 'TE'];
+  const summary = buildResultsCheckSummaryHTML(positions, snapshot.positions, snapshot.teamTotals.length > 0);
+  const left = '<div class="rc-compact-left">' +
+    positions.map(pos => buildResultsCheckPositionTableHTML(pos, snapshot.positions[pos])).join('') +
+    '</div>';
+  const right = '<div class="rc-compact-right">' +
+    buildPublishedTotalsHTML(snapshot.weeksLabel + ' So Far', snapshot.teamTotals, 'exportPublicResultsCheckCSV') +
+    '</div>';
+  return summary + '<div class="rc-compact-wrap">' + left + right + '</div>';
+}
+
+function exportPublicResultsCheckCSV() {
+  if (!requireDownloadAccess()) return;
+  if (!publishedResultsCheck || !publishedResultsCheck.teamTotals || publishedResultsCheck.teamTotals.length === 0) return;
+  const rows = publishedResultsCheck.teamTotals.slice().sort((a, b) => b.value - a.value);
+  downloadCSV('team-implied-totals-so-far.csv', ['Team', 'Total So Far', 'Weeks Counted'], rows.map(r => [r.team, r.value, r.weeksCounted]));
 }
 
 function handleResultsCheckCSVUpload(event, position) {
@@ -12563,6 +12741,7 @@ function saveAppStateLocally() {
       openingTeamTotals,
       openingWeeklyRankings,
       openingSeasonLong,
+      publishedResultsCheck,
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -12586,6 +12765,7 @@ function loadAppStateLocally() {
     if (state.openingTeamTotals) Object.assign(openingTeamTotals, state.openingTeamTotals);
     if (state.openingWeeklyRankings) Object.assign(openingWeeklyRankings, state.openingWeeklyRankings);
     if (state.openingSeasonLong) Object.assign(openingSeasonLong, state.openingSeasonLong);
+    if (state.publishedResultsCheck) publishedResultsCheck = state.publishedResultsCheck;
     migrateArticleRowLabels(); // not awaited — see its own comment above
   } catch (e) {
     console.warn('Could not load previously published data:', e);
@@ -12669,7 +12849,7 @@ async function loadAppState() {
     return;
   }
   try {
-    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes] = await Promise.all([
+    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes] = await Promise.all([
       supabaseClient.from('articles').select('*'),
       supabaseClient.from('season_long_rankings').select('*'),
       supabaseClient.from('season_long_totals').select('*'),
@@ -12692,6 +12872,14 @@ async function loadAppState() {
       // see openingSeasonLong and getROSMovementForWeek. Same missing-table
       // safety net as the two tables above.
       supabaseClient.from('opening_season_long_rankings').select('*'),
+      // The subscriber-facing Results Check snapshot (see
+      // publishResultsCheckToSubscribers) — a single row, only present once
+      // an admin has clicked Publish at least once. Same missing-table
+      // safety net as the tables above: if this table doesn't exist yet, or
+      // nothing's been published yet, this just comes back empty/erroring
+      // and publishedResultsCheck simply stays null (the public tab shows
+      // "nothing published yet") — it never affects any other data loading.
+      supabaseClient.from('published_results_check').select('*'),
     ]);
     // Same graceful, skip-but-continue pattern as every other query below:
     // a problem fetching articles must never block the weekly totals, player
@@ -12807,6 +12995,17 @@ async function loadAppState() {
         byPos[row.pos].rows.push({ player: row.player, team: row.team, prob: Number(row.prob) });
       });
       Object.assign(openingSeasonLong, byPos);
+    }
+
+    if (!pubResultsCheckRes.error && pubResultsCheckRes.data && pubResultsCheckRes.data.length > 0) {
+      const row = pubResultsCheckRes.data[0];
+      publishedResultsCheck = {
+        weeks: row.weeks || [],
+        weeksLabel: row.weeks_label || '',
+        teamTotals: row.team_totals || [],
+        positions: row.positions || {},
+        publishedAt: row.published_at,
+      };
     }
 
     // Backfill: Season Long Player Projections already has real data for
