@@ -1204,6 +1204,13 @@ footer {
 .rc-table th { text-align: left; padding: 3px 8px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #999; border-bottom: 1px solid #eee; font-weight: 700; }
 .rc-table td { padding: 3px 8px; border-bottom: 1px solid #f3f2ee; }
 .rc-table tr:last-child td { border-bottom: none; }
+/* The closing Total row (count of checkmarks) — set off from the 12 player
+   rows above it with a heavier top border and a tinted background, same
+   weight treatment as a table footer, rather than reading as just another row. */
+.rc-table .rc-total-row { background: #f7f6f3; }
+.rc-table .rc-total-row td { border-top: 2px solid #ddd9cf; padding-top: 4px; padding-bottom: 4px; }
+.rc-table .rc-total-row .rc-player { font-weight: 800; }
+.rc-table .rc-total-row .rc-check { font-size: 13px; }
 .rc-table .rc-rank { color: #999; }
 .rc-table .rc-player { font-weight: 700; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-table .rc-team { color: #777; }
@@ -10028,6 +10035,17 @@ function buildResultsCheckPositionTableHTML(position, result) {
       '<td class="rc-check">' + mark + '</td>' +
       '</tr>';
   });
+  // A closing Total row — the count of checkmarks above, spelled out in one
+  // place instead of making someone count them — mirrors the same number
+  // already shown in the head ("X / 12 on a top-12 team"), just restated
+  // right under the column it's summing.
+  html += '<tr class="rc-total-row">' +
+    '<td></td>' +
+    '<td class="rc-player">Total</td>' +
+    '<td></td>' +
+    '<td></td>' +
+    '<td class="rc-check">' + result.countOnTopTeams + '</td>' +
+    '</tr>';
   html += '</tbody></table></div>';
   return html;
 }
@@ -10050,15 +10068,15 @@ function exportCumulativeTeamTotalsCSV() {
   downloadCSV('team-implied-totals-so-far.csv', ['Team', 'Total So Far', 'Weeks Counted'], rows.map(r => [r.team, r.value, r.weeksCounted]));
 }
 
-// Shared "Overall: X of Y top-12 scorers..." line — used both by Admin's
-// own live preview and the public, subscriber-facing Results Check tab, so
-// the wording and numbers always read identically in both places.
+// Shared section question — used both by Admin's own live preview and the
+// public, subscriber-facing Results Check tab, so the heading above the
+// four position tables always reads identically in both places. Static
+// wording rather than a computed "Overall: X of Y..." line — the per-
+// position counts live in each table's own head and Total row instead.
 function buildResultsCheckSummaryHTML(positions, results, hasCumulative) {
   const withData = positions.filter(pos => results[pos]);
   if (withData.length === 0 || !hasCumulative) return '';
-  const totalTop = withData.reduce((sum, pos) => sum + results[pos].top12.length, 0);
-  const totalOnTopTeams = withData.reduce((sum, pos) => sum + results[pos].countOnTopTeams, 0);
-  return '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:16px;color:#111;padding:10px 0;border-top:1px solid #e2e0da;margin-top:4px;">Overall: ' + totalOnTopTeams + ' of ' + totalTop + ' top-12 scorers (across ' + withData.length + ' position' + (withData.length === 1 ? '' : 's') + ' tracked) play for a top-12 team.</div>';
+  return '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:16px;color:#111;padding:10px 0;border-top:1px solid #e2e0da;margin-top:4px;">How many top 12 players at each position come from top 12 implied total teams?</div>';
 }
 
 function renderResultsCheckPage() {
