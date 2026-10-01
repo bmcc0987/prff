@@ -1527,6 +1527,7 @@ footer {
         <a href="#" onclick="goToProjectionsTab(event,'totals')">Weekly Team Implied Totals</a>
         <a href="#" onclick="goToProjectionsTab(event,'weekly')">Weekly Player Projections</a>
         <a href="#" onclick="goToProjectionsTab(event,'ros')">Rest of Season Projections</a>
+        <a href="#" onclick="goToProjectionsTab(event,'results-check')">Results Check</a>
       </div>
     </div>
     <a class="nav-link" href="#" onclick="goToArticlesPage(event)">Articles</a>
@@ -10043,8 +10044,8 @@ function buildResultsCheckPositionTableHTML(position, result) {
     '<td></td>' +
     '<td class="rc-player">Total</td>' +
     '<td></td>' +
+    '<td class="rc-pts">' + result.countOnTopTeams + '</td>' +
     '<td></td>' +
-    '<td class="rc-check">' + result.countOnTopTeams + '</td>' +
     '</tr>';
   html += '</tbody></table></div>';
   return html;
