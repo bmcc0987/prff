@@ -378,6 +378,18 @@ body { font-family: 'Lato', sans-serif; background: #f2f1ee; overflow-x: hidden;
   line-height: 1; transition: background 0.15s, border-color 0.15s; padding: 0;
 }
 .article-row-arrow:hover { background: #f5f4f1; border-color: #3DB87A; }
+/* Admin's "Row order" panel — drag-and-drop reordering within a row (see
+   renderArticleOrderPanel()/applyRowOrder() in the JS). The dragged item
+   fades out in place; a green top/bottom border on whichever item the
+   cursor is over shows exactly where it'll land on drop. Dragging is
+   scoped to one row at a time — dropping is only ever allowed onto another
+   item already in that same row, never across rows. */
+.article-order-row-item { cursor: grab; }
+.article-order-row-item:active { cursor: grabbing; }
+.article-order-dragging { opacity: 0.4; }
+.article-order-drop-before { box-shadow: inset 0 2px 0 0 #3DB87A; }
+.article-order-drop-after { box-shadow: inset 0 -2px 0 0 #3DB87A; }
+.article-order-drag-handle { color: #bbb; font-size: 14px; line-height: 1; flex-shrink: 0; user-select: none; }
 /* Loading-skeleton version of the same layout, shown briefly before real
    article data arrives — kept visually consistent with the real rows. */
 .article-rows-skeleton { display: flex; gap: 16px; overflow-x: hidden; }
@@ -2682,7 +2694,7 @@ footer {
 
       <div id="article-order-panel" style="margin-bottom:20px; padding:14px 16px; background:#f7f6f2; border:1px solid #e2e0da; border-radius:10px;">
         <div style="font-family:'Lato',sans-serif; font-weight:800; font-size:14px; color:#333; margin-bottom:4px;">Row order</div>
-        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Use the arrows to set the order articles appear in within each row on the site. This only changes where an article sits in its row — it never touches the article's content, its Free/Pro setting, or its URL.</div>
+        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">Drag an article by its <span style="letter-spacing:-1px;">⋮⋮</span> handle, or use the arrows, to set the order articles appear in within each row on the site. This only changes where an article sits in its row — it never touches the article's content, its Free/Pro setting, or its URL, and you can't drag an article into a different row this way.</div>
         <div id="article-order-rows"></div>
         <div id="article-order-status" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; font-weight:700; margin-top:8px;"></div>
       </div>
@@ -11418,7 +11430,20 @@ function renderArticleOrderPanel() {
     idsInRow.forEach((id, idx) => {
       const a = publishedArticles[id];
       const row = document.createElement('div');
+      row.className = 'article-order-row-item';
       row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff;border:1px solid #e2e0da;border-radius:6px;margin-bottom:4px;";
+      row.draggable = true;
+      row.addEventListener('dragstart', function (e) { articleOrderDragStart(e, rowLabel, id); });
+      row.addEventListener('dragend', articleOrderDragEnd);
+      row.addEventListener('dragover', function (e) { articleOrderDragOver(e, rowLabel, id); });
+      row.addEventListener('dragleave', function (e) { articleOrderDragLeave(e); });
+      row.addEventListener('drop', function (e) { articleOrderDrop(e, rowLabel, id); });
+
+      const handle = document.createElement('div');
+      handle.className = 'article-order-drag-handle';
+      handle.title = 'Drag to reorder';
+      handle.textContent = '⋮⋮';
+      row.appendChild(handle);
 
       const title = document.createElement('div');
       title.style.cssText = "flex:1;min-width:0;font-family:'Lato',sans-serif;font-size:13px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
@@ -11450,30 +11475,17 @@ function renderArticleOrderPanel() {
   });
 }
 
-// Moves one article up or down within its row by swapping it with its
-// neighbor, then renumbers every article in that row 1, 2, 3... so the
-// underlying Display Order values stay small and unambiguous (rather than
-// swapping two possibly-equal-or-unset numbers, which could leave the row
-// only half-ordered). This is a narrow, standalone action: it only ever
-// writes each affected article's displayOrder, using a targeted database
-// update rather than the full publish flow — so reordering can never touch
-// an article's id, title, body, or Free/Pro access, and can never turn
-// into "publishing a brand new article" the way editing through a stale
-// hidden field once could.
-async function moveArticleInRow(rowLabel, id, direction) {
-  const sortedIds = sortedArticleIds();
-  const idsInRow = sortedIds.filter(aid => (publishedArticles[aid].rowLabel || '').trim() === rowLabel);
-  const idx = idsInRow.indexOf(id);
-  const swapWith = idx + direction;
-  if (idx === -1 || swapWith < 0 || swapWith >= idsInRow.length) return;
-
-  const reordered = idsInRow.slice();
-  const tmp = reordered[idx];
-  reordered[idx] = reordered[swapWith];
-  reordered[swapWith] = tmp;
-
+// Renumbers every article in one row to 1, 2, 3... in the given order,
+// updates local state, re-renders, and persists just the changed
+// displayOrder values with a targeted database update per article — never
+// the full publish flow. Shared by both the Up/Down buttons and drag-and-
+// drop below, so either path can only ever touch an article's position in
+// its row — never its id, title, body, or Free/Pro access — and can never
+// turn into "publishing a brand new article" the way editing through a
+// stale hidden field once could.
+async function applyRowOrder(rowLabel, orderedIds) {
   const updates = [];
-  reordered.forEach((aid, i) => {
+  orderedIds.forEach((aid, i) => {
     const newOrder = i + 1;
     if (publishedArticles[aid].displayOrder !== newOrder) {
       publishedArticles[aid].displayOrder = newOrder;
@@ -11507,6 +11519,78 @@ async function moveArticleInRow(rowLabel, id, direction) {
     }
   }
   if (statusEl) statusEl.style.display = 'none';
+}
+
+// Moves one article up or down within its row by swapping it with its
+// neighbor. See applyRowOrder() above for what actually gets saved.
+async function moveArticleInRow(rowLabel, id, direction) {
+  const sortedIds = sortedArticleIds();
+  const idsInRow = sortedIds.filter(aid => (publishedArticles[aid].rowLabel || '').trim() === rowLabel);
+  const idx = idsInRow.indexOf(id);
+  const swapWith = idx + direction;
+  if (idx === -1 || swapWith < 0 || swapWith >= idsInRow.length) return;
+
+  const reordered = idsInRow.slice();
+  const tmp = reordered[idx];
+  reordered[idx] = reordered[swapWith];
+  reordered[swapWith] = tmp;
+  await applyRowOrder(rowLabel, reordered);
+}
+
+// --- Drag-and-drop reordering within the Row order panel ---------------
+// Dragging is deliberately scoped to one row at a time: dragOver/drop only
+// ever accept a drop onto another item already in the SAME row (checked via
+// rowLabel below), so dragging can reorder a row but can never silently
+// move an article into a different row — that still has to be a deliberate
+// edit to the article's own Row field.
+let articleDragState = null; // { rowLabel, id } of whatever's currently being dragged
+
+function articleOrderDragStart(e, rowLabel, id) {
+  articleDragState = { rowLabel: rowLabel, id: id };
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', id); } catch (err) { /* Firefox needs this set; harmless if it throws elsewhere */ }
+  e.currentTarget.classList.add('article-order-dragging');
+}
+
+function articleOrderDragEnd() {
+  document.querySelectorAll('.article-order-dragging').forEach(el => el.classList.remove('article-order-dragging'));
+  document.querySelectorAll('.article-order-drop-before, .article-order-drop-after').forEach(el => {
+    el.classList.remove('article-order-drop-before', 'article-order-drop-after');
+  });
+  articleDragState = null;
+}
+
+function articleOrderDragLeave(e) {
+  e.currentTarget.classList.remove('article-order-drop-before', 'article-order-drop-after');
+}
+
+function articleOrderDragOver(e, rowLabel, id) {
+  if (!articleDragState || articleDragState.rowLabel !== rowLabel || articleDragState.id === id) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const rect = e.currentTarget.getBoundingClientRect();
+  const before = (e.clientY - rect.top) < rect.height / 2;
+  e.currentTarget.classList.toggle('article-order-drop-before', before);
+  e.currentTarget.classList.toggle('article-order-drop-after', !before);
+}
+
+async function articleOrderDrop(e, rowLabel, targetId) {
+  e.preventDefault();
+  const droppedBefore = e.currentTarget.classList.contains('article-order-drop-before');
+  e.currentTarget.classList.remove('article-order-drop-before', 'article-order-drop-after');
+  if (!articleDragState || articleDragState.rowLabel !== rowLabel) return;
+  const draggedId = articleDragState.id;
+  if (draggedId === targetId) return;
+
+  const sortedIds = sortedArticleIds();
+  const idsInRow = sortedIds.filter(aid => (publishedArticles[aid].rowLabel || '').trim() === rowLabel);
+  const withoutDragged = idsInRow.filter(aid => aid !== draggedId);
+  let targetIdx = withoutDragged.indexOf(targetId);
+  if (targetIdx === -1) return;
+  if (!droppedBefore) targetIdx += 1;
+  withoutDragged.splice(targetIdx, 0, draggedId);
+
+  await applyRowOrder(rowLabel, withoutDragged);
 }
 
 function loadArticleIntoEditor() {
