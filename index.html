@@ -10436,6 +10436,29 @@ function computeTopTeamAbbrSet(cumulativeRows, n) {
   return set;
 }
 
+// Colors each team abbreviation by its tier in Results Check's OWN
+// cumulative team implied totals (the season-to-date sum of whichever weeks
+// are checked) — top 12 green, bottom 12 red, middle 8 (ranks 13–20) left
+// uncolored. Same thresholds and colors as getTeamTierColorMap/
+// getWeeklyTeamTierColorMap use elsewhere on the site for the pre-season
+// Season Long Team Implied Totals and a single week's totals respectively;
+// this is the same idea applied to Results Check's cumulative totals
+// instead, so a player's team tells you where that team actually stands
+// this season, not just whether that one player's team happens to be top-12
+// (which the checkmark column already shows).
+function computeResultsCheckTeamTierColorMap(cumulativeRows) {
+  const map = {};
+  const scored = (cumulativeRows || []).filter(r => typeof r.value === 'number').slice().sort((a, b) => b.value - a.value);
+  const ranks = computeDisplayRanks(scored, r => r.value);
+  scored.forEach((r, i) => {
+    const rank = ranks[i];
+    const abbr = NFL_TEAM_ABBR[r.team] || r.team;
+    if (rank <= 12) map[abbr] = '#3DB87A';
+    else if (rank >= 21) map[abbr] = '#c0392b';
+  });
+  return map;
+}
+
 // Cross-references one position's uploaded CSV against the top-N team set:
 // ranks the CSV's players by actual points scored (TTL), takes the top 12
 // (tie-aware, so a tie AT 12th includes everyone tied there), and flags
@@ -10471,7 +10494,8 @@ const RESULTS_CHECK_HISTORICAL_AVG = { QB: 8.27, RB: 6.27, WR: 7.27, TE: 5.9 };
 // Column widths are fixed via <colgroup> (see .rc-table's table-layout:fixed
 // in CSS) so Team/Pts/Top12 sit evenly spaced across the row instead of
 // bunching together wherever the Player column happens to stop.
-function buildResultsCheckPositionTableHTML(position, result) {
+function buildResultsCheckPositionTableHTML(position, result, teamTierColorMap) {
+  teamTierColorMap = teamTierColorMap || {};
   const historicalAvg = RESULTS_CHECK_HISTORICAL_AVG[position];
   const subhead = (historicalAvg !== undefined)
     ? '<div class="rc-table-subhead">Historically (2015–2025): ' + historicalAvg + '/year average</div>'
@@ -10495,10 +10519,12 @@ function buildResultsCheckPositionTableHTML(position, result) {
     const mark = p.onTopTeam
       ? '<span style="color:#3DB87A;">&#10003;</span>'
       : '<span style="color:#c0392b;">&#10007;</span>';
+    const tierColor = teamTierColorMap[p.team];
+    const teamStyle = tierColor ? ' style="color:' + tierColor + ';font-weight:700;"' : '';
     html += '<tr>' +
       '<td class="rc-rank">' + p.rank + '</td>' +
       '<td class="rc-player">' + p.player + '</td>' +
-      '<td class="rc-team">' + p.team + '</td>' +
+      '<td class="rc-team"' + teamStyle + '>' + p.team + '</td>' +
       '<td class="rc-pts">' + p.points.toFixed(1) + '</td>' +
       '<td class="rc-check">' + mark + '</td>' +
       '</tr>';
@@ -10546,7 +10572,11 @@ function exportCumulativeTeamTotalsCSV() {
 function buildResultsCheckSummaryHTML(positions, results, hasCumulative) {
   const withData = positions.filter(pos => results[pos]);
   if (withData.length === 0 || !hasCumulative) return '';
-  return '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:16px;color:#111;padding:10px 0;border-top:1px solid #e2e0da;margin-top:4px;">How many top 12 players at each position come from top 12 implied total teams?</div>';
+  return '<div style="font-family:\'Lato\',sans-serif;font-weight:800;font-size:16px;color:#111;padding:10px 0 4px;border-top:1px solid #e2e0da;margin-top:4px;">How many top 12 players at each position come from top 12 implied total teams?</div>' +
+    '<div style="font-family:\'Lato\',sans-serif;font-size:12px;color:#666;padding:0 0 10px;">' +
+    '<span style="color:#3DB87A;font-weight:700;">■</span> Top 12 implied total team &nbsp;&nbsp;' +
+    '<span style="color:#111;font-weight:700;">■</span> Middle 8 &nbsp;&nbsp;' +
+    '<span style="color:#c0392b;font-weight:700;">■</span> Bottom 12 implied total team</div>';
 }
 
 function renderResultsCheckPage() {
@@ -10571,13 +10601,14 @@ function renderResultsCheckPage() {
   }
 
   const topTeamAbbrSet = computeTopTeamAbbrSet(cumulative, 12);
+  const teamTierColorMap = computeResultsCheckTeamTierColorMap(cumulative);
   const positions = ['QB', 'RB', 'WR', 'TE'];
   const results = {};
   positions.forEach(pos => { results[pos] = computeTopScorersVsTopTeams(pos, topTeamAbbrSet); });
 
   const tablesContainer = document.getElementById('results-check-tables');
   if (tablesContainer) {
-    tablesContainer.innerHTML = positions.map(pos => buildResultsCheckPositionTableHTML(pos, results[pos])).join('');
+    tablesContainer.innerHTML = positions.map(pos => buildResultsCheckPositionTableHTML(pos, results[pos], teamTierColorMap)).join('');
   }
 
   const summaryContainer = document.getElementById('results-check-summary');
@@ -10667,8 +10698,9 @@ async function publishResultsCheckToSubscribers() {
 function buildResultsCheckCompactHTML(snapshot) {
   const positions = ['QB', 'RB', 'WR', 'TE'];
   const summary = buildResultsCheckSummaryHTML(positions, snapshot.positions, snapshot.teamTotals.length > 0);
+  const teamTierColorMap = computeResultsCheckTeamTierColorMap(snapshot.teamTotals);
   const left = '<div class="rc-compact-left">' +
-    positions.map(pos => buildResultsCheckPositionTableHTML(pos, snapshot.positions[pos])).join('') +
+    positions.map(pos => buildResultsCheckPositionTableHTML(pos, snapshot.positions[pos], teamTierColorMap)).join('') +
     '</div>';
   const right = '<div class="rc-compact-right">' +
     buildPublishedTotalsHTML(snapshot.weeksLabel + ' So Far', snapshot.teamTotals, 'exportPublicResultsCheckCSV') +
