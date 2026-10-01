@@ -1192,15 +1192,23 @@ footer {
 .rc-table-head { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: #f7f6f3; border-bottom: 1px solid #e2e0da; font-family: 'Lato', sans-serif; }
 .rc-table-head-pos { font-weight: 800; font-size: 13px; color: #111; }
 .rc-table-head-count { font-size: 11px; color: #666; font-weight: 700; }
-.rc-table { width: 100%; border-collapse: collapse; font-family: 'Lato', sans-serif; font-size: 11.5px; }
+/* The historical-average reference line (see RESULTS_CHECK_HISTORICAL_AVG)
+   sits between the head and the table itself, above every position's card. */
+.rc-table-subhead { padding: 5px 10px; font-family: 'Lato', sans-serif; font-size: 10.5px; color: #888; font-style: italic; border-bottom: 1px solid #f3f2ee; background: #fcfcfb; }
+/* table-layout: fixed + the <colgroup> widths in buildResultsCheckPositionTableHTML
+   are what actually fix the columns in place — without them, a plain table
+   gives the Player column (the only one without a set width) ALL the
+   left-over space, which crams Team/Pts/Top12 together at the far right
+   edge instead of spacing them out evenly across the row. */
+.rc-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-family: 'Lato', sans-serif; font-size: 11.5px; }
 .rc-table th { text-align: left; padding: 3px 8px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #999; border-bottom: 1px solid #eee; font-weight: 700; }
 .rc-table td { padding: 3px 8px; border-bottom: 1px solid #f3f2ee; }
 .rc-table tr:last-child td { border-bottom: none; }
-.rc-table .rc-rank { color: #999; width: 18px; }
-.rc-table .rc-player { font-weight: 700; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
-.rc-table .rc-team { color: #777; width: 32px; }
-.rc-table .rc-pts { text-align: right; font-weight: 700; width: 40px; }
-.rc-table .rc-check { text-align: center; width: 22px; font-weight: 800; }
+.rc-table .rc-rank { color: #999; }
+.rc-table .rc-player { font-weight: 700; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-table .rc-team { color: #777; }
+.rc-table .rc-pts { text-align: right; font-weight: 700; }
+.rc-table .rc-check { text-align: center; font-weight: 800; }
 /* ============================================================
    MOBILE NAV (hamburger + slide-down menu)
    ============================================================ */
@@ -9971,18 +9979,37 @@ function computeTopScorersVsTopTeams(position, topTeamAbbrSet) {
   return { top12: top12, countOnTopTeams: top12.filter(p => p.onTopTeam).length };
 }
 
+// Historical baseline, 2015–2025: the average number (out of 12) of each
+// position's real top-12 fantasy scorers that came from a top-12-implied-
+// total team, per year — a fixed reference point so this season's live
+// count has something to be compared against. Provided directly as a
+// constant (not derived from anything else on the site, and not something
+// Results Check computes); update these numbers by hand if a more current
+// historical average is ever provided.
+const RESULTS_CHECK_HISTORICAL_AVG = { QB: 8.27, RB: 6.27, WR: 7.27, TE: 5.9 };
+
 // A compact, skinny card (not a full-width table) for one position's
 // top-12-scorers-vs-top-12-teams breakdown — sized to sit comfortably in a
 // narrow column next to 3 others (see .rc-compact-left/.rc-table-* CSS),
 // identically on Admin's own preview and the public, subscriber-facing
 // Results Check tab, since both call this same function on the same data.
+// Column widths are fixed via <colgroup> (see .rc-table's table-layout:fixed
+// in CSS) so Team/Pts/Top12 sit evenly spaced across the row instead of
+// bunching together wherever the Player column happens to stop.
 function buildResultsCheckPositionTableHTML(position, result) {
+  const historicalAvg = RESULTS_CHECK_HISTORICAL_AVG[position];
+  const subhead = (historicalAvg !== undefined)
+    ? '<div class="rc-table-subhead">Historically (2015–2025): ' + historicalAvg + '/year average</div>'
+    : '';
   if (!result) {
-    return '<div class="rc-table-wrap"><div class="rc-table-head"><span class="rc-table-head-pos">' + position + '</span><span style="font-family:\'Lato\',sans-serif;font-size:11px;color:#999;font-style:italic;">Not available yet</span></div></div>';
+    return '<div class="rc-table-wrap"><div class="rc-table-head"><span class="rc-table-head-pos">' + position + '</span><span style="font-family:\'Lato\',sans-serif;font-size:11px;color:#999;font-style:italic;">Not available yet</span></div>' + subhead + '</div>';
   }
   let html = '<div class="rc-table-wrap">';
   html += '<div class="rc-table-head"><span class="rc-table-head-pos">' + position + '</span><span class="rc-table-head-count">' + result.countOnTopTeams + ' / ' + result.top12.length + ' on a top-12 team</span></div>';
-  html += '<table class="rc-table"><thead><tr>' +
+  html += subhead;
+  html += '<table class="rc-table">' +
+    '<colgroup><col style="width:7%"><col style="width:37%"><col style="width:18%"><col style="width:19%"><col style="width:19%"></colgroup>' +
+    '<thead><tr>' +
     '<th></th>' +
     '<th>Player</th>' +
     '<th>Tm</th>' +
