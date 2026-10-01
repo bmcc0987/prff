@@ -2805,6 +2805,23 @@ footer {
         <div id="results-check-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; font-weight:700; margin-top:10px;"></div>
       </div>
 
+      <div class="admin-field" style="margin-bottom:16px;">
+        <label class="auth-label">Player name aliases <span class="trade-optional-tag">optional, for name mismatches</span></label>
+        <div style="font-family:'Lato',sans-serif; font-size:12px; color:#777; margin-bottom:10px;">If a player's name is entered differently here than in the FantasyPros CSV — a nickname like "Kenny" vs "Kenneth" — Weekly Breakdown won't recognize them as the same person. Add a pairing below and it will. Saved in this browser only, applied automatically anywhere names get matched.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+          <div class="admin-field" style="flex:1; min-width:180px;">
+            <label class="auth-label" style="font-size:11px;">Your spelling (Weekly Player Projections)</label>
+            <input class="auth-input" type="text" id="rc-alias-site-name" placeholder="Kenneth Gainwell">
+          </div>
+          <div class="admin-field" style="flex:1; min-width:180px;">
+            <label class="auth-label" style="font-size:11px;">FantasyPros spelling</label>
+            <input class="auth-input" type="text" id="rc-alias-csv-name" placeholder="Kenny Gainwell">
+          </div>
+          <button type="button" class="trade-add-btn" style="width:auto; padding:8px 16px;" onclick="addResultsCheckPlayerAlias()">Add</button>
+        </div>
+        <div id="rc-alias-list"></div>
+      </div>
+
       <div class="proj-subtabs" style="margin:0 0 18px;">
         <button class="proj-subtab active" id="rc-admin-view-season" onclick="switchResultsCheckAdminView('season')">Season Totals</button>
         <button class="proj-subtab" id="rc-admin-view-weekly" onclick="switchResultsCheckAdminView('weekly')">Weekly Breakdown</button>
@@ -10201,6 +10218,76 @@ function loadResultsCheckCSVLocally() {
   } catch (e) { /* fine to start from empty if this ever fails to parse */ }
 }
 
+// Admin-managed player name aliases, for a nickname mismatch
+// normalizeNameForWeeklyMatch can't fix on its own (e.g. you type "Kenneth
+// Gainwell" into Weekly Player Projections, but FantasyPros' export calls
+// him "Kenny Gainwell" — not a formatting difference, a genuinely different
+// name). Keyed by the normalized form of what you typed; each entry also
+// keeps the original, as-typed spelling of both sides so the list in Admin
+// reads naturally instead of as all-lowercase normalized text. Saved only
+// in this browser's localStorage, same as the uploaded CSVs — never synced
+// anywhere, since matching only ever needs to happen here, in the browser
+// that's about to publish a Weekly Breakdown.
+const RESULTS_CHECK_PLAYER_ALIASES_KEY = 'prff_results_check_player_aliases_v1';
+let resultsCheckPlayerAliases = {}; // { normalizedSiteName: { csvNormalized, siteDisplay, csvDisplay } }
+
+function saveResultsCheckPlayerAliasesLocally() {
+  try { localStorage.setItem(RESULTS_CHECK_PLAYER_ALIASES_KEY, JSON.stringify(resultsCheckPlayerAliases)); } catch (e) { /* best-effort only */ }
+}
+function loadResultsCheckPlayerAliasesLocally() {
+  try {
+    const raw = localStorage.getItem(RESULTS_CHECK_PLAYER_ALIASES_KEY);
+    if (raw) Object.assign(resultsCheckPlayerAliases, JSON.parse(raw));
+  } catch (e) { /* fine to start from empty if this ever fails to parse */ }
+}
+
+function addResultsCheckPlayerAlias() {
+  const siteInput = document.getElementById('rc-alias-site-name');
+  const csvInput = document.getElementById('rc-alias-csv-name');
+  const siteName = siteInput.value.trim();
+  const csvName = csvInput.value.trim();
+  if (!siteName || !csvName) return;
+  resultsCheckPlayerAliases[normalizeNameForWeeklyMatch(siteName)] = {
+    csvNormalized: normalizeNameForWeeklyMatch(csvName),
+    siteDisplay: siteName,
+    csvDisplay: csvName,
+  };
+  saveResultsCheckPlayerAliasesLocally();
+  siteInput.value = '';
+  csvInput.value = '';
+  renderResultsCheckPlayerAliasesList();
+  // Refresh whichever Results Check view is currently showing so a newly
+  // added alias takes effect immediately, without needing a page reload.
+  renderResultsCheckPage();
+  if (resultsCheckAdminView === 'weekly') renderResultsCheckWeeklyAdmin();
+}
+
+function removeResultsCheckPlayerAlias(key, evt) {
+  if (evt) evt.preventDefault();
+  delete resultsCheckPlayerAliases[key];
+  saveResultsCheckPlayerAliasesLocally();
+  renderResultsCheckPlayerAliasesList();
+  renderResultsCheckPage();
+  if (resultsCheckAdminView === 'weekly') renderResultsCheckWeeklyAdmin();
+}
+
+function renderResultsCheckPlayerAliasesList() {
+  const container = document.getElementById('rc-alias-list');
+  if (!container) return;
+  const keys = Object.keys(resultsCheckPlayerAliases);
+  if (keys.length === 0) {
+    container.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:12px;color:#999;font-style:italic;">No aliases added yet.</div>';
+    return;
+  }
+  container.innerHTML = keys.map(key => {
+    const a = resultsCheckPlayerAliases[key];
+    return '<div style="display:flex; align-items:center; gap:10px; font-family:\'Lato\',sans-serif; font-size:13px; color:#333; padding:4px 0;">' +
+      '<span><strong>' + a.siteDisplay + '</strong> = ' + a.csvDisplay + '</span>' +
+      '<a href="#" onclick="removeResultsCheckPlayerAlias(\'' + key.replace(/'/g, "\\'") + '\',event)" style="color:#c0392b; font-weight:700; font-size:12px; text-decoration:none;">Remove</a>' +
+      '</div>';
+  }).join('');
+}
+
 // FantasyPros exports Jacksonville as "JAC"; every other NFL_TEAM_ABBR
 // value on this site (and everywhere else these exports use) is "JAX" —
 // normalize that one known mismatch rather than silently failing to match
@@ -10319,7 +10406,13 @@ function computeWeeklyAccuracyForPosition(position, week) {
   });
 
   const rows = predicted.rows.map(r => {
-    const match = actualByName[normalizeNameForWeeklyMatch(r.player)];
+    // Try the straightforward normalized match first; if that misses, fall
+    // back to a manually-saved alias (see resultsCheckPlayerAliases) for a
+    // genuine nickname mismatch normalization alone can't resolve (e.g.
+    // "Kenneth Gainwell" here vs "Kenny Gainwell" in the CSV).
+    const normalizedName = normalizeNameForWeeklyMatch(r.player);
+    const alias = resultsCheckPlayerAliases[normalizedName];
+    const match = actualByName[normalizedName] || (alias ? actualByName[alias.csvNormalized] : undefined);
     return {
       player: r.player,
       team: r.team,
@@ -10582,8 +10675,10 @@ function buildResultsCheckSummaryHTML(positions, results, hasCumulative) {
 function renderResultsCheckPage() {
   loadResultsCheckCSVLocally();
   loadResultsCheckWeeksLocally();
+  loadResultsCheckPlayerAliasesLocally();
   refreshResultsCheckStatusLabels();
   renderResultsCheckWeeksPicker();
+  renderResultsCheckPlayerAliasesList();
 
   const availableWeeks = getAvailableResultsCheckWeeks();
   const selectedWeeks = availableWeeks.filter(isResultsCheckWeekSelected);
