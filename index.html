@@ -13757,7 +13757,12 @@ const ARTICLE_ID_REDIRECTS = {
   // comment) put a meaningless trailing "-2" on this one too — it isn't
   // "part 2" of anything, that's just what the running counter happened to
   // be when it was first published.
-  'waiver-wire-week-1-2': 'waiver-wire-week-1'
+  'waiver-wire-week-1-2': 'waiver-wire-week-1',
+  // Same bug, same fix, different week: this one isn't "part 2" either —
+  // it just collided with something in publishedArticles (very likely a
+  // leftover draft/duplicate also titled "Waiver Wire Week 4") at the
+  // moment it was published, so uniqueArticleId tacked on a "-2".
+  'waiver-wire-week-4-2': 'waiver-wire-week-4'
 };
 
 // Load whatever's published BEFORE the first render, so it shows up
