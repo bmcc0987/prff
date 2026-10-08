@@ -4091,8 +4091,7 @@ function renderProjectionsPage() {
     }
     emptyState.style.display = 'none';
     const section = document.createElement('div');
-    section.innerHTML = '<h3 class="proj-question-heading">How has our season-to-date accuracy looked so far?</h3>' +
-      lastUpdatedBlurbHTML(publishedResultsCheck.publishedAt) +
+    section.innerHTML = lastUpdatedBlurbHTML(publishedResultsCheck.publishedAt) +
       buildResultsCheckCompactHTML(publishedResultsCheck);
     container.appendChild(section);
     return;
@@ -13514,6 +13513,32 @@ const publishedTimestamps = {
   teamTotals: {},        // { '3': '...', ... }
 };
 
+// Supabase/PostgREST caps a single `select('*')` at 1,000 rows by default —
+// past that limit, the rest of the table is silently dropped with no error
+// at all, not even a warning. weekly_rankings and ros_rankings both grew
+// past 1,000 total rows this season (5 weeks in) and started silently
+// losing positions/weeks at random depending on row order on disk, which
+// looked exactly like published data randomly "disappearing" even though
+// every row was still safely sitting in the database the whole time — see
+// CHANGELOG for the full incident. Every table loaded in loadAppState()
+// below now goes through this helper instead of a bare .select('*'), paging
+// through with .range() until a page comes back short, so this can never
+// silently truncate again no matter how large any of these tables get over
+// the rest of the season, regardless of the project's configured row cap.
+async function fetchAllRows(table) {
+  const pageSize = 1000;
+  let allRows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabaseClient.from(table).select('*').range(from, from + pageSize - 1);
+    if (error) return { data: allRows.length ? allRows : null, error };
+    allRows = allRows.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: allRows, error: null };
+}
+
 async function loadAppState() {
   if (!supabaseClient) {
     console.warn('Supabase client not available — using locally cached data only.');
@@ -13522,13 +13547,13 @@ async function loadAppState() {
   }
   try {
     const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes, pubWeeklyAccuracyRes] = await Promise.all([
-      supabaseClient.from('articles').select('*'),
-      supabaseClient.from('season_long_rankings').select('*'),
-      supabaseClient.from('season_long_totals').select('*'),
-      supabaseClient.from('weekly_rankings').select('*'),
-      supabaseClient.from('ros_rankings').select('*'),
-      supabaseClient.from('weekly_team_totals').select('*'),
-      supabaseClient.from('weekly_matchups').select('*'),
+      fetchAllRows('articles'),
+      fetchAllRows('season_long_rankings'),
+      fetchAllRows('season_long_totals'),
+      fetchAllRows('weekly_rankings'),
+      fetchAllRows('ros_rankings'),
+      fetchAllRows('weekly_team_totals'),
+      fetchAllRows('weekly_matchups'),
       // These two tables back the Weekly Team Implied Totals / Weekly Player
       // Projections movement badges (see openingTeamTotals,
       // openingWeeklyRankings). If they haven't been created yet (see
@@ -13537,13 +13562,13 @@ async function loadAppState() {
       // rejecting the whole Promise.all, so the rest of the site's data
       // still loads normally; the two blocks below already guard on
       // `.error` before touching their results.
-      supabaseClient.from('opening_weekly_rankings').select('*'),
-      supabaseClient.from('opening_team_totals').select('*'),
+      fetchAllRows('opening_weekly_rankings'),
+      fetchAllRows('opening_team_totals'),
       // Backs Rest of Season's movement badges, which compare every week
       // against the ORIGINAL (pre-Week 1) Season Long Player Projections —
       // see openingSeasonLong and getROSMovementForWeek. Same missing-table
       // safety net as the two tables above.
-      supabaseClient.from('opening_season_long_rankings').select('*'),
+      fetchAllRows('opening_season_long_rankings'),
       // The subscriber-facing Results Check snapshot (see
       // publishResultsCheckToSubscribers) — a single row, only present once
       // an admin has clicked Publish at least once. Same missing-table
@@ -13551,12 +13576,12 @@ async function loadAppState() {
       // nothing's been published yet, this just comes back empty/erroring
       // and publishedResultsCheck simply stays null (the public tab shows
       // "nothing published yet") — it never affects any other data loading.
-      supabaseClient.from('published_results_check').select('*'),
+      fetchAllRows('published_results_check'),
       // The subscriber-facing Results Check Weekly Breakdown rows — one row
       // per position/week/player, same shape and same missing-table safety
       // net as weekly_rankings/ros_rankings above (see
       // publishWeeklyAccuracyToSubscribers and CHANGELOG for the SQL).
-      supabaseClient.from('published_weekly_accuracy').select('*'),
+      fetchAllRows('published_weekly_accuracy'),
     ]);
     // Same graceful, skip-but-continue pattern as every other query below:
     // a problem fetching articles must never block the weekly totals, player
