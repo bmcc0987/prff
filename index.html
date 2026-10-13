@@ -2619,6 +2619,8 @@ footer {
         <button class="trade-add-btn" style="margin-top:20px;" onclick="smartLoadPositionRankings(document.getElementById('admin-position').value, document.getElementById('admin-week').value)">Load existing</button>
       </div>
 
+      <div id="admin-load-status" style="font-family:'Lato',sans-serif; font-size:12px; color:#666; margin:-6px 0 10px;"></div>
+
       <div class="admin-rankings-body">
       <div class="admin-rankings-main">
       <datalist id="admin-player-list"></datalist>
@@ -7156,6 +7158,21 @@ async function analyzeTrade() {
 // refresh. A live site would save these to the database (e.g. Supabase) so
 // they persist and can actually be read by the public Projections page.
 const publishedRankings = {}; // key "QB-4" -> { topN, rows: [{player, team, prob}] }
+// Admin-only working roster for Weekly Player Projections — same shape and
+// same key ("QB-4") as publishedRankings, but keeps EVERY player you've
+// given a name, including ones currently at 0%/blank Prob % (benched, bye
+// week, hasn't been decided yet, etc.). publishedRankings — the one the
+// public page, trade analyzer, CSV exports, and everything else reads —
+// still only ever contains players above 0%, exactly as before; a 0% player
+// is filtered out of THAT on every publish, same as always. This object
+// exists so the Admin editor itself has somewhere permanent to keep a
+// zeroed-out player instead of them quietly disappearing from the editor
+// the next time you open that position/week (see CHANGELOG for the full
+// story of why this was needed) — and so next week's editor can start from
+// this week's full player list instead of a blank table. Loaded from the
+// weekly_rankings_full table; see loadAdminTable/publishAdminTable/
+// findPriorFullWeeklyWeek below.
+const fullWeeklyRankings = {}; // key "QB-4" -> { topN, rows: [{player, team, prob}] } (0% included)
 // key "QB-4" -> { rows: [{player, team, prob}] } — a frozen copy of whatever
 // was in publishedRankings the very FIRST time this position/week was ever
 // published. Every later republish of the same position/week overwrites
@@ -7429,7 +7446,24 @@ function loadAdminTable() {
   tbody.innerHTML = '';
   adminRowCount = 0;
 
-  const existing = publishedRankings[key];
+  // Loads from fullWeeklyRankings — the admin's full working roster, which
+  // keeps every named player including ones at 0% — not from
+  // publishedRankings, which only ever has players above 0% (still the
+  // right store for the public page, trade analyzer, etc.; see CHANGELOG).
+  // If this exact position/week has nothing saved yet, carry forward the
+  // most recent earlier week's full roster as a starting point, same
+  // pattern Rest of Season already uses.
+  let existing = fullWeeklyRankings[key];
+  let carriedOverFromWeek = null;
+  if (!existing) {
+    const wk = parseInt(week, 10);
+    const prior = !isNaN(wk) ? findPriorFullWeeklyWeek(position, wk) : null;
+    if (prior) {
+      existing = prior.data;
+      carriedOverFromWeek = prior.week;
+    }
+  }
+
   if (existing) {
     document.getElementById('admin-topn').value = existing.topN;
     existing.rows.forEach(r => addAdminRow(r.player, r.team, r.prob));
@@ -7437,6 +7471,17 @@ function loadAdminTable() {
     for (let i = 0; i < topN; i++) addAdminRow();
   }
   updateAdminProbSum();
+
+  const statusEl = document.getElementById('admin-load-status');
+  if (statusEl) {
+    if (carriedOverFromWeek !== null) {
+      statusEl.textContent = 'Nothing saved yet for ' + position + ' Week ' + week + ' — showing Week ' + carriedOverFromWeek + '\'s players as a starting point (including any that were at 0%). Edit and click Publish to make Week ' + week + ' live.';
+    } else if (fullWeeklyRankings[key]) {
+      statusEl.textContent = 'Showing ' + position + ' Week ' + week + ' — any player at 0% here stays on this page but won\'t show on the public site. Edit and re-publish to update.';
+    } else {
+      statusEl.textContent = 'Nothing saved for ' + position + ' Week ' + week + ' yet, and no earlier week to start from — showing blank rows.';
+    }
+  }
 }
 
 // Interpolates across a red -> yellow -> green scale to match the reference heatmap.
@@ -8053,12 +8098,22 @@ function buildWeeklyAccuracyTableHTML(position, weekLabel, data, exportFnName) {
 }
 
 // Small notice prepended above the "Live preview" whenever one or more
-// rows got left out of a publish because their Prob % was 0 (or blank,
-// which counts the same as 0) — so excluding them is visible in the
+// rows got left out of what just went live because their Prob % was 0 (or
+// blank, which counts the same as 0) — so excluding them is visible in the
 // moment, not a silent surprise the next time someone looks for that
-// player and can't find them.
-function zeroProbExcludedNoticeHTML(count) {
+// player and can't find them. Weekly Player Projections and Rest of Season
+// pass `kept: true` — a 0% player there stays right on the Admin page
+// (fullWeeklyRankings/fullROS, see CHANGELOG) and just doesn't show up
+// publicly, so the wording says that plainly instead of implying they were
+// removed. Season Long still fully excludes a 0% player, so it gets the
+// original wording by leaving `kept` unset.
+function zeroProbExcludedNoticeHTML(count, kept) {
   if (!count) return '';
+  if (kept) {
+    const pluralKept = count === 1 ? 'player is' : 'players are';
+    return '<div style="color:#8a6d3b;background:#fcf3d9;border:1px solid #f0dca0;border-radius:6px;font-family:\'Lato\',sans-serif;font-size:13px;font-weight:700;padding:10px 14px;margin-bottom:12px;">' +
+      count + ' ' + pluralKept + ' sitting at 0% (or blank) Prob % — left out of what just went live, but kept right here on this page so they stay on your list. Give one a probability above 0% and publish again whenever you want them live.</div>';
+  }
   const plural = count === 1 ? 'player was' : 'players were';
   return '<div style="color:#8a6d3b;background:#fcf3d9;border:1px solid #f0dca0;border-radius:6px;font-family:\'Lato\',sans-serif;font-size:13px;font-weight:700;padding:10px 14px;margin-bottom:12px;">' +
     count + ' ' + plural + ' left out of this publish because their Prob % was 0% (or blank) — a 0% probability is treated the same as removing the player.</div>';
@@ -8090,34 +8145,37 @@ async function publishAdminTable() {
   const topN = parseInt(document.getElementById('admin-topn').value, 10) || 12;
   const key = position + '-' + week;
 
-  // A player with a 0% probability (or a blank Prob % field, which counts
-  // the same as 0) is excluded from publishing entirely, same treatment as
-  // a blank player name — per "I want to exclude the player if given a
-  // 0%," rather than the old behavior of publishing them live showing 0%.
-  const rows = [];
+  // A player with a 0% probability (or a blank Prob % field) is excluded
+  // from what actually goes live, same treatment as a blank player name —
+  // per "I want to exclude the player if given a 0%." But unlike before,
+  // that player is NOT gone: allRows (the admin's own full working roster,
+  // see fullWeeklyRankings above) keeps them, including at 0%, so they
+  // stay on this page across reloads and carry forward into next week's
+  // editor instead of quietly disappearing. `rows` — the filtered set
+  // that's actually published — is unchanged in meaning from before.
+  const allRows = [];
   let zeroProbExcludedCount = 0;
   document.querySelectorAll('#admin-rows tr').forEach(tr => {
     const inputs = tr.querySelectorAll('input');
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
-    const prob = parseFloat(inputs[2].value);
+    const prob = parseFloat(inputs[2].value) || 0;
     const notes = inputs[3] ? inputs[3].value.trim() : '';
     if (!player) return;
-    if (!(prob > 0)) { zeroProbExcludedCount++; return; }
-    rows.push({ player, team, prob, notes });
+    if (!(prob > 0)) zeroProbExcludedCount++;
+    allRows.push({ player, team, prob, notes });
   });
+  const rows = allRows.filter(r => r.prob > 0);
 
-  if (rows.length === 0) {
+  if (allRows.length === 0) {
     const previewWrap = document.getElementById('admin-preview-wrap');
     const preview = document.getElementById('admin-preview');
-    const msg = zeroProbExcludedCount > 0
-      ? 'Every player currently in this table has a 0% (or blank) Prob % — nothing to publish. Give at least one player a probability above 0%.'
-      : 'Add at least one player with a probability above 0% before publishing.';
-    preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">' + msg + '</div>';
+    preview.innerHTML = '<div style="color:#c0392b;font-family:\'Lato\',sans-serif;font-weight:700;padding:12px 0;">Add at least one player before publishing.</div>';
     previewWrap.style.display = 'block';
     return;
   }
 
+  fullWeeklyRankings[key] = { topN, rows: allRows };
   publishedRankings[key] = { topN, rows };
   publishedTimestamps.weekly[key] = new Date().toISOString();
 
@@ -8128,7 +8186,7 @@ async function publishAdminTable() {
   // published immediately before it. Only set once per key: a position/week
   // that already has an opening snapshot (from earlier this session, or
   // loaded from Supabase on page load) is left untouched.
-  const isFirstPublishThisWeek = !openingWeeklyRankings[key];
+  const isFirstPublishThisWeek = !openingWeeklyRankings[key] && rows.length > 0;
   if (isFirstPublishThisWeek) {
     openingWeeklyRankings[key] = { rows: rows.map(r => ({ player: r.player, team: r.team, prob: r.prob })) };
   }
@@ -8140,6 +8198,18 @@ async function publishAdminTable() {
       await supabaseReplaceRows('weekly_rankings', { pos: position, week: Number(week) },
         rows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN })));
       await publishNotesForRows('weekly', position, Number(week), rows);
+      // Admin-only full working roster (0% players included) — a separate
+      // table from weekly_rankings above so a 0% player can stay on the
+      // Admin page without ever touching what's actually live. Wrapped in
+      // its own try/catch: if weekly_rankings_full doesn't exist yet (see
+      // CHANGELOG for the create-table SQL), this just logs a warning — the
+      // real publish above already succeeded and stays unaffected.
+      try {
+        await supabaseReplaceRows('weekly_rankings_full', { pos: position, week: Number(week) },
+          allRows.map(r => ({ pos: position, week: Number(week), player: r.player, team: r.team, prob: r.prob, top_n: topN })));
+      } catch (fullErr) {
+        console.warn('Could not save the full Weekly Player Projections working roster (0% players included) for ' + key + ' — the real publish above still succeeded fine. Create the weekly_rankings_full table (see CHANGELOG) to keep 0% players on this page across reloads.', fullErr);
+      }
       // Opening-snapshot table: written once per position/week and never
       // touched again after that, unlike the delete-then-replace pattern
       // above. An upsert with ignoreDuplicates is what makes this
@@ -8170,7 +8240,7 @@ async function publishAdminTable() {
   clearAdminDraftEntry('weekly', key);
   showJustPublishedStatus('admin-draft-status');
 
-  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount) +
+  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount, true) +
     buildPublishedTableHTML(position, 'Week ' + week, topN, rows, null, week, getWeeklyMovementForWeek(position, week, rows), "this week's first publish");
   previewWrap.style.display = 'block';
 
@@ -8188,6 +8258,11 @@ async function publishAdminTable() {
 // don't triplicate the row/sort/load/publish logic.
 const publishedSeasonLong = {"QB":{"topN":12,"rows":[{"player":"Lamar Jackson","team":"BAL","prob":72.0},{"player":"Josh Allen","team":"BUF","prob":70.0},{"player":"Dak Prescott","team":"DAL","prob":69.0},{"player":"Joe Burrow","team":"CIN","prob":65.0},{"player":"Matthew Stafford","team":"LAR","prob":64.0},{"player":"Jayden Daniels","team":"WAS","prob":52.0},{"player":"Justin Herbert","team":"LAC","prob":51.0},{"player":"Drake Maye","team":"NE","prob":48.0},{"player":"Patrick Mahomes","team":"KC","prob":46.0},{"player":"Trevor Lawrence","team":"JAX","prob":46.0},{"player":"Brock Purdy","team":"SF","prob":45.0},{"player":"Tyler Shough","team":"NO","prob":43.0},{"player":"Caleb Williams","team":"CHI","prob":43.0},{"player":"Bo Nix","team":"DEN","prob":42.0},{"player":"Daniel Jones","team":"IND","prob":42.0},{"player":"Jalen Hurts","team":"PHI","prob":41.0},{"player":"Jared Goff","team":"DET","prob":41.0},{"player":"Jaxson Dart","team":"NYG","prob":37.0},{"player":"Jordan Love","team":"GB","prob":35.0},{"player":"Sam Darnold","team":"SEA","prob":30.0},{"player":"Baker Mayfield","team":"TB","prob":29.0},{"player":"C.J. Stroud","team":"HOU","prob":24.0},{"player":"Kyler Murray","team":"MIN","prob":24.0},{"player":"Jacoby Brissett","team":"ARI","prob":20.0},{"player":"Bryce Young","team":"CAR","prob":18.0},{"player":"Kirk Cousins","team":"LV","prob":17.0},{"player":"Geno Smith","team":"NYJ","prob":15.0},{"player":"Aaron Rodgers","team":"PIT","prob":14.0},{"player":"Cam Ward","team":"TEN","prob":14.0},{"player":"Michael Penix Jr.","team":"ATL","prob":13.0},{"player":"Deshaun Watson","team":"CLE","prob":12.0},{"player":"Malik Willis","team":"MIA","prob":12.0}]},"WR":{"topN":12,"rows":[{"player":"Puka Nacua","team":"LAR","prob":68.0},{"player":"Ja'Marr Chase","team":"CIN","prob":65.0},{"player":"Amon-Ra St. Brown","team":"DET","prob":64.0},{"player":"Jaxon Smith-Njigba","team":"SEA","prob":54.0},{"player":"CeeDee Lamb","team":"DAL","prob":47.0},{"player":"Rashee Rice","team":"KC","prob":43.0},{"player":"Zay Flowers","team":"BAL","prob":39.0},{"player":"George Pickens","team":"DAL","prob":37.0},{"player":"Nico Collins","team":"HOU","prob":36.0},{"player":"AJ Brown","team":"NE","prob":36.0},{"player":"Chris Olave","team":"NO","prob":34.0},{"player":"Drake London","team":"ATL","prob":32.0},{"player":"Garrett Wilson","team":"NYJ","prob":29.0},{"player":"Malik Nabers","team":"NYG","prob":27.0},{"player":"Justin Jefferson","team":"MIN","prob":26.0},{"player":"DeVonta Smith","team":"PHI","prob":25.0},{"player":"Parker Washington","team":"JAX","prob":24.0},{"player":"Davante Adams","team":"LAR","prob":23.0},{"player":"Ladd McConkey","team":"LAC","prob":22.0},{"player":"Jaylen Waddle","team":"DEN","prob":20.0},{"player":"Jameson Williams","team":"DET","prob":20.0},{"player":"Luther Burden","team":"CHI","prob":19.0},{"player":"Tetairoa McMillan","team":"CAR","prob":18.0},{"player":"Marvin Harrison Jr.","team":"ARI","prob":16.0},{"player":"Josh Downs","team":"IND","prob":16.0},{"player":"Tee Higgins","team":"CIN","prob":15.0},{"player":"Terry McLaurin","team":"WAS","prob":15.0},{"player":"Mike Evans","team":"SF","prob":14.0},{"player":"DJ Moore","team":"BUF","prob":13.0},{"player":"Brian Thomas Jr.","team":"JAX","prob":13.0},{"player":"Jayden Reed","team":"GB","prob":12.0},{"player":"Rome Odunze","team":"CHI","prob":12.0},{"player":"Christian Watson","team":"GB","prob":12.0},{"player":"Matthew Golden","team":"GB","prob":12.0},{"player":"Chris Godwin Jr.","team":"TB","prob":11.0},{"player":"Michael Wilson","team":"ARI","prob":10.0},{"player":"Quentin Johnston","team":"LAC","prob":10.0},{"player":"Emeka Egbuka","team":"TB","prob":10.0},{"player":"Stefon Diggs","team":"WAS","prob":10.0},{"player":"Jordyn Tyson","team":"NO","prob":9.0},{"player":"Makai Lemon","team":"PHI","prob":9.0},{"player":"Michael Pittman","team":"PIT","prob":9.0},{"player":"Alec Pierce","team":"IND","prob":8.0},{"player":"Xavier Worthy","team":"KC","prob":8.0},{"player":"Jalen Coker","team":"CAR","prob":7.0},{"player":"Jakobi Meyers","team":"JAX","prob":7.0},{"player":"DK Metcalf","team":"PIT","prob":7.0},{"player":"Malik Washington","team":"MIA","prob":6.0},{"player":"Khalil Shakir","team":"BUF","prob":5.0},{"player":"Ryan Flournoy","team":"DAL","prob":5.0},{"player":"Courtland Sutton","team":"DEN","prob":5.0},{"player":"Travis Hunter","team":"JAX","prob":5.0},{"player":"Romeo Doubs","team":"NE","prob":5.0},{"player":"Rashid Shaheed","team":"SEA","prob":5.0},{"player":"Calvin Ridley","team":"TEN","prob":5.0},{"player":"Dontayvion Wicks","team":"PHI","prob":4.0},{"player":"Wan'Dale Robinson","team":"TEN","prob":4.0},{"player":"Carnell Tate","team":"TEN","prob":4.0},{"player":"KC Concepcion","team":"CLE","prob":3.0},{"player":"Jerry Jeudy","team":"CLE","prob":3.0},{"player":"Jauan Jennings","team":"MIN","prob":3.0},{"player":"Ricky Pearsall","team":"SF","prob":3.0},{"player":"Jalen McMillan","team":"TB","prob":3.0},{"player":"Elic Ayomanor","team":"TEN","prob":3.0},{"player":"Rashod Bateman","team":"BAL","prob":2.0},{"player":"Tre Harris","team":"LAC","prob":2.0},{"player":"Tre Tucker","team":"LV","prob":2.0},{"player":"Jordan Addison","team":"MIN","prob":2.0},{"player":"Demario Douglas","team":"NE","prob":2.0},{"player":"Germie Bernard","team":"PIT","prob":2.0},{"player":"Caleb Douglas","team":"MIA","prob":2.0},{"player":"Tank Dell","team":"HOU","prob":2.0},{"player":"Jayden Higgins","team":"HOU","prob":2.0},{"player":"Kendrick Bourne","team":"ARI","prob":1.0},{"player":"Olamide Zaccheaus","team":"ATL","prob":1.0},{"player":"Jahan Dotson","team":"ATL","prob":1.0},{"player":"Devontez Walker","team":"BAL","prob":1.0},{"player":"Josh Palmer","team":"BUF","prob":1.0},{"player":"Xavier Legette","team":"CAR","prob":1.0},{"player":"Khalif Raymond","team":"CHI","prob":1.0},{"player":"Andrei Iosivas","team":"CIN","prob":1.0},{"player":"Denzel Boston","team":"CLE","prob":1.0},{"player":"Troy Franklin","team":"DEN","prob":1.0},{"player":"Isaac TeSlaa","team":"DET","prob":1.0},{"player":"Nick Westbrook-Ikhine","team":"IND","prob":1.0},{"player":"Tyquan Thornton","team":"KC","prob":1.0},{"player":"Jordan Whittington","team":"LAR","prob":1.0},{"player":"Jack Bech","team":"LV","prob":1.0},{"player":"Jalen Nailor","team":"LV","prob":1.0},{"player":"Dont'e Thornton","team":"LV","prob":1.0},{"player":"Tutu Atwell","team":"MIA","prob":1.0},{"player":"Jalen Tolbert","team":"MIA","prob":1.0},{"player":"Kyle Williams","team":"NE","prob":1.0},{"player":"Mack Hollins","team":"NE","prob":1.0},{"player":"Devaughn Vele","team":"NO","prob":1.0},{"player":"Darnell Mooney","team":"NYG","prob":1.0},{"player":"Darius Slayton","team":"NYG","prob":1.0},{"player":"Juju Smith-Schuster","team":"NYG","prob":1.0},{"player":"Odell Beckham Jr","team":"NYG","prob":1.0},{"player":"Calvin Austin III","team":"NYG","prob":1.0},{"player":"Adonai Mitchell","team":"NYJ","prob":1.0},{"player":"Omar Cooper Jr.","team":"NYJ","prob":1.0},{"player":"Cooper Kupp","team":"SEA","prob":1.0},{"player":"Tory Horton","team":"SEA","prob":1.0},{"player":"Christian Kirk","team":"SF","prob":1.0},{"player":"Ted Hurst III","team":"TB","prob":1.0},{"player":"Chimere Dike","team":"TEN","prob":1.0},{"player":"Antonio Williams","team":"WAS","prob":1.0},{"player":"Treylon Burks","team":"WAS","prob":1.0}]},"RB":{"topN":12,"rows":[{"player":"Jonathan Taylor","team":"IND","prob":65.0},{"player":"Christian McCaffrey","team":"SF","prob":64.0},{"player":"Jahmyr Gibbs","team":"DET","prob":59.0},{"player":"Bijan Robinson","team":"ATL","prob":57.0},{"player":"Ashton Jeanty","team":"LV","prob":56.0},{"player":"De'Von Achane","team":"MIA","prob":55.0},{"player":"Derrick Henry","team":"BAL","prob":54.0},{"player":"James Cook","team":"BUF","prob":52.0},{"player":"Saquon Barkley","team":"PHI","prob":42.0},{"player":"Chase Brown","team":"CIN","prob":37.0},{"player":"Kenneth Walker III","team":"KC","prob":37.0},{"player":"Kyren Williams","team":"LAR","prob":33.0},{"player":"Josh Jacobs","team":"GB","prob":32.0},{"player":"Javonte Williams","team":"DAL","prob":29.0},{"player":"Jeremiyah Love","team":"ARI","prob":27.0},{"player":"David Montgomery","team":"HOU","prob":26.0},{"player":"Omarion Hampton","team":"LAC","prob":25.0},{"player":"D'Andre Swift","team":"CHI","prob":25.0},{"player":"Breece Hall","team":"NYJ","prob":24.0},{"player":"Cam Skattebo","team":"NYG","prob":23.0},{"player":"Travis Etienne","team":"NO","prob":22.0},{"player":"Bucky Irving","team":"TB","prob":20.0},{"player":"Quinshon Judkins","team":"CLE","prob":19.0},{"player":"TreVeyon Henderson","team":"NE","prob":19.0},{"player":"Rhamondre Stevenson","team":"NE","prob":18.0},{"player":"Bhayshul Tuten","team":"JAX","prob":17.0},{"player":"Jadarian Price","team":"SEA","prob":15.0},{"player":"Zach Charbonnet","team":"SEA","prob":15.0},{"player":"Blake Corum","team":"LAR","prob":14.0},{"player":"Chris Rodriguez Jr.","team":"JAX","prob":14.0},{"player":"Jaylen Warren","team":"PIT","prob":14.0},{"player":"Rico Dowdle","team":"PIT","prob":14.0},{"player":"Tyler Allgeier","team":"ARI","prob":13.0},{"player":"Chuba Hubbard","team":"CAR","prob":12.0},{"player":"Tony Pollard","team":"TEN","prob":12.0},{"player":"Tyjae Spears","team":"TEN","prob":12.0},{"player":"J.K. Dobbins","team":"DEN","prob":12.0},{"player":"Kenneth Gainwell","team":"TB","prob":12.0},{"player":"Rachaad White","team":"WAS","prob":12.0},{"player":"RJ Harvey","team":"DEN","prob":12.0},{"player":"Keaton Mitchell","team":"LAC","prob":12.0},{"player":"Alvin Kamara","team":"NO","prob":10.0},{"player":"Aaron Jones","team":"MIN","prob":10.0},{"player":"Jordan Mason","team":"MIN","prob":10.0},{"player":"Jonathan Brooks","team":"CAR","prob":10.0},{"player":"Jacory Croskey-Merritt","team":"WAS","prob":9.0},{"player":"Kimani Vidal","team":"LAC","prob":7.0},{"player":"Woody Marks","team":"HOU","prob":5.0},{"player":"Isiah Pacheco","team":"DET","prob":5.0},{"player":"Kyle Monangai","team":"CHI","prob":3.0},{"player":"Tyron Tracy Jr.","team":"NYG","prob":3.0},{"player":"Tank Bigsby","team":"PHI","prob":2.0},{"player":"Jordan James","team":"SF","prob":2.0},{"player":"Kaelon Black","team":"SF","prob":2.0},{"player":"Braelon Allen","team":"NYJ","prob":2.0},{"player":"Brashard Smith","team":"KC","prob":1.0},{"player":"Justice Hill","team":"BAL","prob":1.0},{"player":"Ty Johnson","team":"BUF","prob":1.0},{"player":"Samaje Perine","team":"CIN","prob":1.0},{"player":"Malik Davis","team":"DAL","prob":1.0},{"player":"Chris Brooks","team":"GB","prob":1.0},{"player":"Marshawn Lloyd","team":"GB","prob":1.0},{"player":"Brian Robinson","team":"ATL","prob":1.0},{"player":"Dylan Sampson","team":"CLE","prob":1.0},{"player":"Mike Washington Jr.","team":"LV","prob":1.0},{"player":"Jaylen Wright","team":"MIA","prob":1.0},{"player":"Kaleb Johnson","team":"PIT","prob":1.0},{"player":"DJ Giddens","team":"IND","prob":1.0},{"player":"LeQuint Allen Jr.","team":"JAX","prob":1.0},{"player":"Sean Tucker","team":"TB","prob":1.0}]},"TE":{"topN":12,"rows":[{"player":"Brock Bowers","team":"LV","prob":69.0},{"player":"Trey McBride","team":"ARI","prob":66.0},{"player":"Colston Loveland","team":"CHI","prob":63.0},{"player":"Tucker Kraft","team":"GB","prob":60.0},{"player":"Tyler Warren","team":"IND","prob":55.0},{"player":"Kyle Pitts","team":"ATL","prob":52.0},{"player":"Jake Ferguson","team":"DAL","prob":42.0},{"player":"Harold Fannin Jr.","team":"CLE","prob":34.0},{"player":"George Kittle","team":"SF","prob":32.0},{"player":"Sam LaPorta","team":"DET","prob":32.0},{"player":"Isaiah Likely","team":"NYG","prob":32.0},{"player":"Travis Kelce","team":"KC","prob":31.0},{"player":"Juwan Johnson","team":"NO","prob":29.0},{"player":"Chig Okonkwo","team":"WAS","prob":27.0},{"player":"Dallas Goedert","team":"PHI","prob":26.0},{"player":"Dalton Kincaid","team":"BUF","prob":26.0},{"player":"T.J. Hockenson","team":"MIN","prob":25.0},{"player":"Mark Andrews","team":"BAL","prob":25.0},{"player":"Terrance Ferguson","team":"LAR","prob":25.0},{"player":"Oronde Gadsden II","team":"LAC","prob":25.0},{"player":"Hunter Henry","team":"NE","prob":25.0},{"player":"Dalton Schultz","team":"HOU","prob":24.0},{"player":"Brenton Strange","team":"JAX","prob":22.0},{"player":"David Njoku","team":"LAC","prob":20.0},{"player":"Greg Dulcich","team":"MIA","prob":18.0},{"player":"Dawson Knox","team":"BUF","prob":17.0},{"player":"Tyler Higbee","team":"LAR","prob":15.0},{"player":"Mike Gesicki","team":"CIN","prob":15.0},{"player":"Colby Parkinson","team":"LAR","prob":12.0},{"player":"Evan Engram","team":"DEN","prob":12.0},{"player":"Luke Musgrave","team":"GB","prob":10.0},{"player":"Noah Gray","team":"KC","prob":10.0},{"player":"AJ Barner","team":"SEA","prob":10.0},{"player":"Eric Saubert","team":"SEA","prob":10.0},{"player":"Elijah Arroyo","team":"SEA","prob":10.0},{"player":"Mo Alie-Cox","team":"IND","prob":10.0},{"player":"Tommy Tremble","team":"CAR","prob":10.0},{"player":"Ja'Tavion Sanders","team":"CAR","prob":10.0},{"player":"Theo Johnson","team":"NYG","prob":10.0},{"player":"Mason Taylor","team":"NYJ","prob":10.0},{"player":"Durham Smythe","team":"BAL","prob":5.0},{"player":"Cole Kmet","team":"CHI","prob":5.0},{"player":"Drew Sample","team":"CIN","prob":5.0},{"player":"Luke Schoonmaker","team":"DAL","prob":5.0},{"player":"Brock Wright","team":"DET","prob":5.0},{"player":"Jake Tonges","team":"SF","prob":5.0},{"player":"Foster Moreau","team":"HOU","prob":5.0},{"player":"Charlie Kolar","team":"LAC","prob":5.0},{"player":"Josh Oliver","team":"MIN","prob":5.0},{"player":"Julian Hill","team":"NE","prob":5.0},{"player":"Cade Otton","team":"TB","prob":5.0},{"player":"Payne Durham","team":"TB","prob":5.0},{"player":"John Bates","team":"WAS","prob":5.0},{"player":"Tip Reiman","team":"ARI","prob":5.0},{"player":"Austin Hooper","team":"ATL","prob":5.0},{"player":"Blake Whiteheart","team":"CLE","prob":5.0},{"player":"Adam Trautman","team":"DEN","prob":5.0},{"player":"Michael Mayer","team":"LV","prob":5.0},{"player":"Will Kacmarek","team":"MIA","prob":5.0},{"player":"Noah Fant","team":"NO","prob":5.0},{"player":"Kenyon Sadiq","team":"NYJ","prob":5.0},{"player":"Darnell Washington","team":"PIT","prob":5.0},{"player":"Pat Freiermuth","team":"PIT","prob":5.0},{"player":"Gunnar Helm","team":"TEN","prob":5.0},{"player":"Daniel Bellinger","team":"TEN","prob":5.0}]}};
 const publishedROS = {};        // key "QB-5" (position-week) -> { topN, rows }
+// Same idea as fullWeeklyRankings above, for Rest of Season: every named
+// player stays here even at 0%, while publishedROS (the public store) keeps
+// only players above 0%, exactly as before. Loaded from ros_rankings_full;
+// see loadRankTable/publishRankTable/findPriorPublishedROSWeek below.
+const fullROS = {};             // key "QB-5" (position-week) -> { topN, rows } (0% included)
 
 // key position -> { rows: [{player, team, prob}] } — a frozen copy of
 // Season Long Player Projections, captured once and never touched again,
@@ -8341,9 +8416,13 @@ function exportRankRowsCSV(mode) {
 // looking at whatever the highest already-published week below the
 // selected one is, not just "the previous number," so it still works
 // sensibly if a week ever gets skipped.
+// Searches fullROS (the admin's full working roster, 0% players included)
+// rather than publishedROS, so a week you carry forward brings along every
+// player you'd kept on the list for the prior week — not just the ones that
+// were actually live above 0%.
 function findPriorPublishedROSWeek(position, beforeWeek) {
   let bestWeek = null;
-  Object.keys(publishedROS).forEach(key => {
+  Object.keys(fullROS).forEach(key => {
     const idx = key.lastIndexOf('-');
     if (idx === -1) return;
     const pos = key.slice(0, idx);
@@ -8351,7 +8430,23 @@ function findPriorPublishedROSWeek(position, beforeWeek) {
     if (pos !== position || isNaN(wk) || wk >= beforeWeek) return;
     if (bestWeek === null || wk > bestWeek) bestWeek = wk;
   });
-  return bestWeek === null ? null : { week: bestWeek, data: publishedROS[position + '-' + bestWeek] };
+  return bestWeek === null ? null : { week: bestWeek, data: fullROS[position + '-' + bestWeek] };
+}
+
+// Same idea as findPriorPublishedROSWeek above, for Weekly Player
+// Projections — searches fullWeeklyRankings so carrying a position forward
+// into a new week brings its full player list, 0% ones included.
+function findPriorFullWeeklyWeek(position, beforeWeek) {
+  let bestWeek = null;
+  Object.keys(fullWeeklyRankings).forEach(key => {
+    const idx = key.lastIndexOf('-');
+    if (idx === -1) return;
+    const pos = key.slice(0, idx);
+    const wk = parseInt(key.slice(idx + 1), 10);
+    if (pos !== position || isNaN(wk) || wk >= beforeWeek) return;
+    if (bestWeek === null || wk > bestWeek) bestWeek = wk;
+  });
+  return bestWeek === null ? null : { week: bestWeek, data: fullWeeklyRankings[position + '-' + bestWeek] };
 }
 
 // Looks up a locally-saved (not-yet-published) draft for Rest of Season,
@@ -8397,7 +8492,13 @@ function loadRankTable(mode) {
     }
   }
 
-  let existing = cfg.store[key];
+  // Rest of Season loads from fullROS — the admin's full working roster,
+  // which keeps every named player including ones currently at 0% — not
+  // from publishedROS (cfg.store), which only ever has players above 0%
+  // (that's still the right store for everything public-facing; see
+  // CHANGELOG). Season Long is unchanged and still reads straight from
+  // cfg.store (publishedSeasonLong), since this request didn't extend to it.
+  let existing = mode === 'ros' ? fullROS[key] : cfg.store[key];
   const statusEl = mode === 'ros' ? document.getElementById('ros-load-status') : null;
   let carriedOverFromWeek = null;
 
@@ -8423,11 +8524,11 @@ function loadRankTable(mode) {
     const position = document.getElementById(cfg.posId).value;
     const week = document.getElementById(cfg.weekId).value;
     if (carriedOverFromWeek !== null) {
-      statusEl.textContent = 'Nothing published yet for ' + position + ' Week ' + week + ' — showing Week ' + carriedOverFromWeek + '\'s published numbers as a starting point. Edit and click Publish to make Week ' + week + ' live.';
-    } else if (cfg.store[key]) {
-      statusEl.textContent = 'Showing the published ' + position + ' Week ' + week + ' data. Edit and re-publish to update it.';
+      statusEl.textContent = 'Nothing saved yet for ' + position + ' Week ' + week + ' — showing Week ' + carriedOverFromWeek + '\'s players as a starting point (including any that were at 0%). Edit and click Publish to make Week ' + week + ' live.';
+    } else if (fullROS[key]) {
+      statusEl.textContent = 'Showing ' + position + ' Week ' + week + ' — any player at 0% here stays on this page but won\'t show on the public site. Edit and re-publish to update.';
     } else {
-      statusEl.textContent = 'Nothing published for ' + position + ' Week ' + week + ' yet, and no earlier published week to start from — showing blank rows (or use "Copy from Season Long").';
+      statusEl.textContent = 'Nothing saved for ' + position + ' Week ' + week + ' yet, and no earlier week to start from — showing blank rows (or use "Copy from Season Long").';
     }
   }
 }
@@ -8484,22 +8585,31 @@ async function publishRankTable(mode) {
   const topN = parseInt(document.getElementById(cfg.topNId).value, 10) || 12;
   const key = rankModeKey(mode);
 
-  // Same 0%-excludes-the-player rule as Weekly (see publishAdminTable):
-  // a 0% or blank Prob % leaves the player out of the publish entirely.
-  const rows = [];
+  // Season Long keeps the old rule exactly: a 0%/blank Prob % player is
+  // excluded entirely, same as it's always been. Rest of Season no longer
+  // does that — a 0%/blank player there stays in allRows (the admin's own
+  // full working roster, see fullROS above) and only gets filtered out of
+  // `rows`, the set that actually goes live on the public site. This is
+  // what lets a benched/bye-week ROS player stay on this page instead of
+  // vanishing the moment you zero them out and publish (see CHANGELOG).
+  const allRows = [];
   let zeroProbExcludedCount = 0;
   document.querySelectorAll('#' + cfg.rowsId + ' tr').forEach(tr => {
     const inputs = tr.querySelectorAll('input');
     const player = inputs[0].value.trim();
     const team = inputs[1].value.trim().toUpperCase();
-    const prob = parseFloat(inputs[2].value);
+    const prob = parseFloat(inputs[2].value) || 0;
     const notes = (mode === 'seasonlong' && inputs[3]) ? inputs[3].value.trim() : '';
     if (!player) return;
-    if (!(prob > 0)) { zeroProbExcludedCount++; return; }
-    rows.push({ player, team, prob, notes });
+    if (!(prob > 0)) {
+      zeroProbExcludedCount++;
+      if (mode === 'seasonlong') return;
+    }
+    allRows.push({ player, team, prob, notes });
   });
+  const rows = allRows.filter(r => r.prob > 0);
 
-  if (rows.length === 0) {
+  if (allRows.length === 0) {
     const previewWrap = document.getElementById(cfg.previewWrapId);
     const preview = document.getElementById(cfg.previewId);
     const msg = zeroProbExcludedCount > 0
@@ -8510,6 +8620,7 @@ async function publishRankTable(mode) {
     return;
   }
 
+  if (mode === 'ros') fullROS[key] = { topN, rows: allRows };
   cfg.store[key] = { topN, rows };
   if (mode === 'seasonlong') publishedTimestamps.seasonLong[position] = new Date().toISOString();
   else publishedTimestamps.ros[key] = new Date().toISOString();
@@ -8537,6 +8648,18 @@ async function publishRankTable(mode) {
         await supabaseReplaceRows('ros_rankings', { pos: position, week },
           rows.map(r => ({ pos: position, week, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
         await publishNotesForRows(mode, position, week, rows);
+        // Admin-only full working roster (0% players included) — a separate
+        // table from ros_rankings above so a 0% player can stay on the
+        // Admin page without ever touching what's actually live. Wrapped in
+        // its own try/catch: if ros_rankings_full doesn't exist yet (see
+        // CHANGELOG for the create-table SQL), this just logs a warning —
+        // the real publish above already succeeded and stays unaffected.
+        try {
+          await supabaseReplaceRows('ros_rankings_full', { pos: position, week },
+            allRows.map(r => ({ pos: position, week, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
+        } catch (fullErr) {
+          console.warn('Could not save the full Rest of Season working roster (0% players included) for ' + key + ' — the real publish above still succeeded fine. Create the ros_rankings_full table (see CHANGELOG) to keep 0% players on this page across reloads.', fullErr);
+        }
       } else {
         await supabaseReplaceRows('season_long_rankings', { pos: position },
           rows.map(r => ({ pos: position, player: r.player, team: r.team, prob: r.prob, top_n: topN })));
@@ -8571,7 +8694,7 @@ async function publishRankTable(mode) {
   // baseline those badges compare against), so this only applies when
   // mode === 'ros'.
   const rosPreviewMovement = mode === 'ros' ? getROSMovementForWeek(position, document.getElementById(cfg.weekId).value, rows) : undefined;
-  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount) +
+  preview.innerHTML = (supabaseClient ? '' : dbNotConnectedWarningHTML()) + zeroProbExcludedNoticeHTML(zeroProbExcludedCount, mode === 'ros') +
     (mode === 'ros' ? rosMovementNoteHTML(position) : '') +
     buildPublishedTableHTML(position, label, topN, rows, null, undefined, rosPreviewMovement, 'the original Season Long Player Projections (published before Week 1)');
   previewWrap.style.display = 'block';
@@ -11332,10 +11455,12 @@ function autoFillPositionRankings(position, week) {
   updateAdminProbSum();
 }
 
-// If this position/week has already been published, load that (so your
-// edits and sort order are preserved) instead of overwriting it with a
-// fresh auto-fill from team tiers. Only auto-fills for positions that
-// haven't been published yet.
+// If this position/week already has a saved working roster (published or
+// not — see fullWeeklyRankings), or an earlier week's roster to carry
+// forward, load that (so your edits, sort order, and any 0% players are
+// preserved) instead of overwriting it with a fresh auto-fill from team
+// tiers. Only auto-fills from team tiers when there's truly nothing at all
+// to start from — e.g. Week 1, or a position that's never been touched.
 async function smartLoadPositionRankings(position, week) {
   renderAdminMatchupsPanel(week);
   renderAdminTotalsRefPanel(week);
@@ -11345,7 +11470,9 @@ async function smartLoadPositionRankings(position, week) {
     return;
   }
   const key = position + '-' + week;
-  if (publishedRankings[key]) {
+  const wk = parseInt(week, 10);
+  const hasSomethingToLoad = !!fullWeeklyRankings[key] || (!isNaN(wk) && !!findPriorFullWeeklyWeek(position, wk));
+  if (hasSomethingToLoad) {
     loadAdminTable();
   } else {
     autoFillPositionRankings(position, week);
@@ -13407,6 +13534,8 @@ function saveAppStateLocally() {
       publishedMatchups,
       publishedRankings,
       publishedROS,
+      fullWeeklyRankings,
+      fullROS,
       openingTeamTotals,
       openingWeeklyRankings,
       openingSeasonLong,
@@ -13432,6 +13561,8 @@ function loadAppStateLocally() {
     if (state.publishedMatchups) Object.assign(publishedMatchups, state.publishedMatchups);
     if (state.publishedRankings) Object.assign(publishedRankings, state.publishedRankings);
     if (state.publishedROS) Object.assign(publishedROS, state.publishedROS);
+    if (state.fullWeeklyRankings) Object.assign(fullWeeklyRankings, state.fullWeeklyRankings);
+    if (state.fullROS) Object.assign(fullROS, state.fullROS);
     if (state.openingTeamTotals) Object.assign(openingTeamTotals, state.openingTeamTotals);
     if (state.openingWeeklyRankings) Object.assign(openingWeeklyRankings, state.openingWeeklyRankings);
     if (state.openingSeasonLong) Object.assign(openingSeasonLong, state.openingSeasonLong);
@@ -13546,7 +13677,7 @@ async function loadAppState() {
     return;
   }
   try {
-    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes, pubWeeklyAccuracyRes] = await Promise.all([
+    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes, pubWeeklyAccuracyRes, fullWkRankRes, fullRosRankRes] = await Promise.all([
       fetchAllRows('articles'),
       fetchAllRows('season_long_rankings'),
       fetchAllRows('season_long_totals'),
@@ -13582,6 +13713,15 @@ async function loadAppState() {
       // net as weekly_rankings/ros_rankings above (see
       // publishWeeklyAccuracyToSubscribers and CHANGELOG for the SQL).
       fetchAllRows('published_weekly_accuracy'),
+      // Admin-only full working rosters (0% players included) for Weekly
+      // Player Projections and Rest of Season — see fullWeeklyRankings/
+      // fullROS above and CHANGELOG. Same missing-table safety net as the
+      // tables above: if these don't exist yet, the Admin editor just falls
+      // back to its old behavior (0% players don't stick around) until the
+      // tables are created — everything else keeps working normally either
+      // way, including the real publishedRankings/publishedROS public data.
+      fetchAllRows('weekly_rankings_full'),
+      fetchAllRows('ros_rankings_full'),
     ]);
     // Same graceful, skip-but-continue pattern as every other query below:
     // a problem fetching articles must never block the weekly totals, player
@@ -13647,6 +13787,12 @@ async function loadAppState() {
     }
     if (!wkRankRes.error) Object.assign(publishedRankings, groupByPosWeek(wkRankRes.data, publishedTimestamps.weekly));
     if (!rosRankRes.error) Object.assign(publishedROS, groupByPosWeek(rosRankRes.data, publishedTimestamps.ros));
+    // No separate timestamp tracking needed for these two — they're
+    // admin-only working rosters, not shown anywhere with a "Last Updated"
+    // label — so each gets its own throwaway bucket instead of reusing
+    // publishedTimestamps.weekly/ros above.
+    if (!fullWkRankRes.error) Object.assign(fullWeeklyRankings, groupByPosWeek(fullWkRankRes.data, {}));
+    if (!fullRosRankRes.error) Object.assign(fullROS, groupByPosWeek(fullRosRankRes.data, {}));
 
     if (!wkTotRes.error) {
       const byWeek = {};
