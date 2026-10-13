@@ -2564,7 +2564,9 @@ footer {
       <div class="admin-actions">
         <button class="trade-add-btn" onclick="sortAdminTotalsRows()">↓ Sort by Total</button>
         <button class="trade-analyze-btn" onclick="publishAdminTotalsTable()">Publish</button>
+        <button class="trade-add-btn" title="Publishes what's in the table above as usual, but resets this week's movement baseline to match it — so this round shows no ▲/▼ badges at all. Any later republish of this week goes back to showing movement normally, measured from this point forward." onclick="publishAdminTotalsTable(true)">Publish without movement (reset this week's baseline)</button>
       </div>
+      <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Use "Publish without movement" after fixing a mistake that's throwing off the ▲/▼ badges — it keeps what you typed above, but wipes this week's movement history so it stops comparing to the bad earlier number. Normal "Publish" starts tracking movement from here again on your next update.</div>
 
       <div id="admintotals-preview-wrap" style="display:none;">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
@@ -10985,7 +10987,21 @@ function handleResultsCheckCSVUpload(event, position) {
   reader.readAsText(file);
 }
 
-async function publishAdminTotalsTable() {
+// `resetMovementBaseline` (true when called from the "Publish without
+// movement" button) publishes exactly the same way as a normal Publish —
+// nothing about what gets saved or shown as this week's current totals is
+// different — except it also overwrites openingTeamTotals[week] (see that
+// variable's comment and getTeamTotalsMovementForWeek) with the rows being
+// published right now, instead of leaving the existing opening snapshot
+// alone. Since the movement badges always compare the current rows to that
+// snapshot, making the snapshot equal to the current rows makes every
+// team's delta exactly 0 for this one publish — buildTeamMoveBadgeHTML
+// renders nothing for a delta of 0, so the ▲/▼ badges simply don't appear
+// this round. It's a one-time reset, not a toggle: the very next ordinary
+// Publish (resetMovementBaseline left false) goes right back to comparing
+// against whatever was just published here, so movement tracking resumes
+// normally from this corrected point forward.
+async function publishAdminTotalsTable(resetMovementBaseline) {
   const week = document.getElementById('admintotals-week').value;
   const rows = [];
   document.querySelectorAll('#admintotals-rows tr').forEach(tr => {
@@ -11022,7 +11038,7 @@ async function publishAdminTotalsTable() {
   // per week: a week that already has an opening snapshot (from earlier
   // this session, or loaded from Supabase on page load) is left untouched.
   const isFirstPublishThisWeek = !openingTeamTotals[week];
-  if (isFirstPublishThisWeek) {
+  if (isFirstPublishThisWeek || resetMovementBaseline) {
     openingTeamTotals[week] = { rows: rows.map(r => ({ team: r.team, value: r.value })) };
   }
   saveAppStateLocally();
@@ -11054,6 +11070,21 @@ async function publishAdminTotalsTable() {
           .upsert(rows.map(r => ({ week: Number(week), team: r.team, value: r.value === 'BYE' ? null : r.value })),
             { onConflict: 'week,team', ignoreDuplicates: true });
         if (openErr) console.warn('Could not save the opening snapshot for Week ' + week + ' (movement badges may be off until this succeeds):', openErr);
+      } else if (resetMovementBaseline) {
+        // "Publish without movement" on a week that's already been
+        // published before: ignoreDuplicates (above) would silently refuse
+        // to touch rows that already exist, which is exactly wrong here —
+        // this is the one case where the opening snapshot SHOULD be
+        // overwritten. supabaseReplaceRows deletes this week's existing
+        // opening_team_totals rows and reinserts the current ones, so the
+        // saved snapshot matches what openingTeamTotals[week] was just set
+        // to above, and stays that way across a page reload.
+        try {
+          await supabaseReplaceRows('opening_team_totals', { week: Number(week) },
+            rows.map(r => ({ week: Number(week), team: r.team, value: r.value === 'BYE' ? null : r.value })));
+        } catch (openErr) {
+          console.warn('Could not reset the movement baseline for Week ' + week + ' in the database (it\'s reset for this browser session, but may come back on reload until this succeeds):', openErr);
+        }
       }
     } catch (e) {
       console.error('Supabase publish failed:', e);
