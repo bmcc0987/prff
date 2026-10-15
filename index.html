@@ -2734,8 +2734,9 @@ footer {
         </div>
         <button class="trade-add-btn" style="margin-top:20px;" onclick="loadRankTable('ros')">Load existing</button>
         <button class="trade-add-btn" style="margin-top:20px;" onclick="copySeasonLongIntoROS()">Copy from Season Long</button>
+        <button class="trade-add-btn" style="margin-top:20px;" title="Finds the most recent earlier week that has anything saved for this position (published or just carried over before) and loads its player list into this editor as a starting point." onclick="loadPreviousWeekROS()">Load previous week</button>
       </div>
-      <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Rankings for the rest of the season, starting from this week. Re-publish each week to keep it current. Use "Copy from Season Long" to pull in the published Season Long numbers as a starting point, then adjust and publish. Once you've published any week, later weeks automatically start from the most recent published week's numbers until you publish over them.</div>
+      <div class="trade-optional-tag" style="margin-bottom:10px; display:block;">Rankings for the rest of the season, starting from this week. Re-publish each week to keep it current. Use "Copy from Season Long" to pull in the published Season Long numbers as a starting point, then adjust and publish. Once you've published any week, later weeks automatically start from the most recent published week's numbers until you publish over them — or click "Load previous week" any time to pull the most recent earlier week in on demand.</div>
       <div id="ros-load-status" style="font-family:'Lato',sans-serif; font-size:12px; color:#666; margin:-6px 0 10px;"></div>
 
       <div class="admin-rankings-body">
@@ -8421,10 +8422,17 @@ function exportRankRowsCSV(mode) {
 // Searches fullROS (the admin's full working roster, 0% players included)
 // rather than publishedROS, so a week you carry forward brings along every
 // player you'd kept on the list for the prior week — not just the ones that
-// were actually live above 0%.
-function findPriorPublishedROSWeek(position, beforeWeek) {
+// were actually live above 0%. Falls back to publishedROS (the legacy,
+// public-only store) for any week that has nothing in fullROS at all — this
+// covers weeks that were published before the ros_rankings_full table
+// existed (see the October 10th changelog entry), which otherwise look like
+// they were never published, even though they really were. A week with a
+// fullROS entry always wins over a same-or-earlier week that only has a
+// publishedROS entry, since fullROS is strictly more complete; between the
+// two stores, whichever has the single most recent qualifying week wins.
+function findBestPriorWeek(store, position, beforeWeek) {
   let bestWeek = null;
-  Object.keys(fullROS).forEach(key => {
+  Object.keys(store).forEach(key => {
     const idx = key.lastIndexOf('-');
     if (idx === -1) return;
     const pos = key.slice(0, idx);
@@ -8432,23 +8440,36 @@ function findPriorPublishedROSWeek(position, beforeWeek) {
     if (pos !== position || isNaN(wk) || wk >= beforeWeek) return;
     if (bestWeek === null || wk > bestWeek) bestWeek = wk;
   });
-  return bestWeek === null ? null : { week: bestWeek, data: fullROS[position + '-' + bestWeek] };
+  return bestWeek;
+}
+
+function findPriorPublishedROSWeek(position, beforeWeek) {
+  const fullWeek = findBestPriorWeek(fullROS, position, beforeWeek);
+  const legacyWeek = findBestPriorWeek(publishedROS, position, beforeWeek);
+  if (fullWeek !== null && (legacyWeek === null || fullWeek >= legacyWeek)) {
+    return { week: fullWeek, data: fullROS[position + '-' + fullWeek] };
+  }
+  if (legacyWeek !== null) {
+    return { week: legacyWeek, data: publishedROS[position + '-' + legacyWeek] };
+  }
+  return null;
 }
 
 // Same idea as findPriorPublishedROSWeek above, for Weekly Player
 // Projections — searches fullWeeklyRankings so carrying a position forward
-// into a new week brings its full player list, 0% ones included.
+// into a new week brings its full player list, 0% ones included, falling
+// back to publishedRankings (legacy, public-only) for a week published
+// before weekly_rankings_full existed.
 function findPriorFullWeeklyWeek(position, beforeWeek) {
-  let bestWeek = null;
-  Object.keys(fullWeeklyRankings).forEach(key => {
-    const idx = key.lastIndexOf('-');
-    if (idx === -1) return;
-    const pos = key.slice(0, idx);
-    const wk = parseInt(key.slice(idx + 1), 10);
-    if (pos !== position || isNaN(wk) || wk >= beforeWeek) return;
-    if (bestWeek === null || wk > bestWeek) bestWeek = wk;
-  });
-  return bestWeek === null ? null : { week: bestWeek, data: fullWeeklyRankings[position + '-' + bestWeek] };
+  const fullWeek = findBestPriorWeek(fullWeeklyRankings, position, beforeWeek);
+  const legacyWeek = findBestPriorWeek(publishedRankings, position, beforeWeek);
+  if (fullWeek !== null && (legacyWeek === null || fullWeek >= legacyWeek)) {
+    return { week: fullWeek, data: fullWeeklyRankings[position + '-' + fullWeek] };
+  }
+  if (legacyWeek !== null) {
+    return { week: legacyWeek, data: publishedRankings[position + '-' + legacyWeek] };
+  }
+  return null;
 }
 
 // Looks up a locally-saved (not-yet-published) draft for Rest of Season,
@@ -8562,6 +8583,47 @@ function copySeasonLongIntoROS() {
   // Copying in rows here doesn't type anything (no 'input' events fire),
   // so without this the copied-but-unpublished table wouldn't be protected
   // by the draft autosave until you actually edited something by hand.
+  saveDraftNow('ros');
+}
+
+// Manual version of the automatic week-to-week carryover in loadRankTable
+// (mode 'ros') above — same findPriorPublishedROSWeek lookup, but triggered
+// on demand by the "Load previous week" button instead of only kicking in
+// when the current week has nothing saved at all. This matters because the
+// automatic carryover can come up empty for reasons that have nothing to do
+// with whether an earlier week was really published — most commonly, a week
+// published before the ros_rankings_full table existed (see the October
+// 10th and 13th changelog entries) only partially counted before this fix,
+// and separately, this button lets you pull in the prior week's list even
+// when the current week already has its own rows, if you'd rather start
+// over from what Week N-1 looked like.
+function loadPreviousWeekROS() {
+  const position = document.getElementById('ros-position').value;
+  const week = parseInt(document.getElementById('ros-week').value, 10);
+  if (isNaN(week)) {
+    alert('Enter a valid week number first.');
+    return;
+  }
+  const prior = findPriorPublishedROSWeek(position, week);
+  if (!prior) {
+    alert('There\'s no earlier ' + position + ' Rest of Season week before Week ' + week + ' with anything saved to load from.');
+    return;
+  }
+  const tbody = document.getElementById('ros-rows');
+  if (tbody.children.length > 0) {
+    const ok = confirm('This will replace the ' + tbody.children.length + ' row(s) currently in this editor with the ' + prior.data.rows.length + ' row(s) from ' + position + ' Week ' + prior.week + '. Continue?');
+    if (!ok) return;
+  }
+  tbody.innerHTML = '';
+  RANK_MODE.ros.rowCount = 0;
+  prior.data.rows.forEach(r => addRankRow('ros', r.player, r.team, r.prob));
+  document.getElementById('ros-topn').value = prior.data.topN || 12;
+  updateRankProbSum('ros');
+  const statusEl = document.getElementById('ros-load-status');
+  if (statusEl) statusEl.textContent = 'Loaded ' + position + ' Week ' + prior.week + '\'s players into this editor as a starting point (including any that were at 0%). Edit and click Publish to make Week ' + week + ' live.';
+  // Same reasoning as copySeasonLongIntoROS above: these rows were filled
+  // in programmatically, not typed, so nothing would protect them via the
+  // draft autosave until an actual keystroke happened without this.
   saveDraftNow('ros');
 }
 
