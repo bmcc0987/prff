@@ -3706,6 +3706,19 @@ function goToAdmin(evt) {
 
 let activeProjTab = 'totals-sl';
 
+// Which week the "Combined Team Implied Totals" section on the public
+// Weekly Team Implied Totals tab currently adds up through (see
+// renderTotalsCumulativeTable/computeCumulativeTeamTotals below). null means
+// "not set yet, default to whatever the most recently published week is" —
+// the same convention populateTotalsWeekSelect uses for the single-week
+// dropdown above it. Reset to null (not just left alone) every time the
+// 'totals' tab is freshly entered, from the same two places that already
+// reset the single-week dropdown, so a newly published week is picked up
+// automatically on your next visit without a reload; changing the dropdown
+// yourself mid-visit only updates this variable, it doesn't get stomped by
+// anything else while you're still looking at the tab.
+let totalsCumulativeThroughWeek = null;
+
 function refreshProjectionsGate() {
   // The old in-page "locked" placeholder card is retired — the real page
   // always renders now (see below), so it stays permanently hidden and the
@@ -3725,6 +3738,7 @@ function refreshProjectionsGate() {
     if (activeProjTab === 'totals') {
       document.getElementById('proj-totals-week-row').style.display = 'flex';
       populateTotalsWeekSelect();
+      totalsCumulativeThroughWeek = null;
     }
     // Rebuilding the Weekly Player Projections week dropdown here too (not
     // just from switchProjTab/switchWeeklyPosition below) means simply
@@ -3778,7 +3792,7 @@ function switchProjTab(tab, opts) {
   const showRCWeeklyControls = (tab === 'results-check' && activeResultsCheckView === 'weekly');
   document.getElementById('proj-rc-weekly-subtabs').style.display = showRCWeeklyControls ? 'flex' : 'none';
   document.getElementById('proj-rc-weekly-week-row').style.display = showRCWeeklyControls ? 'flex' : 'none';
-  if (tab === 'totals') populateTotalsWeekSelect();
+  if (tab === 'totals') { populateTotalsWeekSelect(); totalsCumulativeThroughWeek = null; }
   if (tab === 'weekly') populateWeeklyProjWeekSelect();
   if (tab === 'ros') populateROSWeekSelect();
   if (showRCWeeklyControls) populateResultsCheckWeeklyPublicWeekSelect();
@@ -4045,20 +4059,50 @@ function renderProjectionsPage() {
       emptyState.style.display = 'block';
       return;
     }
+    emptyState.style.display = 'none';
     const selectedWeek = document.getElementById('proj-totals-week-select').value;
     const data = publishedTeamTotals[selectedWeek];
-    if (!data) {
-      emptyState.querySelector('.proj-locked-title').textContent = 'Nothing published for Week ' + selectedWeek;
-      emptyState.querySelector('.proj-locked-sub').textContent = 'Try a different week from the dropdown above.';
-      emptyState.style.display = 'block';
-      return;
-    }
-    emptyState.style.display = 'none';
     const section = document.createElement('div');
-    const totalsMovement = getTeamTotalsMovementForWeek(selectedWeek, data.rows);
-    section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.teamTotals[selectedWeek]) +
-      buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows, 'exportWeeklyImpliedTotalsForWeekCSV', publishedMatchups[selectedWeek], totalsMovement);
+    if (data) {
+      const totalsMovement = getTeamTotalsMovementForWeek(selectedWeek, data.rows);
+      section.innerHTML = lastUpdatedBlurbHTML(publishedTimestamps.teamTotals[selectedWeek]) +
+        buildPublishedTotalsHTML('Week ' + selectedWeek, data.rows, 'exportWeeklyImpliedTotalsForWeekCSV', publishedMatchups[selectedWeek], totalsMovement);
+    } else {
+      // A plain inline note rather than the full-page emptyState placeholder
+      // used above — this only means the single week currently picked in
+      // the dropdown has nothing published, not that the whole tab is
+      // empty, and the Combined Totals section right below can still have
+      // plenty to show even when this one week doesn't.
+      section.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;padding:10px 0 20px;">' +
+        'Nothing published for Week ' + selectedWeek + ' — try a different week from the dropdown above.</div>';
+    }
     container.appendChild(section);
+
+    // Combined Team Implied Totals: adds up every published week through
+    // whichever one is picked below — see computeCumulativeTeamTotals and
+    // totalsCumulativeThroughWeek's own comments. This sits below the
+    // single-week table above with its own independent week picker (not
+    // tied to the dropdown above it), so "what did Week 5 alone look like"
+    // and "what do Weeks 1-5 add up to together" can each be checked
+    // without one fighting the other over a shared control. Shown whenever
+    // ANY week has ever been published, even if the single-week dropdown
+    // above happens to be sitting on a week with nothing in it.
+    const publishedWeekNums = totalsKeys.map(w => parseInt(w, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    if (totalsCumulativeThroughWeek === null || !publishedWeekNums.includes(totalsCumulativeThroughWeek)) {
+      totalsCumulativeThroughWeek = publishedWeekNums[publishedWeekNums.length - 1];
+    }
+    const cumWrap = document.createElement('div');
+    cumWrap.style.marginTop = '36px';
+    const optionsHTML = publishedWeekNums.map(w =>
+      '<option value="' + w + '"' + (w === totalsCumulativeThroughWeek ? ' selected' : '') + '>' + w + '</option>').join('');
+    cumWrap.innerHTML = '<h3 class="proj-question-heading">Combined Team Implied Totals</h3>' +
+      '<div class="proj-subtabs" style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">' +
+      '<span style="font-family:\'Lato\',sans-serif; font-size:13px; font-weight:700; color:#555;">Add up every published week through</span>' +
+      '<select class="admin-select" id="proj-totals-cumulative-select" style="width:80px; padding:6px 10px;" onchange="setTotalsCumulativeThroughWeek(this.value)">' + optionsHTML + '</select>' +
+      '</div>' +
+      '<div id="proj-totals-cumulative-table"></div>';
+    container.appendChild(cumWrap);
+    renderTotalsCumulativeTable();
     return;
   }
 
@@ -8919,6 +8963,51 @@ function exportWeeklyImpliedTotalsForWeekCSV() {
   if (!data || !data.rows || data.rows.length === 0) return;
   const rows = data.rows.map(r => [r.team, r.value]);
   downloadCSV('weekly-implied-totals-week-' + week + '.csv', ['Team', 'Implied Total'], rows);
+}
+
+// Re-renders just the "Combined Team Implied Totals" section's table (not
+// the whole Projections page) from totalsCumulativeThroughWeek — called
+// once when the Weekly Team Implied Totals tab first builds this section,
+// and again from setTotalsCumulativeThroughWeek below every time its own
+// dropdown changes, so picking a different "through week" doesn't touch or
+// re-scroll the single-week table above it. Uses computeCumulativeTeamTotals
+// and describeWeekSelection — the same running-sum-of-published-weeks logic
+// and "Weeks 1-3, 5"-style labeling Results Check's own season-to-date
+// totals already use, just driven by this section's own week picker instead
+// of Results Check's week checkboxes.
+function renderTotalsCumulativeTable() {
+  const tableEl = document.getElementById('proj-totals-cumulative-table');
+  if (!tableEl) return;
+  const weeks = Object.keys(publishedTeamTotals).map(w => parseInt(w, 10))
+    .filter(n => !isNaN(n) && n <= totalsCumulativeThroughWeek).sort((a, b) => a - b);
+  if (weeks.length === 0) {
+    tableEl.innerHTML = '<div style="font-family:\'Lato\',sans-serif;font-size:13px;color:#999;font-style:italic;">No published weeks at or before Week ' + totalsCumulativeThroughWeek + '.</div>';
+    return;
+  }
+  const cumulative = computeCumulativeTeamTotals(weeks);
+  tableEl.innerHTML = buildPublishedTotalsHTML(describeWeekSelection(weeks) + ' Combined', cumulative, 'exportCumulativeTeamTotalsThroughWeekCSV');
+}
+
+function setTotalsCumulativeThroughWeek(value) {
+  totalsCumulativeThroughWeek = parseInt(value, 10);
+  renderTotalsCumulativeTable();
+}
+
+// "Export as CSV" for the Weekly Team Implied Totals page's own Combined
+// Totals section — deliberately separate from Results Check's identically-
+// shaped exportCumulativeTeamTotalsCSV (same computeCumulativeTeamTotals
+// underneath, but that one reads Results Check's own checked-weeks state;
+// this one reads this section's "through week" dropdown instead, so the two
+// features' export buttons never read each other's selection by accident).
+function exportCumulativeTeamTotalsThroughWeekCSV() {
+  if (!requireDownloadAccess()) return;
+  const weeks = Object.keys(publishedTeamTotals).map(w => parseInt(w, 10))
+    .filter(n => !isNaN(n) && n <= totalsCumulativeThroughWeek).sort((a, b) => a - b);
+  if (weeks.length === 0) return;
+  const rows = computeCumulativeTeamTotals(weeks).sort((a, b) => b.value - a.value);
+  const filenameWeeks = weeks.length > 1 ? (weeks[0] + '-' + weeks[weeks.length - 1]) : String(weeks[0]);
+  downloadCSV('team-implied-totals-weeks-' + filenameWeeks + '-combined.csv',
+    ['Team', 'Combined Total', 'Weeks Counted'], rows.map(r => [r.team, r.value, r.weeksCounted]));
 }
 
 // Single position+week export used by the "Export as CSV" button on the
