@@ -2638,7 +2638,7 @@ footer {
         <button class="trade-add-btn" onclick="sortAdminRows('prob')">↓ Sort by Prob</button>
         <button class="trade-add-btn" onclick="sortAdminRows('player')">A-Z Sort by Player</button>
         <button class="trade-add-btn" onclick="sortAdminRows('team')">A-Z Sort by Team</button>
-        <button class="trade-add-btn" onclick="document.getElementById('admin-csv-import-file').click()">⬆ Import CSV</button>
+        <label class="trade-add-btn" for="admin-csv-import-file" style="cursor:pointer;">⬆ Import CSV</label>
         <input type="file" id="admin-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToAdminRows(event)">
         <button class="trade-add-btn" onclick="exportAdminRowsCSV()">⬇ Export CSV</button>
         <button class="trade-add-btn" id="admin-save-draft-btn" onclick="saveDraftNow('weekly')" title="Saves your in-progress work in this browser so you can leave and come back to it later. This does NOT publish it live — use Publish for that.">💾 Save</button>
@@ -2695,7 +2695,7 @@ footer {
         <button class="trade-add-btn" onclick="sortRankRows('seasonlong', 'prob')">↓ Sort by Prob</button>
         <button class="trade-add-btn" onclick="sortRankRows('seasonlong', 'player')">A-Z Sort by Player</button>
         <button class="trade-add-btn" onclick="sortRankRows('seasonlong', 'team')">A-Z Sort by Team</button>
-        <button class="trade-add-btn" onclick="document.getElementById('sl-csv-import-file').click()">⬆ Import CSV</button>
+        <label class="trade-add-btn" for="sl-csv-import-file" style="cursor:pointer;">⬆ Import CSV</label>
         <input type="file" id="sl-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToRankRows(event, 'seasonlong')">
         <button class="trade-add-btn" onclick="exportRankRowsCSV('seasonlong')">⬇ Export CSV</button>
         <button class="trade-add-btn" id="sl-save-draft-btn" onclick="saveDraftNow('seasonlong')" title="Saves your in-progress work in this browser so you can leave and come back to it later. This does NOT publish it live — use Publish for that.">💾 Save</button>
@@ -2753,9 +2753,13 @@ footer {
         <button class="trade-add-btn" onclick="addRankRow('ros')">+ Add player</button>
         <button class="trade-add-btn" onclick="sortRankRows('ros')">↓ Sort by Prob</button>
         <button class="trade-add-btn" onclick="sortRankRows('ros','team')">A-Z Sort by Team</button>
+        <label class="trade-add-btn" for="ros-csv-import-file" style="cursor:pointer;">⬆ Import CSV</label>
+        <input type="file" id="ros-csv-import-file" accept=".csv" style="display:none;" onchange="importCSVToRankRows(event, 'ros')">
+        <button class="trade-add-btn" onclick="exportRankRowsCSV('ros')">⬇ Export CSV</button>
         <button class="trade-add-btn" id="ros-save-draft-btn" onclick="saveDraftNow('ros')" title="Saves your in-progress work in this browser so you can leave and come back to it later. This does NOT publish it live — use Publish for that.">💾 Save</button>
         <button class="trade-analyze-btn" onclick="publishRankTable('ros')">Publish</button>
       </div>
+      <div id="ros-csv-import-error" style="display:none; color:#c0392b; font-family:'Lato',sans-serif; font-size:13px; margin-top:6px;"></div>
       <div id="ros-draft-status" class="admin-draft-status" style="display:none;"></div>
 
       <div class="admin-sum-row">Sum: <span id="ros-prob-sum-value">0</span></div>
@@ -8381,6 +8385,16 @@ function importCSVToRankRows(event, mode) {
         addRankRow(mode, player, team, isNaN(prob) ? '' : prob, notes);
       });
       updateRankProbSum(mode);
+      // Rows added here come from the file, not typing, so no 'input'
+      // events fire to trigger the normal draft autosave — without this,
+      // an imported-but-not-yet-published table would stay unprotected
+      // until an actual keystroke happened, and anything that re-ran
+      // loadRankTable/loadAdminTable in the meantime (switching position
+      // or week and back, reopening this admin tab) could silently wipe
+      // the import back out before Publish ever got clicked. Same fix as
+      // copySeasonLongIntoROS and loadPreviousWeekROS already have for the
+      // same reason.
+      saveDraftNow(mode);
     } catch (err) {
       if (errorEl) {
         errorEl.textContent = 'Could not import that file: ' + err.message;
