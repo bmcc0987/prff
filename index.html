@@ -13852,6 +13852,13 @@ const publishedTimestamps = {
 // through with .range() until a page comes back short, so this can never
 // silently truncate again no matter how large any of these tables get over
 // the rest of the season, regardless of the project's configured row cap.
+// Tracks whether the separate, independent articles load (see
+// handleArticlesLoaded) has settled at least once — used by
+// routeFromLocation so a direct link to a specific article doesn't get
+// mistaken for "unknown article" and redirected away just because articles
+// are still loading in the background when the link is first opened.
+let articlesSettled = false;
+
 async function fetchAllRows(table) {
   const pageSize = 1000;
   let allRows = [];
@@ -13872,9 +13879,26 @@ async function loadAppState() {
     loadAppStateLocally();
     return;
   }
+  // Articles can carry large embedded photos (stored as base64 straight in
+  // the row — see handleFeaturedImageFileSelect/handlePhotoFileSelect), so
+  // it's often by far the single slowest query the site makes. It used to
+  // sit inside the same Promise.all as every other table below, which this
+  // whole function — and therefore the site's very first render, since
+  // initApp does `await loadAppState()` before rendering anything — waited
+  // on. That meant one slow articles load delayed EVERYTHING on the page,
+  // not just the article sections, which is exactly what made the whole
+  // site "take forever to load" even once articles grew large. Articles now
+  // loads on its own track: kicked off here, in parallel with everything
+  // else, but never awaited by this function. handleArticlesLoaded below
+  // applies the result and re-renders just the article-related pieces
+  // whenever it's ready — instantly if the table loads quickly, or later if
+  // it doesn't — without holding up anything else on the page either way.
+  fetchAllRows('articles').then(handleArticlesLoaded).catch(err => {
+    console.warn('Articles failed to load unexpectedly:', err);
+  });
+
   try {
-    const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes, pubWeeklyAccuracyRes, fullWkRankRes, fullRosRankRes] = await Promise.all([
-      fetchAllRows('articles'),
+    const [slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes, pubWeeklyAccuracyRes, fullWkRankRes, fullRosRankRes] = await Promise.all([
       fetchAllRows('season_long_rankings'),
       fetchAllRows('season_long_totals'),
       fetchAllRows('weekly_rankings'),
@@ -13919,29 +13943,9 @@ async function loadAppState() {
       fetchAllRows('weekly_rankings_full'),
       fetchAllRows('ros_rankings_full'),
     ]);
-    // Same graceful, skip-but-continue pattern as every other query below:
-    // a problem fetching articles must never block the weekly totals, player
-    // projections, ROS, season-long, matchups, or opening-snapshot data that
-    // already arrived successfully in this same Promise.all from loading —
-    // this used to `throw` here instead, which (via the outer catch) bailed
-    // the ENTIRE function into loadAppStateLocally() — stale/cached data —
-    // any time JUST the articles table hiccupped, even though every other
-    // query had already succeeded. See CHANGELOG for the full story.
-    if (artRes.error) {
-      console.warn('Could not load articles from the database this time — articles may show as missing or stale until a later page load succeeds:', artRes.error);
-    } else {
-      (artRes.data || []).forEach(row => {
-        const article = { id: row.id, title: row.title, tag: row.tag, rowLabel: row.row_label || '', access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
-        if (row.status === 'published') publishedArticles[row.id] = article;
-        else draftArticles[row.id] = article;
-      });
-      // Fixes up any article still carrying an old, since-renamed Row value
-      // (see ARTICLE_ROW_RENAMES/migrateArticleRowLabels above) — the rename
-      // itself happens synchronously right now, so renderHomepageArticles()
-      // right after loadAppState() already shows the corrected header; not
-      // awaited, since the Supabase write-back is a best-effort background fix.
-      migrateArticleRowLabels();
-    }
+    // Articles is handled on its own, separate track now — see
+    // handleArticlesLoaded and the comment above where it's kicked off,
+    // above this try block.
 
     // Keeps the LATEST published_at seen for a given key — since a publish
     // deletes-then-inserts all rows together, they'll normally all share
@@ -14108,6 +14112,39 @@ async function loadAppState() {
   }
 }
 
+// Applies the result of the separate, independent articles fetch kicked off
+// at the top of loadAppState() (see the comment there for why articles is
+// no longer part of the main Promise.all) and refreshes just the
+// article-facing parts of the page. Runs whenever that fetch settles —
+// which could be before or after the rest of loadAppState() has already
+// finished and rendered — so this never delays anything else on the site,
+// and a direct link to one specific article (see routeFromLocation, which
+// this calls again) resolves correctly however that race comes out.
+function handleArticlesLoaded(artRes) {
+  articlesSettled = true;
+  if (artRes.error) {
+    console.warn('Could not load articles from the database this time — articles may show as missing or stale until a later page load succeeds:', artRes.error);
+  } else {
+    (artRes.data || []).forEach(row => {
+      const article = { id: row.id, title: row.title, tag: row.tag, rowLabel: row.row_label || '', access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
+      if (row.status === 'published') publishedArticles[row.id] = article;
+      else draftArticles[row.id] = article;
+    });
+    // Fixes up any article still carrying an old, since-renamed Row value
+    // (see ARTICLE_ROW_RENAMES/migrateArticleRowLabels above) — not
+    // awaited, since the Supabase write-back is a best-effort background fix.
+    migrateArticleRowLabels();
+    saveAppStateLocally();
+  }
+  // Re-render whatever's currently showing that depends on articles — a
+  // harmless no-op if the homepage/articles grid isn't the page currently
+  // on screen, and resolves a pending direct link to a specific article
+  // (routeFromLocation holds off on "article not found" until articlesSettled
+  // is true, specifically so it can wait for this).
+  renderHomepageArticles();
+  routeFromLocation();
+}
+
 // Old article ids that changed after the article was already published and
 // shared/indexed — e.g. an id that was minted while the piece was still a
 // draft (getting a "-draft-N" suffix) and kept that suffix even after
@@ -14152,6 +14189,14 @@ function routeFromLocation() {
     }
     if (publishedArticles[id]) {
       goToArticle(id, { skipPush: true });
+    } else if (!articlesSettled) {
+      // Articles load on their own separate, possibly-slower track now (see
+      // handleArticlesLoaded) — this id not being found yet doesn't mean
+      // it doesn't exist, just that that fetch hasn't finished. Don't
+      // redirect a valid, shared article link away to the articles list
+      // just because it raced articles loading — handleArticlesLoaded calls
+      // routeFromLocation() again the moment that fetch settles, which will
+      // correctly resolve this one way or the other then.
     } else {
       // Unknown/removed article id — fall back to the articles list rather
       // than showing a broken empty reader page.
