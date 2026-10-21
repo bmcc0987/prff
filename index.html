@@ -12717,6 +12717,17 @@ async function publishArticle() {
   errorEl.style.border = '';
   errorEl.style.borderRadius = '';
   errorEl.style.padding = '';
+  // This article's real text is still being fetched in the background (see
+  // loadArticleIntoEditor/articleBodyLoading) — the body field is disabled
+  // and empty right now, not holding a "Loading…" placeholder, specifically
+  // so there's nothing here that could get saved as this article's actual
+  // text by mistake. Just ask for a moment and stop rather than publish
+  // over real content with an empty body.
+  if (articleBodyLoading) {
+    errorEl.textContent = 'Still loading this article\'s existing text — give it a moment and try again.';
+    errorEl.style.display = 'block';
+    return;
+  }
   if (!title) {
     errorEl.textContent = 'Add a title before publishing.';
     errorEl.style.display = 'block';
@@ -12811,6 +12822,12 @@ async function saveArticleDraft() {
   errorEl.style.border = '';
   errorEl.style.borderRadius = '';
   errorEl.style.padding = '';
+  // See the matching check in publishArticle() just above for why.
+  if (articleBodyLoading) {
+    errorEl.textContent = 'Still loading this article\'s existing text — give it a moment and try again.';
+    errorEl.style.display = 'block';
+    return;
+  }
   if (!title) {
     errorEl.textContent = 'Add a title before saving.';
     errorEl.style.display = 'block';
@@ -13265,9 +13282,18 @@ async function articleOrderEmptyRowDrop(e, rowLabel) {
   await applyRowMove(draggedId, fromRowLabel, rowLabel, [draggedId]);
 }
 
-function loadArticleIntoEditor() {
+// True while an existing article's full text is being fetched in the
+// background for the editor below (see fetchArticlesListRows/
+// fetchArticleBody — the bulk list load doesn't include it). publishArticle
+// and saveArticleDraft both check this before saving, so a Publish/Save
+// click can't go out while the body field is still a loading placeholder
+// and overwrite that article's real text with the placeholder.
+let articleBodyLoading = false;
+
+async function loadArticleIntoEditor() {
   const raw = document.getElementById('article-load-select').value;
   if (!raw) {
+    articleBodyLoading = false;
     document.getElementById('article-title').value = '';
     document.getElementById('article-tag').value = '';
     document.getElementById('article-row').value = '';
@@ -13275,6 +13301,7 @@ function loadArticleIntoEditor() {
     document.getElementById('article-author').value = 'Process/Results Staff';
     document.getElementById('article-image').value = '';
     document.getElementById('article-body').value = '';
+    document.getElementById('article-body').disabled = false;
     document.getElementById('article-editing-id').value = '';
     document.getElementById('article-editing-type').value = '';
     document.getElementById('article-display-order').value = '';
@@ -13293,7 +13320,6 @@ function loadArticleIntoEditor() {
   document.getElementById('article-access').value = a.access;
   document.getElementById('article-author').value = a.author;
   document.getElementById('article-image').value = a.image;
-  document.getElementById('article-body').value = a.body;
   document.getElementById('article-editing-id').value = a.id;
   document.getElementById('article-editing-type').value = isDraft ? 'draft' : 'published';
   document.getElementById('article-display-order').value = (a.displayOrder === null || a.displayOrder === undefined) ? '' : a.displayOrder;
@@ -13309,9 +13335,44 @@ function loadArticleIntoEditor() {
   } else {
     previewWrap.style.display = 'none';
   }
+  const bodyField = document.getElementById('article-body');
   const articlePreview = document.getElementById('article-preview');
   articlePreview.innerHTML = buildArticleReaderHTML(a);
   document.getElementById('article-preview-wrap').style.display = 'block';
+
+  // This specific article's text wasn't part of the lightweight bulk load
+  // (see fetchArticlesListRows) — fetch it now, the one time editing it
+  // actually needs it. The field is disabled and left without a real value
+  // while this is in flight (not even a "Loading…" placeholder VALUE — that
+  // could otherwise get saved as this article's actual text if Publish/Save
+  // is clicked before this finishes) and publishArticle/saveArticleDraft
+  // both refuse to run while articleBodyLoading is true as a second,
+  // independent safeguard against the same thing.
+  if (a.body === null || a.body === undefined) {
+    articleBodyLoading = true;
+    bodyField.value = '';
+    bodyField.disabled = true;
+    bodyField.placeholder = 'Loading article text…';
+    const body = await fetchArticleBody(a.id);
+    // The admin picked something else from the dropdown while this was
+    // loading — don't clobber whatever's shown now with this stale result.
+    if (document.getElementById('article-editing-id').value !== a.id) return;
+    a.body = body || '';
+    bodyField.value = a.body;
+    bodyField.disabled = false;
+    bodyField.placeholder = '';
+    articleBodyLoading = false;
+    articlePreview.innerHTML = buildArticleReaderHTML(a);
+  } else {
+    // Reflects the editor's current selection, not just this call — guards
+    // against a stale in-flight fetch from a since-abandoned earlier
+    // selection (see the id check above) leaving this flag stuck true even
+    // though what's shown now is already fully loaded.
+    articleBodyLoading = false;
+    bodyField.value = a.body;
+    bodyField.disabled = false;
+    bodyField.placeholder = '';
+  }
 }
 
 let articleDeleteArmed = false;
@@ -13367,7 +13428,7 @@ async function deleteCurrentArticle() {
 // featured card's short excerpt, since articles don't have a separate
 // excerpt field.
 function plainTextExcerpt(body, maxLen) {
-  const plain = body
+  const plain = (body || '')
     .split('\n')
     .filter(line => !line.trim().startsWith('|') && !line.trim().startsWith('%%'))
     .join(' ')
@@ -13423,6 +13484,23 @@ function renderHomepageArticles() {
   const featuredArticle = featuredId ? publishedArticles[featuredId] : null;
   populateFeaturedBlock('', featuredArticle);
   populateFeaturedBlock('-page', featuredArticle);
+  // The featured block's excerpt needs this one article's actual text,
+  // which (see fetchArticlesListRows) isn't part of the lightweight list
+  // load everything above came from — fetch it just for this one row, in
+  // the background, and refresh the excerpt once it arrives. Guarded so a
+  // second renderHomepageArticles() call (e.g. after an unrelated article
+  // edit) doesn't kick off a duplicate fetch for the same still-loading row.
+  if (featuredArticle && (featuredArticle.body === null || featuredArticle.body === undefined) && !featuredArticle._bodyFetchInFlight) {
+    featuredArticle._bodyFetchInFlight = true;
+    fetchArticleBody(featuredId).then(body => {
+      featuredArticle._bodyFetchInFlight = false;
+      if (featuredArticle.body === null || featuredArticle.body === undefined) {
+        featuredArticle.body = body || '';
+      }
+      populateFeaturedBlock('', featuredArticle);
+      populateFeaturedBlock('-page', featuredArticle);
+    });
+  }
 
   const grids = document.querySelectorAll('.articles-grid-dynamic');
   if (grids.length === 0) return;
@@ -13467,6 +13545,12 @@ function renderHomepageArticles() {
     const a = publishedArticles[id];
     const tagClass = a.access === 'Pro' ? 'gray' : '';
     const lockHtml = (a.access === 'Pro' && !contentUnlocked()) ? '<div class="lock-overlay">🔒 Unlock with Pro</div>' : '';
+    // a.body isn't part of the lightweight list load this card is built
+    // from (see fetchArticlesListRows) — omit the read-time estimate here
+    // rather than show a misleading "1 min read" on every single card; the
+    // real text (and an accurate read time, via buildArticleReaderHTML) only
+    // loads once this specific card is actually clicked.
+    const readTimeHtml = (a.body === null || a.body === undefined) ? '' : (' · ' + estimateReadMinutes(a.body) + ' min read');
     const card = document.createElement('div');
     card.className = 'article-card';
     card.style.cursor = 'pointer';
@@ -13475,7 +13559,7 @@ function renderHomepageArticles() {
       '<div class="article-thumb"><img src="' + (a.image || 'hero-photo.png') + '" alt=""></div>' +
       '<div class="article-body"><div class="article-tag ' + tagClass + '">' + a.tag + ' · ' + a.access + '</div>' +
       '<div class="article-headline">' + a.title + '</div>' +
-      '<div class="article-meta">' + a.dateLabel + ' · ' + estimateReadMinutes(a.body) + ' min read</div>' + lockHtml + '</div>';
+      '<div class="article-meta">' + a.dateLabel + readTimeHtml + '</div>' + lockHtml + '</div>';
     return card;
   }
 
@@ -13536,13 +13620,25 @@ function renderHomepageArticles() {
 // this exact article rather than just the articles list.
 let currentArticleId = null;
 
-function goToArticle(id, opts) {
+async function goToArticle(id, opts) {
   opts = opts || {};
   const article = publishedArticles[id];
   if (!article) return;
   currentArticleId = id;
-  document.getElementById('article-reader-content').innerHTML = buildArticleReaderHTML(article);
+  // Navigate immediately — don't make opening an article wait on its text,
+  // the one thing this specific article's data doesn't have yet (see
+  // fetchArticlesListRows/fetchArticleBody above).
   showPage(null, 'article', { skipPush: opts.skipPush, path: '/articles/' + encodeURIComponent(id), articleId: id });
+  const readerEl = document.getElementById('article-reader-content');
+  if (article.body === null || article.body === undefined) {
+    readerEl.innerHTML = '<p style="padding:60px 0;text-align:center;color:#999;">Loading…</p>';
+    const body = await fetchArticleBody(id);
+    // Bail without touching the DOM if the visitor navigated elsewhere
+    // while this was loading (e.g. clicked Back, or another article).
+    if (currentArticleId !== id) return;
+    article.body = body || '';
+  }
+  readerEl.innerHTML = buildArticleReaderHTML(article);
 }
 
 // Reading an article is a gated feature like Projections/Trade — a
@@ -13866,6 +13962,54 @@ async function fetchAllRows(table) {
   return { data: allRows, error: null };
 }
 
+// Same paging approach as fetchAllRows, but for `articles` specifically:
+// deliberately leaves out the `body` column. A photo added to an article
+// (see handleFeaturedImageFileSelect/handlePhotoFileSelect/insertPhotoBlock)
+// gets embedded directly as base64 text inside `body`, and across enough
+// articles that's grown this table to tens of megabytes in a single
+// select('*') — confirmed directly in the browser's Network tab: one
+// `articles` request alone was ~25MB and still hadn't finished after 50+
+// seconds. That's what was actually breaking articles everywhere, on every
+// version of the loading code tried today — not a bug in any of it. This
+// lightweight query gets everything the homepage/Articles grid and the
+// Admin "Load existing"/Row order panel need (title, tag, row, access,
+// author, the one featured image, dates, order, featured flag, status)
+// without ever pulling the heavy `body` text. The actual body — needed to
+// read one specific article, or to edit one in Admin — is fetched
+// separately, just for that one row, by fetchArticleBody below, the moment
+// it's actually needed.
+async function fetchArticlesListRows() {
+  const pageSize = 1000;
+  let allRows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabaseClient.from('articles')
+      .select('id,title,tag,row_label,access,author,image,date_label,display_order,featured,status')
+      .range(from, from + pageSize - 1);
+    if (error) return { data: allRows.length ? allRows : null, error };
+    allRows = allRows.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: allRows, error: null };
+}
+
+// Fetches just the `body` text for one specific article — the single-row
+// counterpart to fetchArticlesListRows leaving `body` out of the bulk load.
+// Returns null (rather than throwing) on any failure, so every call site
+// just treats "couldn't load it this time" the same as "empty."
+async function fetchArticleBody(id) {
+  if (!supabaseClient) return null;
+  try {
+    const { data, error } = await supabaseClient.from('articles').select('body').eq('id', id).maybeSingle();
+    if (error || !data) return null;
+    return data.body;
+  } catch (e) {
+    console.warn('Could not load the full text for article "' + id + '":', e);
+    return null;
+  }
+}
+
 async function loadAppState() {
   if (!supabaseClient) {
     console.warn('Supabase client not available — using locally cached data only.');
@@ -13874,7 +14018,7 @@ async function loadAppState() {
   }
   try {
     const [artRes, slRankRes, slTotRes, wkRankRes, rosRankRes, wkTotRes, wkMatchRes, openWkRankRes, openTotRes, openSLRankRes, pubResultsCheckRes, pubWeeklyAccuracyRes, fullWkRankRes, fullRosRankRes] = await Promise.all([
-      fetchAllRows('articles'),
+      fetchArticlesListRows(),
       fetchAllRows('season_long_rankings'),
       fetchAllRows('season_long_totals'),
       fetchAllRows('weekly_rankings'),
@@ -13931,7 +14075,11 @@ async function loadAppState() {
       console.warn('Could not load articles from the database this time — articles may show as missing or stale until a later page load succeeds:', artRes.error);
     } else {
       (artRes.data || []).forEach(row => {
-        const article = { id: row.id, title: row.title, tag: row.tag, rowLabel: row.row_label || '', access: row.access, author: row.author, image: row.image, body: row.body, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
+        // body is intentionally not part of this fetch (see
+        // fetchArticlesListRows) — null here means "not loaded yet," fetched
+        // on demand by fetchArticleBody when this specific article is
+        // actually opened or edited.
+        const article = { id: row.id, title: row.title, tag: row.tag, rowLabel: row.row_label || '', access: row.access, author: row.author, image: row.image, body: null, dateLabel: row.date_label, displayOrder: row.display_order, featured: !!row.featured };
         if (row.status === 'published') publishedArticles[row.id] = article;
         else draftArticles[row.id] = article;
       });
