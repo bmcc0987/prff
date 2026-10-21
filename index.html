@@ -13854,10 +13854,48 @@ const publishedTimestamps = {
 // the rest of the season, regardless of the project's configured row cap.
 async function fetchAllRows(table) {
   const pageSize = 1000;
+  // A flaky mobile connection (weak signal, switching between WiFi and
+  // cellular mid-request) can drop or stall a single page of a query without
+  // ever handing back a clean response — this used to mean that one hiccup
+  // permanently failed the whole table for that page load (see CHANGELOG:
+  // this is what was making the Articles page show "No articles published
+  // yet" on phones while the same data loaded fine on desktop over a more
+  // stable connection — the "articles" table is usually the single biggest
+  // query on the site once any article has an embedded photo, since photos
+  // are stored as base64 straight in the row, so it's the one most exposed
+  // to a slow/unstable network timing out mid-transfer). Now each page gets
+  // a bounded wait (so a dead connection fails fast instead of hanging
+  // forever) and a couple of automatic retries with a short backoff before
+  // giving up — covers exactly this kind of transient drop without
+  // changing behavior for a normal, successful load.
+  const maxAttempts = 3;
+  const perAttemptTimeoutMs = 20000;
   let allRows = [];
   let from = 0;
   while (true) {
-    const { data, error } = await supabaseClient.from(table).select('*').range(from, from + pageSize - 1);
+    let data, error;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), perAttemptTimeoutMs);
+      try {
+        const res = await supabaseClient.from(table).select('*').range(from, from + pageSize - 1).abortSignal(controller.signal);
+        data = res.data;
+        error = res.error;
+      } catch (err) {
+        // abortSignal firing (or any other thrown network error) lands here
+        // instead of coming back as a normal {error} result — treat it the
+        // same way so it's retried just like any other failed attempt.
+        data = undefined;
+        error = err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      if (!error) break;
+      if (attempt < maxAttempts) {
+        console.warn(`fetchAllRows('${table}'): attempt ${attempt} of ${maxAttempts} failed, retrying…`, error);
+        await new Promise(r => setTimeout(r, attempt * 800));
+      }
+    }
     if (error) return { data: allRows.length ? allRows : null, error };
     allRows = allRows.concat(data || []);
     if (!data || data.length < pageSize) break;
