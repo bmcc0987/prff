@@ -12864,6 +12864,10 @@ async function saveArticleDraft() {
 
 function populateArticleLoadSelect() {
   const select = document.getElementById('article-load-select');
+  // Safe to call any time now, including from handleArticlesLoaded — this
+  // element only exists while the Admin Articles editor is actually on
+  // screen, so there's nothing to refresh if it isn't.
+  if (!select) return;
   const current = select.value;
   select.innerHTML = '<option value="">— New article —</option>';
 
@@ -14136,12 +14140,23 @@ function handleArticlesLoaded(artRes) {
     migrateArticleRowLabels();
     saveAppStateLocally();
   }
-  // Re-render whatever's currently showing that depends on articles — a
-  // harmless no-op if the homepage/articles grid isn't the page currently
-  // on screen, and resolves a pending direct link to a specific article
-  // (routeFromLocation holds off on "article not found" until articlesSettled
-  // is true, specifically so it can wait for this).
+  // Re-render whatever's currently showing that depends on articles — each
+  // of these is a harmless no-op if that particular piece isn't the one
+  // currently on screen (populateArticleLoadSelect/renderArticleOrderPanel
+  // both check for their container elements first). This covers the Admin
+  // Articles editor specifically: since articles can now finish loading
+  // AFTER the rest of the page is already up and interactive (see the
+  // comment in loadAppState above), opening Admin > Articles quickly used
+  // to show an empty "Load existing" dropdown and an empty Row order panel
+  // that never refreshed on their own once the data actually arrived — this
+  // keeps both in sync with whatever's really in publishedArticles/
+  // draftArticles, however the timing between page-open and this fetch
+  // finishing happens to land. routeFromLocation also holds off on "article
+  // not found" until articlesSettled is true, specifically so it can wait
+  // for this moment to resolve a pending direct link to a specific article.
   renderHomepageArticles();
+  populateArticleLoadSelect();
+  renderArticleOrderPanel();
   routeFromLocation();
 }
 
