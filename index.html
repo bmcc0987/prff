@@ -10629,7 +10629,12 @@ function parseFantasyProsPointsCSV(text) {
   dataRows.forEach(r => {
     const raw = (r[1] || '').trim();
     if (!raw) return;
-    const m = raw.match(/^(.*\S)\s{2,}([A-Za-z]{2,4})$/);
+    // Your actual FantasyPros exports put exactly one space between the
+    // player name and team code ("Josh Allen BUF") — this used to require
+    // 2+ spaces, which never matched a single real row, so team always came
+    // back blank and nobody could ever show as being on a top-12 team (see
+    // CHANGELOG). \s+ matches one space just as well as several.
+    const m = raw.match(/^(.*\S)\s+([A-Za-z]{2,4})$/);
     const name = m ? m[1].trim() : raw;
     let team = m ? m[2].toUpperCase() : '';
     team = RESULTS_CHECK_TEAM_ALIAS[team] || team;
