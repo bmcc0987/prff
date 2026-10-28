@@ -4131,7 +4131,7 @@ function renderProjectionsPage() {
       const hasActualData = weekData.rows.some(r => r.actualPoints !== null && r.actualPoints !== undefined);
       section.innerHTML = '<h3 class="proj-question-heading">How did our Week ' + selectedWeek + ' ' + pos + ' projections hold up?</h3>' +
         lastUpdatedBlurbHTML(weekData.publishedAt) +
-        buildWeeklyAccuracyTableHTML(pos, 'Week ' + selectedWeek, { rows: weekData.rows, hasActualData: hasActualData }, "exportWeeklyAccuracyCSV('" + pos + "','" + selectedWeek + "')");
+        buildWeeklyAccuracyTableHTML(pos, 'Week ' + selectedWeek, { rows: weekData.rows, hasActualData: hasActualData }, "exportWeeklyAccuracyCSV('" + pos + "','" + selectedWeek + "')", selectedWeek);
       container.appendChild(section);
       return;
     }
@@ -8096,9 +8096,10 @@ function updatePubSelection(uid) {
 // week's projection sits right next to its real outcome instead of needing
 // a separately-written recap article. `data` comes from
 // computeWeeklyAccuracyForPosition: { rows, hasActualData, topN }.
-function buildWeeklyAccuracyTableHTML(position, weekLabel, data, exportFnName) {
+function buildWeeklyAccuracyTableHTML(position, weekLabel, data, exportFnName, week) {
   const uid = 'rcwk-' + (position + '-' + weekLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const rows = data.rows;
+  const teamTierColorMap = (week !== undefined && week !== null) ? getWeeklyTeamTierColorMap(week) : {};
 
   let html = '<div class="pub-table-wrap">';
   if (exportFnName) {
@@ -8121,10 +8122,12 @@ function buildWeeklyAccuracyTableHTML(position, weekLabel, data, exportFnName) {
     const mark = !hasActual
       ? '<span style="color:#bbb;">—</span>'
       : (r.actualTop12 ? '<span style="color:#3DB87A;">&#10003;</span>' : '<span style="color:#c0392b;">&#10007;</span>');
+    const tierColor = teamTierColorMap[r.team];
+    const teamStyle = tierColor ? ' style="color:' + tierColor + ';font-weight:700;"' : '';
     html += '<tr>' +
       '<td>' + displayRanks[i] + '</td>' +
       '<td>' + r.player + '</td>' +
-      '<td>' + (r.team || '') + '</td>' +
+      '<td' + teamStyle + '>' + (r.team || '') + '</td>' +
       '<td class="pub-prob-cell pub-prob-selectable" data-name="' + r.player + '" data-prob="' + r.prob + '" data-top12="' + top12Attr + '" ' +
       'style="background:' + probToColor(r.prob) + ';" ' +
       'onmousedown="pubProbDragStart(event,\'' + uid + '\')" onmouseenter="pubProbDragOver(event,\'' + uid + '\')">' + r.prob + '%</td>' +
@@ -9938,7 +9941,7 @@ function renderResultsCheckWeeklyAdmin() {
       'Heads up: ' + (data.duplicateNames || []).join(', ') + (data.duplicateCount === 1 ? ' appears' : ' appear') + ' more than once in your Weekly Player Projections for ' + resultsCheckWeeklyPosition + ' Week ' + week + '. Only the first entry for each was kept below — you may want to clean up the duplicate' + (data.duplicateCount === 1 ? '' : 's') + ' on the Weekly Player Projections tool.' +
       '</div>'
     : '';
-  container.innerHTML = dupNotice + buildWeeklyAccuracyTableHTML(resultsCheckWeeklyPosition, 'Week ' + week, data, null);
+  container.innerHTML = dupNotice + buildWeeklyAccuracyTableHTML(resultsCheckWeeklyPosition, 'Week ' + week, data, null, week);
 }
 
 // Publishes the CURRENT position/week's projected-vs-actual breakdown
