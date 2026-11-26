@@ -771,24 +771,37 @@ body.auth-gate-open nav.nav { z-index: 9998; }
 .auth-gate-title { font-family: 'Lato', sans-serif; font-size: 20px; font-weight: 900; color: #111; margin-bottom: 8px; }
 .auth-gate-sub { font-family: 'Lato', sans-serif; font-size: 14px; color: #777; margin-bottom: 26px; line-height: 1.5; }
 .trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
-.trade-col { background: white; border: 1px solid #e2e0da; border-radius: 16px; padding: 24px; }
+.trade-col {
+  background: white; border: 1px solid #e2e0da; border-radius: 16px; padding: 24px;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+/* Highlights a team column as a drop target while the OTHER side's "Copy
+   Team ___ to Team ___" button is being dragged over it — see
+   handleTradeColDragOver/handleCopyBtnDragStart. */
+.trade-col.trade-col-drop-target {
+  border-color: #3DB87A; background: #f3fbf6; box-shadow: 0 0 0 2px rgba(61,184,122,0.3) inset;
+}
 .trade-col-name {
   font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 900; text-transform: uppercase;
   letter-spacing: 0.05em; color: #111; border: none; border-bottom: 2px solid #eeece7;
   padding: 4px 0 10px; width: 100%; margin-bottom: 4px; outline: none;
 }
 .trade-col-name:focus { border-bottom-color: #3DB87A; }
-/* Wraps Team B's name field together with the "Copy Team A" button so the
-   button sits right beside it instead of on its own line. Only Team B's
-   column uses this — Team A has nothing to copy from. */
-.trade-col-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.trade-col-name-row .trade-col-name { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
-.trade-copy-a-btn {
-  background: none; border: 1px solid #d6d4cf; border-radius: 100px; color: #555;
-  font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 700; white-space: nowrap;
-  padding: 5px 12px; cursor: pointer; flex-shrink: 0; margin-bottom: 4px;
+/* "Copy Team A to Team B" / "Copy Team B to Team A" — sits right under the
+   "Rest of roster" sublabel on each side. Draggable: dropping it onto the
+   other team's column does the same thing as clicking it (see
+   copyTeam / handleCopyBtnDragStart / handleTradeColDrop). */
+.trade-copy-btn {
+  background: #111; color: white; border: none; border-radius: 100px;
+  font-family: 'Lato', sans-serif; font-size: 12.5px; font-weight: 700; white-space: nowrap;
+  padding: 9px 16px; cursor: grab; width: 100%;
 }
-.trade-copy-a-btn:hover { border-color: #3DB87A; color: #3DB87A; }
+.trade-copy-btn:hover { background: #3DB87A; }
+.trade-copy-btn:active { cursor: grabbing; }
+.trade-copy-btn-hint {
+  font-family: 'Lato', sans-serif; font-size: 11px; color: #999; text-align: center;
+  margin: 6px 0 16px;
+}
 .trade-col-sublabel {
   font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.06em; color: #999; margin-bottom: 14px;
@@ -2267,13 +2280,15 @@ footer {
       <button type="button" class="trade-panel-open-btn" id="trade-panel-toggle-tab" onclick="toggleTradeSidePanel(!document.getElementById('trade-side-panel').classList.contains('open'))">Saved Lineups 📁 <span id="trade-panel-toggle-count"></span></button>
     </div>
     <div class="trade-cols">
-      <div class="trade-col">
+      <div class="trade-col" id="trade-col-A" ondragover="handleTradeColDragOver(event,'A')" ondragleave="handleTradeColDragLeave(event,'A')" ondrop="handleTradeColDrop(event,'A')">
         <input class="trade-col-name" id="trade-teamA-name" value="Team A">
         <div class="trade-col-sublabel">Offers</div>
         <div id="trade-teamA-rows"></div>
         <button class="trade-add-btn" onclick="addPlayerRow('A','offer')">+ Add player</button>
         <div class="trade-roster-divider"></div>
         <div class="trade-col-sublabel">Rest of roster <span class="trade-optional-tag">optional — improves accuracy</span></div>
+        <button type="button" class="trade-copy-btn" draggable="true" onclick="copyTeam('A','B')" ondragstart="handleCopyBtnDragStart(event,'A')" ondragend="handleCopyBtnDragEnd(event)" title="Copy everything in Team A — offers and rest of roster — into Team B">⇄ Copy Team A to Team B</button>
+        <div class="trade-copy-btn-hint">or click and drag to the other team</div>
         <div id="trade-teamA-roster-rows">
           <div class="trade-roster-group">
             <div class="trade-roster-group-header"><span class="trade-roster-group-label">QB</span><button class="trade-roster-add-btn" onclick="addRosterSlot('A','QB')">+ Add</button></div>
@@ -2301,16 +2316,15 @@ footer {
           </div>
         </div>
       </div>
-      <div class="trade-col">
-        <div class="trade-col-name-row">
-          <input class="trade-col-name" id="trade-teamB-name" value="Team B">
-          <button type="button" class="trade-copy-a-btn" onclick="copyTeamAToTeamB()" title="Copy everything from Team A — offers and rest of roster — into Team B">⧉ Copy Team A</button>
-        </div>
+      <div class="trade-col" id="trade-col-B" ondragover="handleTradeColDragOver(event,'B')" ondragleave="handleTradeColDragLeave(event,'B')" ondrop="handleTradeColDrop(event,'B')">
+        <input class="trade-col-name" id="trade-teamB-name" value="Team B">
         <div class="trade-col-sublabel">Offers</div>
         <div id="trade-teamB-rows"></div>
         <button class="trade-add-btn" onclick="addPlayerRow('B','offer')">+ Add player</button>
         <div class="trade-roster-divider"></div>
         <div class="trade-col-sublabel">Rest of roster <span class="trade-optional-tag">optional — improves accuracy</span></div>
+        <button type="button" class="trade-copy-btn" draggable="true" onclick="copyTeam('B','A')" ondragstart="handleCopyBtnDragStart(event,'B')" ondragend="handleCopyBtnDragEnd(event)" title="Copy everything in Team B — offers and rest of roster — into Team A">⇄ Copy Team B to Team A</button>
+        <div class="trade-copy-btn-hint">or click and drag to the other team</div>
         <div id="trade-teamB-roster-rows">
           <div class="trade-roster-group">
             <div class="trade-roster-group-header"><span class="trade-roster-group-label">QB</span><button class="trade-roster-add-btn" onclick="addRosterSlot('B','QB')">+ Add</button></div>
@@ -5359,74 +5373,134 @@ function resetTradeBuilder() {
   document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// Copies everything out of Team A — its name, every filled-in offer row,
-// and every filled-in "rest of roster" slot — into Team B, overwriting
-// whatever's currently there. Meant for quickly setting up a start/sit or
-// "what if I swap one guy" comparison against an identical copy of the
-// same roster, without retyping the whole thing twice.
+// Copies everything out of one team — its name, every offer row, and every
+// "rest of roster" slot in each position group — into the other, overwriting
+// whatever's there. Meant for quickly setting up a start/sit or "what if I
+// swap one guy" comparison against an identical copy of the same roster,
+// without retyping the whole thing twice. Works either direction: Team A's
+// button calls copyTeam('A','B'), Team B's calls copyTeam('B','A'), and
+// dragging either button onto the opposite column (see
+// handleCopyBtnDragStart/handleTradeColDrop below) calls this the same way.
 //
-// Asks for confirmation first ONLY if Team B already has something filled
-// in (an offer or a roster player) that this would wipe out — an empty
-// Team B just gets filled in directly, no prompt needed since there's
-// nothing to lose.
-function copyTeamAToTeamB() {
-  const offersA = namesFromContainer('trade-teamA-rows');
-  const rosterA = rawRosterByGroup('A');
-  const rosterACount = Object.keys(rosterA).reduce((sum, k) => sum + rosterA[k].length, 0);
+// Mirrors `from`'s rows EXACTLY, blank ones included — not just the filled-in
+// names — so a destination team never ends up with fewer input boxes than it
+// had a second ago just because the source side happened to have an empty
+// slot there too. (An earlier version filtered out blanks first, which could
+// make rows on the destination side disappear entirely instead of just
+// staying empty.)
+//
+// Asks for confirmation first ONLY if the destination already has something
+// filled in (an offer or a roster player) that this would wipe out — an
+// empty destination just gets filled in directly, no prompt needed since
+// there's nothing to lose.
+function copyTeam(from, to) {
+  const offerEls = Array.from(document.querySelectorAll('#trade-team' + from + '-rows .trade-input'));
+  const offerValues = offerEls.map(el => el.value);
 
-  if (offersA.length === 0 && rosterACount === 0) {
-    alert('Team A is empty — add a player to Team A first, then copy it over to Team B.');
+  const rosterValues = {};
+  Object.keys(ROSTER_GROUPS).forEach(groupKey => {
+    const els = Array.from(document.querySelectorAll('#trade-team' + from + '-roster-' + groupKey + ' .trade-input'));
+    rosterValues[groupKey] = els.map(el => el.value);
+  });
+
+  const hasAnyOffer = offerValues.some(v => v.trim());
+  const hasAnyRoster = Object.keys(rosterValues).some(k => rosterValues[k].some(v => v.trim()));
+  if (!hasAnyOffer && !hasAnyRoster) {
+    alert('Team ' + from + ' is empty — add a player to Team ' + from + ' first, then copy it over to Team ' + to + '.');
     return;
   }
 
-  const offersB = namesFromContainer('trade-teamB-rows');
-  const rosterB = rawRosterByGroup('B');
-  const rosterBCount = Object.keys(rosterB).reduce((sum, k) => sum + rosterB[k].length, 0);
-  const teamBHasContent = offersB.length > 0 || rosterBCount > 0;
+  const toOffersFilled = namesFromContainer('trade-team' + to + '-rows');
+  const toRoster = rawRosterByGroup(to);
+  const toRosterCount = Object.keys(toRoster).reduce((sum, k) => sum + toRoster[k].length, 0);
+  const toHasContent = toOffersFilled.length > 0 || toRosterCount > 0;
 
-  if (teamBHasContent) {
-    const ok = confirm('This will replace what\'s currently in Team B (' + offersB.length + ' offer player(s), ' + rosterBCount + ' rest-of-roster player(s)) with a copy of everything in Team A. Continue?');
+  if (toHasContent) {
+    const ok = confirm('This will replace what\'s currently in Team ' + to + ' (' + toOffersFilled.length + ' offer player(s), ' + toRosterCount + ' rest-of-roster player(s)) with a copy of everything in Team ' + from + '. Continue?');
     if (!ok) return;
   }
 
-  // Team B's name becomes Team A's — a duplicated team reads the same on
-  // both sides until you rename it, same as duplicating anything else.
-  document.getElementById('trade-teamB-name').value = document.getElementById('trade-teamA-name').value;
+  // Destination's name becomes the source's — a duplicated team reads the
+  // same on both sides until you rename it, same as duplicating anything else.
+  document.getElementById('trade-team' + to + '-name').value = document.getElementById('trade-team' + from + '-name').value;
 
-  // Wipe B's current rows/slots and counters, then rebuild from scratch —
-  // same approach resetTradeBuilder uses just above for a clean rebuild.
-  document.getElementById('trade-teamB-rows').innerHTML = '';
+  // Wipe the destination's current rows/slots and counters, then rebuild to
+  // mirror the source row-for-row (same approach resetTradeBuilder uses for
+  // a clean rebuild, just seeded from `from`'s values instead of nothing).
+  document.getElementById('trade-team' + to + '-rows').innerHTML = '';
   Object.keys(ROSTER_GROUPS).forEach(groupKey => {
-    document.getElementById('trade-teamB-roster-' + groupKey).innerHTML = '';
+    document.getElementById('trade-team' + to + '-roster-' + groupKey).innerHTML = '';
   });
-  tradeRowCounts.B = { offer: 0 };
-  rosterSlotCounts.B = { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 };
+  tradeRowCounts[to] = { offer: 0 };
+  rosterSlotCounts[to] = { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 };
 
-  offersA.forEach(name => {
-    addPlayerRow('B', 'offer');
-    const rows = document.getElementById('trade-teamB-rows').children;
-    rows[rows.length - 1].querySelector('.trade-input').value = name;
+  offerValues.forEach(val => {
+    addPlayerRow(to, 'offer');
+    const rows = document.getElementById('trade-team' + to + '-rows').children;
+    rows[rows.length - 1].querySelector('.trade-input').value = val;
   });
 
   Object.keys(ROSTER_GROUPS).forEach(groupKey => {
-    rosterA[groupKey].forEach(name => {
-      addRosterSlot('B', groupKey);
-      const container = document.getElementById('trade-teamB-roster-' + groupKey);
-      container.children[container.children.length - 1].querySelector('.trade-input').value = name;
+    rosterValues[groupKey].forEach(val => {
+      addRosterSlot(to, groupKey);
+      const container = document.getElementById('trade-team' + to + '-roster-' + groupKey);
+      container.children[container.children.length - 1].querySelector('.trade-input').value = val;
     });
   });
 
-  refreshRosteredPlayers('B');
+  refreshRosteredPlayers(to);
 
-  // Whatever result was on screen was computed against B's OLD contents —
-  // hide it rather than leave a stale result up that no longer matches
-  // what's actually in the builder now.
+  // Whatever result was on screen was computed against the destination's OLD
+  // contents — hide it rather than leave a stale result up that no longer
+  // matches what's actually in the builder now.
   document.getElementById('trade-result').style.display = 'none';
   document.getElementById('startsit-result').style.display = 'none';
   const dupWarning = document.getElementById('trade-duplicate-warning');
   if (dupWarning) dupWarning.style.display = 'none';
 
   document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Drag-and-drop for the "Copy Team ___ to Team ___" buttons: picking one up
+// and dropping it onto the OTHER team's column does exactly what clicking it
+// does. copyBtnDragSide tracks which side's button is currently being
+// dragged (null when nothing's being dragged); a column only lights up as a
+// drop target, and only actually accepts a drop, when it's the opposite side
+// from whichever button is in the air — dragging a button onto its own
+// column, or a stray drag of something else entirely, does nothing.
+let copyBtnDragSide = null;
+
+function handleCopyBtnDragStart(e, side) {
+  copyBtnDragSide = side;
+  e.dataTransfer.effectAllowed = 'copy';
+  // Some browsers require data on the transfer for the drop to be allowed
+  // at all — the value itself isn't actually read back on drop.
+  e.dataTransfer.setData('text/plain', side);
+}
+
+function handleCopyBtnDragEnd(e) {
+  copyBtnDragSide = null;
+  document.querySelectorAll('.trade-col-drop-target').forEach(el => el.classList.remove('trade-col-drop-target'));
+}
+
+function handleTradeColDragOver(e, side) {
+  if (!copyBtnDragSide || copyBtnDragSide === side) return;
+  e.preventDefault(); // required to allow a drop at all
+  e.dataTransfer.dropEffect = 'copy';
+  e.currentTarget.classList.add('trade-col-drop-target');
+}
+
+function handleTradeColDragLeave(e, side) {
+  e.currentTarget.classList.remove('trade-col-drop-target');
+}
+
+function handleTradeColDrop(e, side) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('trade-col-drop-target');
+  if (!copyBtnDragSide || copyBtnDragSide === side) return;
+  const from = copyBtnDragSide;
+  copyBtnDragSide = null;
+  copyTeam(from, side);
 }
 
 // ===========================================================================
