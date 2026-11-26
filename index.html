@@ -778,6 +778,17 @@ body.auth-gate-open nav.nav { z-index: 9998; }
   padding: 4px 0 10px; width: 100%; margin-bottom: 4px; outline: none;
 }
 .trade-col-name:focus { border-bottom-color: #3DB87A; }
+/* Wraps Team B's name field together with the "Copy Team A" button so the
+   button sits right beside it instead of on its own line. Only Team B's
+   column uses this — Team A has nothing to copy from. */
+.trade-col-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trade-col-name-row .trade-col-name { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+.trade-copy-a-btn {
+  background: none; border: 1px solid #d6d4cf; border-radius: 100px; color: #555;
+  font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 700; white-space: nowrap;
+  padding: 5px 12px; cursor: pointer; flex-shrink: 0; margin-bottom: 4px;
+}
+.trade-copy-a-btn:hover { border-color: #3DB87A; color: #3DB87A; }
 .trade-col-sublabel {
   font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.06em; color: #999; margin-bottom: 14px;
@@ -2291,7 +2302,10 @@ footer {
         </div>
       </div>
       <div class="trade-col">
-        <input class="trade-col-name" id="trade-teamB-name" value="Team B">
+        <div class="trade-col-name-row">
+          <input class="trade-col-name" id="trade-teamB-name" value="Team B">
+          <button type="button" class="trade-copy-a-btn" onclick="copyTeamAToTeamB()" title="Copy everything from Team A — offers and rest of roster — into Team B">⧉ Copy Team A</button>
+        </div>
         <div class="trade-col-sublabel">Offers</div>
         <div id="trade-teamB-rows"></div>
         <button class="trade-add-btn" onclick="addPlayerRow('B','offer')">+ Add player</button>
@@ -5337,6 +5351,76 @@ function resetTradeBuilder() {
   // back off so the reset really is a fresh start.
   if (numbersMode) toggleNumbersMode();
 
+  document.getElementById('trade-result').style.display = 'none';
+  document.getElementById('startsit-result').style.display = 'none';
+  const dupWarning = document.getElementById('trade-duplicate-warning');
+  if (dupWarning) dupWarning.style.display = 'none';
+
+  document.getElementById('trade-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Copies everything out of Team A — its name, every filled-in offer row,
+// and every filled-in "rest of roster" slot — into Team B, overwriting
+// whatever's currently there. Meant for quickly setting up a start/sit or
+// "what if I swap one guy" comparison against an identical copy of the
+// same roster, without retyping the whole thing twice.
+//
+// Asks for confirmation first ONLY if Team B already has something filled
+// in (an offer or a roster player) that this would wipe out — an empty
+// Team B just gets filled in directly, no prompt needed since there's
+// nothing to lose.
+function copyTeamAToTeamB() {
+  const offersA = namesFromContainer('trade-teamA-rows');
+  const rosterA = rawRosterByGroup('A');
+  const rosterACount = Object.keys(rosterA).reduce((sum, k) => sum + rosterA[k].length, 0);
+
+  if (offersA.length === 0 && rosterACount === 0) {
+    alert('Team A is empty — add a player to Team A first, then copy it over to Team B.');
+    return;
+  }
+
+  const offersB = namesFromContainer('trade-teamB-rows');
+  const rosterB = rawRosterByGroup('B');
+  const rosterBCount = Object.keys(rosterB).reduce((sum, k) => sum + rosterB[k].length, 0);
+  const teamBHasContent = offersB.length > 0 || rosterBCount > 0;
+
+  if (teamBHasContent) {
+    const ok = confirm('This will replace what\'s currently in Team B (' + offersB.length + ' offer player(s), ' + rosterBCount + ' rest-of-roster player(s)) with a copy of everything in Team A. Continue?');
+    if (!ok) return;
+  }
+
+  // Team B's name becomes Team A's — a duplicated team reads the same on
+  // both sides until you rename it, same as duplicating anything else.
+  document.getElementById('trade-teamB-name').value = document.getElementById('trade-teamA-name').value;
+
+  // Wipe B's current rows/slots and counters, then rebuild from scratch —
+  // same approach resetTradeBuilder uses just above for a clean rebuild.
+  document.getElementById('trade-teamB-rows').innerHTML = '';
+  Object.keys(ROSTER_GROUPS).forEach(groupKey => {
+    document.getElementById('trade-teamB-roster-' + groupKey).innerHTML = '';
+  });
+  tradeRowCounts.B = { offer: 0 };
+  rosterSlotCounts.B = { QB: 0, WR: 0, RB: 0, TE: 0, FLEX: 0, BENCH: 0 };
+
+  offersA.forEach(name => {
+    addPlayerRow('B', 'offer');
+    const rows = document.getElementById('trade-teamB-rows').children;
+    rows[rows.length - 1].querySelector('.trade-input').value = name;
+  });
+
+  Object.keys(ROSTER_GROUPS).forEach(groupKey => {
+    rosterA[groupKey].forEach(name => {
+      addRosterSlot('B', groupKey);
+      const container = document.getElementById('trade-teamB-roster-' + groupKey);
+      container.children[container.children.length - 1].querySelector('.trade-input').value = name;
+    });
+  });
+
+  refreshRosteredPlayers('B');
+
+  // Whatever result was on screen was computed against B's OLD contents —
+  // hide it rather than leave a stale result up that no longer matches
+  // what's actually in the builder now.
   document.getElementById('trade-result').style.display = 'none';
   document.getElementById('startsit-result').style.display = 'none';
   const dupWarning = document.getElementById('trade-duplicate-warning');
