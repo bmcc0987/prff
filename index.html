@@ -5416,7 +5416,7 @@ function copyTeam(from, to) {
   const toHasContent = toOffersFilled.length > 0 || toRosterCount > 0;
 
   if (toHasContent) {
-    const ok = confirm('This will replace what\'s currently in Team ' + to + ' (' + toOffersFilled.length + ' offer player(s), ' + toRosterCount + ' rest-of-roster player(s)) with a copy of everything in Team ' + from + '. Continue?');
+    const ok = confirm('This will replace what\'s currently in Team ' + to + ' with a copy of everything in Team ' + from + '. Continue?');
     if (!ok) return;
   }
 
